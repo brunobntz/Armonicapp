@@ -272,14 +272,38 @@ def test_toda_escala_tiene_nombre_para_mostrar():
 PATRON_TABLATURA = re.compile(r"^-?(10|[1-9])'{0,2}$")
 
 
-def test_estan_las_nueve_combinaciones_de_posicion_y_escala():
-    """Tres posiciones (1a, 2a, 3a) por tres escalas = nueve tablas."""
-    for posicion in (1, 2, 3):
+def test_hay_tabla_para_cada_posicion_estudiada_y_cada_escala():
+    """
+    Las seis posiciones que Bruno trabaja con Leandro (1a, 2a, 3a, 4a, 5a y 12a)
+    por tres escalas = dieciocho tablas.
+
+    Las otras seis posiciones no tienen tabla explícita a propósito: las cubre
+    teoria.py por cálculo, en el paso 3.
+    """
+    for posicion in tablas.POSICIONES_CON_TABLA:
         for escala in tablas.ESCALAS_INTERVALOS:
             assert (posicion, escala) in tablas.ESCALAS_POR_POSICION, (
                 f"Falta la tabla de {escala} en la posicion {posicion}"
             )
-    assert len(tablas.ESCALAS_POR_POSICION) == 9
+    esperadas = len(tablas.POSICIONES_CON_TABLA) * len(tablas.ESCALAS_INTERVALOS)
+    assert len(tablas.ESCALAS_POR_POSICION) == esperadas
+
+
+def test_la_pentatonica_mayor_de_doceava_no_pide_bends_del_cuatro_para_arriba():
+    """
+    El hecho que hace amable a la 12a posición, y la razón por la que Leandro
+    empuja la pentatónica y no la escala mayor completa: del agujero 4 al 10
+    la escala sale entera con aire natural, sin un solo bend.
+
+    Lo fijamos por escrito porque es el argumento pedagógico central de lo que
+    Bruno está estudiando ahora.
+    """
+    escala = tablas.ESCALAS_POR_POSICION[(12, "pentatonica_mayor")]
+    del_cuatro_para_arriba = [
+        tab for tab in escala if int(tab.strip("-'")) >= 4
+    ]
+    assert len(del_cuatro_para_arriba) == 11
+    assert all("'" not in tab for tab in del_cuatro_para_arriba)
 
 
 def test_todas_las_tablaturas_estan_bien_escritas():

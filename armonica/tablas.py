@@ -129,7 +129,15 @@ POSICIONES = {
     12: 5,   # armónica en C -> tocás en F
 }
 
-# Nombres para mostrar en pantalla. Solo las tres primeras tienen apodo conocido.
+# Posiciones que tienen tabla explícita de escalas en agujeros (más abajo).
+# Son las seis que Bruno trabaja con Leandro. Las otras seis las cubre teoria.py
+# por cálculo, sin tabla escrita a mano.
+POSICIONES_CON_TABLA = [1, 2, 3, 4, 5, 12]
+
+# Nombres para mostrar en pantalla.
+# Nota de vocabulario: Leandro usa siempre el ordinal ("4a posicion") y nunca
+# dice "cruzada" ni "straight harp". Los apodos en inglés van entre paréntesis
+# solo como referencia, porque aparecen en todos los métodos.
 NOMBRES_POSICIONES = {
     1: "1a posicion (straight harp)",
     2: "2a posicion (cross harp)",
@@ -269,6 +277,77 @@ ESCALAS_POR_POSICION = {
         # y en el agudo haría falta un overblow. Por eso aparece una sola vez.
         "1", "-1", "-2''", "-2", "3", "-3''", "4", "-4", "-5",
         "6", "-6'", "-6", "7", "-8", "-9", "9", "-10", "10",
+    ],
+
+    # -------------------------------------------------------------------------
+    # 4a POSICIÓN — la menor relativa de la 1a. Armónica en C -> tocás en A.
+    # Es la que usaste para "Minor Swing" (Am) y para el tema de Leandro.
+    # Su tónica es el agujero 3 aspirado con bend de un tono, o sea "-3''":
+    # justo el agujero que tenés con fuga de aire.
+    # -------------------------------------------------------------------------
+    (4, "pentatonica_mayor"): [
+        # A B Db E Gb — pide muchos bends, es la menos cómoda de las tres
+        # (Gb y Db del registro medio necesitan overblow, fuera de V1)
+        "-1'", "2", "-2'", "-3''", "-3", "-4'", "5", "-6", "-7", "8", "9'",
+        "-10", "10'",
+    ],
+    (4, "pentatonica_menor"): [
+        # A C D E G — esta sale entera sin overblows y con un solo bend
+        "1", "-1", "2", "-2", "3", "-3''", "4", "-4", "5", "6", "-6", "7", "-8",
+        "8", "9", "-10", "10",
+    ],
+    (4, "blues"): [
+        # A C D Eb E G — la blue note (Eb) solo aparece arriba, en "8'"
+        # (los Eb grave y medio necesitan overblow, fuera de V1)
+        "1", "-1", "2", "-2", "3", "-3''", "4", "-4", "5", "6", "-6", "7", "-8",
+        "8'", "8", "9", "-10", "10",
+    ],
+
+    # -------------------------------------------------------------------------
+    # 5a POSICIÓN — Armónica en C -> tocás en E. La usaste para el E7 de
+    # "Minor Swing". Su tónica es el 2 soplado.
+    # -------------------------------------------------------------------------
+    (5, "pentatonica_mayor"): [
+        # E Gb Ab B Db — muy incómoda, casi todo pide bend u overblow
+        "-1'", "2", "-2'", "-3", "-4'", "5", "-6'", "-7", "8", "9'", "10'",
+    ],
+    (5, "pentatonica_menor"): [
+        # E G A B D — cómoda, sin overblows
+        "-1", "2", "-2", "3", "-3''", "-3", "-4", "5", "6", "-6", "-7", "-8",
+        "8", "9", "-10", "10'",
+    ],
+    (5, "blues"): [
+        # E G A Bb B D
+        "-1", "2", "-2", "3", "-3''", "-3'", "-3", "-4", "5", "6", "-6", "-7",
+        "-8", "8", "9", "-10", "10''", "10'",
+    ],
+
+    # -------------------------------------------------------------------------
+    # 12a POSICIÓN — Armónica en C -> tocás en F. Es lo que estás trabajando
+    # ahora, con el estudio de Carlos del Junco sobre el blues en Fa.
+    # Su tónica es el 5 aspirado.
+    #
+    # El dato que hace amable a esta posición: la pentatónica mayor de Fa sale
+    # ENTERA del agujero 4 al 10 sin un solo bend. Once notas seguidas de aire
+    # natural. Por eso Leandro te empuja a la pentatónica y no a la escala
+    # mayor completa, que sí pide el Sib (el primer bend del 3, o el overblow
+    # del 6).
+    # -------------------------------------------------------------------------
+    (12, "pentatonica_mayor"): [
+        # F G A C D — del "4" en adelante no hay ningún bend
+        "1", "-1", "-2''", "-2", "3", "-3''", "4", "-4", "-5", "6", "-6", "7",
+        "-8", "-9", "9", "-10", "10",
+    ],
+    (12, "pentatonica_menor"): [
+        # F Ab Bb C Eb — mucho más cara: el Ab del medio es "-6'" y el Bb "-3'"
+        # (Eb, Ab y Bb de varios registros necesitan overblow, fuera de V1)
+        "1", "-2''", "-3'", "4", "-5", "-6'", "7", "8'", "-9", "10''", "10",
+    ],
+    (12, "blues"): [
+        # F Ab Bb B C Eb — el B (la quinta bemol de Fa) sale sin bend en "-7"
+        # y en "-3". Es la nota azul regalada de la 12a posición.
+        "1", "-2''", "-3'", "-3", "4", "-5", "-6'", "-7", "7", "8'", "-9",
+        "10''", "10'", "10",
     ],
 }
 

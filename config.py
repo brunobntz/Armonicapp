@@ -110,6 +110,32 @@ PREFERENCIA_AMBIGUEDAD = "aspirado"
 
 
 # =============================================================================
+# 4b. NOTACIÓN — cómo se escribe la tablatura en pantalla y en los archivos
+# =============================================================================
+
+# En tu material conviven tres notaciones distintas:
+#   - La que vos confirmaste:      -4   -4'   -3''
+#   - La de tu atril de 12a:       ↓4   ↓4'   ↓3''   (y ↑ para soplado)
+#   - La de las hojas de Leandro:  el número con una rayita arriba o abajo
+#
+# Internamente la app NUNCA guarda texto: guarda agujero, dirección y cantidad
+# de bends. El texto se arma recién al mostrarlo. Por eso cambiar de notación
+# es cambiar esta línea, y no afecta nada más.
+#
+#   "guion"   ->  4   -4   -4'   -3''      (la que confirmaste)
+#   "flechas" ->  ↑4  ↓4   ↓4'   ↓3''      (la de tu atril)
+NOTACION = "guion"
+
+# Símbolo de los bends. El apóstrofo simple es lo estándar en tablatura de
+# armónica: uno por cada medio tono. Tu atril usa ′ ″ ‴ (primas tipográficas),
+# que se ven mejor pero son incómodas de tipear.
+SIMBOLO_BEND = "'"
+
+# Símbolo de overblow, para cuando entren (fuera de V1). Tu atril usa "°".
+SIMBOLO_OVERBLOW = "°"
+
+
+# =============================================================================
 # 5. PANTALLA — cómo se ve en la terminal
 # =============================================================================
 
