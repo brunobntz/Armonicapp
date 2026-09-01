@@ -1,0 +1,5 @@
+# Dependencias del proyecto. Instalar con:  pip install -r requirements.txt
+numpy>=1.26        # cálculo numérico: YIN, RMS, buffers de audio
+sounddevice>=0.4   # captura de audio del micrófono (envuelve PortAudio)
+rich>=13.0         # pantalla en terminal con colores y refresco en vivo
+pytest>=8.0        # tests unitarios

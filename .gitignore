@@ -1,0 +1,11 @@
+# Entorno virtual y cachés de Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Salidas de sesiones y audios de prueba (pueden pesar mucho; se regeneran)
+sesiones/*
+!sesiones/.gitkeep
+audio_prueba/*
+!audio_prueba/.gitkeep
