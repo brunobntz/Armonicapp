@@ -9,3 +9,8 @@ sesiones/*
 !sesiones/.gitkeep
 audio_prueba/*
 !audio_prueba/.gitkeep
+
+# Material de las clases (apuntes del profe). Se queda en tu maquina:
+# no va al repositorio porque es contenido de un tercero.
+material/*
+!material/LEEME.md
