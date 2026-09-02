@@ -150,9 +150,11 @@ def test_los_dos_bends_soplados_del_diez():
 def test_los_tres_bends_del_tres_segun_leandro():
     """
     El recap del 28/07 lista los bends del 3: 1º Bb, 2º A, 3º Ab.
-    Los dos primeros tienen que dar exactamente eso. El tercero NO está en V1,
-    así que la armónica "no lo puede dar" desde el punto de vista de la app.
-    Este test documenta esa frontera.
+    Los tres tienen que dar exactamente eso.
+
+    El tercero se incorporó el 02/09. Antes la app devolvía None para el Lab
+    grave, que es la blue note de la 12a posición y la tónica de la 4a: sin él
+    faltaba una nota importante de verdad, no un adorno.
     """
     primero, _ = mapeo.frecuencia_a_nota(hz("Bb4"), tabla_inversa=TABLA_C)
     segundo, _ = mapeo.frecuencia_a_nota(hz("A4"), tabla_inversa=TABLA_C)
@@ -160,7 +162,8 @@ def test_los_tres_bends_del_tres_segun_leandro():
 
     assert primero.como_tab() == "-3'"
     assert segundo.como_tab() == "-3''"
-    assert tercero is None      # el 3''' queda fuera de V1
+    assert tercero.como_tab() == "-3'''"
+    assert tercero.nombre == "Ab4"
 
 
 # =============================================================================
@@ -385,13 +388,15 @@ def test_ida_y_vuelta_entre_texto_y_nota():
 
 def test_tab_a_nota_rechaza_bends_imposibles():
     """
-    El 5 aspirado no tiene bend, y el 3 no llega a tres bends en V1.
+    El 5 aspirado no tiene bend, y ningún agujero llega a cuatro.
     Preferimos un error ruidoso a una nota mal calculada en silencio.
     """
     with pytest.raises(ValueError):
         mapeo.tab_a_nota("-5'", "C")
     with pytest.raises(ValueError):
-        mapeo.tab_a_nota("-3'''", "C")
+        mapeo.tab_a_nota("-3''''", "C")
+    with pytest.raises(ValueError):
+        mapeo.tab_a_nota("-2'''", "C")     # el 2 llega hasta dos bends
 
 
 def test_tab_a_nota_rechaza_texto_invalido():

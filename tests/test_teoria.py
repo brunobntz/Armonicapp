@@ -147,11 +147,17 @@ def test_la_escala_mayor_completa_de_fa_si_pide_el_si_bemol():
 
 def test_las_notas_que_faltan_en_la_pentatonica_menor_de_doceava():
     """
-    Las cinco notas que la armónica en Do no puede dar para esta escala.
+    Las notas que la armónica en Do no puede dar para esta escala.
     Fijadas por escrito porque explican por qué la 12a menor es incómoda.
+
+    El Lab grave (Ab4) salió de esta lista el 02/09, al incorporar el tercer
+    bend del 3. Es la pregunta que tenías abierta desde el 21/08: el Lab grave
+    existe y sale del bend más difícil de la armónica; el bend del 6 da la
+    misma nota una octava arriba, en un agujero que sí responde.
     """
     resultado = teoria.agujeros_para_escala("C", 12, "pentatonica_menor")
-    assert resultado.faltantes == ["Eb4", "Ab4", "Eb5", "Bb5", "Ab6"]
+    assert resultado.faltantes == ["Eb4", "Eb5", "Bb5", "Ab6"]
+    assert "Ab4" not in resultado.faltantes
 
 
 def test_del_agujero_cuatro_para_arriba_la_pentatonica_de_doceava_no_pide_bends():

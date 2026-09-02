@@ -139,14 +139,21 @@ def test_todos_los_agujeros_con_bend_estan_entre_uno_y_diez():
         assert 1 <= agujero <= 10
 
 
-def test_v1_permite_como_mucho_dos_semitonos_de_bend():
+def test_los_bends_llegan_hasta_tono_y_medio():
     """
-    Pediste bends de medio tono y de un tono nada más. Este test documenta esa
-    decisión: si alguien agrega el tercer bend del agujero 3, va a fallar acá
-    y va a tener que actualizar también la notación y la pantalla.
+    Como máximo se baja un tono y medio: son los tres bends del agujero 3.
+
+    Ese tercer bend (el Lab en una armónica de Do) se incorporó el 02/09. Al
+    principio estaba afuera y era un error: Leandro lo enseña, y es la blue
+    note de la 12a posición en el registro grave.
+
+    Ningún otro agujero llega a tres. Es una particularidad del 3, que tiene
+    cuatro semitonos entre su soplado y su aspirado.
     """
-    for cantidad in list(tablas.BENDS_ASPIRADOS.values()) + list(tablas.BENDS_SOPLADOS.values()):
-        assert 1 <= cantidad <= 2
+    todos = list(tablas.BENDS_ASPIRADOS.values()) + list(tablas.BENDS_SOPLADOS.values())
+    assert all(1 <= cantidad <= 3 for cantidad in todos)
+    assert tablas.BENDS_ASPIRADOS[3] == 3
+    assert max(c for a, c in tablas.BENDS_ASPIRADOS.items() if a != 3) == 2
 
 
 # =============================================================================
@@ -269,7 +276,7 @@ def test_toda_escala_tiene_nombre_para_mostrar():
 
 # Una tablatura válida es: un guión opcional (aspirado), un número de agujero
 # del 1 al 10, y cero, uno o dos apóstrofos (los bends).
-PATRON_TABLATURA = re.compile(r"^-?(10|[1-9])'{0,2}$")
+PATRON_TABLATURA = re.compile(r"^-?(10|[1-9])'{0,3}$")
 
 
 def test_hay_tabla_para_cada_posicion_estudiada_y_cada_escala():

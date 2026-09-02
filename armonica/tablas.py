@@ -80,7 +80,7 @@ AFINACION_ASPIRADO = [2, 7, 11, 14, 17, 21, 23, 26, 29, 33]
 BENDS_ASPIRADOS = {
     1: 1,   # Db4 en armónica de C
     2: 2,   # Gb4 y F4
-    3: 2,   # Bb4 y A4  (en la vida real el 3 tiene un tercer bend, Ab4: ver nota abajo)
+    3: 3,   # Bb4, A4 y Ab4  — los tres que Leandro enumeró el 28/07
     4: 1,   # Db5
     6: 1,   # Ab5
 }
@@ -92,13 +92,23 @@ BENDS_SOPLADOS = {
     10: 2,   # B6 y Bb6
 }
 
+# Sobre el TERCER BEND DEL 3 (el "-3'''", Ab4 en una armónica de C).
+# Al principio quedó afuera porque el pedido original hablaba de medio tono y
+# un tono nada más. Fue un error: Leandro lo enseña explícitamente el 28/07
+# ("1º bend: Bb, 2º bend: A, 3º bend: Ab") y ese Lab es una nota de verdad:
+# la tercera menor de Fa, o sea la blue note de la 12a posición, y la tónica
+# de la 4a. Sin él, media escala de blues quedaba sin su nota característica
+# en el registro grave. Está incluido desde 2026-09-02.
+#
+# Es el bend más difícil de la armónica, y encima el agujero 3 de tu Crossover
+# tiene fuga de aire. Que la app lo muestre no significa que salga fácil: para
+# eso está el medidor de cents, que te va a decir cuán cerca del Lab llegaste.
+
 # FUERA DE ALCANCE EN V1 (documentado para no olvidarlo):
-#   - El tercer bend del agujero 3 aspirado (3''', Ab4 en C). Existe y es real,
-#     pero pediste solo medio tono y un tono, así que queda afuera.
-#     Se agrega cambiando el 2 por un 3 en BENDS_ASPIRADOS[3].
 #   - El bend del 5 aspirado: es de un cuarto de tono, no llega a semitono.
 #     No se puede representar en esta notación.
 #   - Los overblows y overdraws (que SUBEN la nota). Requieren otra tabla.
+#     Son los que te faltan para el Sib del registro medio (↑6°) y el Mib (↑4°).
 
 
 # =============================================================================
@@ -275,7 +285,7 @@ ESCALAS_POR_POSICION = {
         # en "-6'", el agujero 6 aspirado con medio bend.
         # En el registro grave sería el tercer bend del 3, que no está en V1,
         # y en el agudo haría falta un overblow. Por eso aparece una sola vez.
-        "1", "-1", "-2''", "-2", "3", "-3''", "4", "-4", "-5",
+        "1", "-1", "-2''", "-2", "3", "-3'''", "-3''", "4", "-4", "-5",
         "6", "-6'", "-6", "7", "-8", "-9", "9", "-10", "10",
     ],
 
@@ -309,7 +319,7 @@ ESCALAS_POR_POSICION = {
     # -------------------------------------------------------------------------
     (5, "pentatonica_mayor"): [
         # E Gb Ab B Db — muy incómoda, casi todo pide bend u overblow
-        "-1'", "2", "-2'", "-3", "-4'", "5", "-6'", "-7", "8", "9'", "10'",
+        "-1'", "2", "-2'", "-3'''", "-3", "-4'", "5", "-6'", "-7", "8", "9'", "10'",
     ],
     (5, "pentatonica_menor"): [
         # E G A B D — cómoda, sin overblows
@@ -341,12 +351,12 @@ ESCALAS_POR_POSICION = {
     (12, "pentatonica_menor"): [
         # F Ab Bb C Eb — mucho más cara: el Ab del medio es "-6'" y el Bb "-3'"
         # (Eb, Ab y Bb de varios registros necesitan overblow, fuera de V1)
-        "1", "-2''", "-3'", "4", "-5", "-6'", "7", "8'", "-9", "10''", "10",
+        "1", "-2''", "-3'''", "-3'", "4", "-5", "-6'", "7", "8'", "-9", "10''", "10",
     ],
     (12, "blues"): [
         # F Ab Bb B C Eb — el B (la quinta bemol de Fa) sale sin bend en "-7"
         # y en "-3". Es la nota azul regalada de la 12a posición.
-        "1", "-2''", "-3'", "-3", "4", "-5", "-6'", "-7", "7", "8'", "-9",
+        "1", "-2''", "-3'''", "-3'", "-3", "4", "-5", "-6'", "-7", "7", "8'", "-9",
         "10''", "10'", "10",
     ],
 }

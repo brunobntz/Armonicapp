@@ -257,25 +257,35 @@ if __name__ == "__main__":
     print(f"Escala:   {tablas.NOMBRES_ESCALAS[resultado.escala]} de {resultado.tonica}")
     print(f"Notas:    {' '.join(resultado.nombres_notas)}\n")
 
-    print("Agujeros, de grave a agudo:")
+    con_bend = [nota for nota in resultado.agujeros if nota.bend > 0]
+
+    # La lista completa. Los que piden bend van marcados con un asterisco, para
+    # que se vea de un golpe cuáles son los caros. Antes esta lista iba seguida
+    # de otra con los agujeros naturales, y era fácil confundir la segunda con
+    # la escala entera: ahora hay UNA sola lista y el detalle va debajo.
+    print(f"LA ESCALA COMPLETA ({len(resultado.agujeros)} agujeros):")
     linea = "  "
     for nota in resultado.agujeros:
-        pedazo = f"{nota.como_tab()} {nota.nombre}".ljust(11)
+        marca = "*" if nota.bend > 0 else " "
+        pedazo = f"{nota.como_tab()} {nota.nombre}{marca}".ljust(12)
         if len(linea) + len(pedazo) > 78:
             print(linea)
             linea = "  "
         linea += pedazo
     print(linea)
 
-    naturales = resultado.sin_bends()
-    print(f"\nSin ningun bend ({len(naturales)} de {len(resultado.agujeros)}):")
-    print("  " + "  ".join(nota.como_tab() for nota in naturales))
+    if con_bend:
+        print(f"\n  * pide bend ({len(con_bend)} de {len(resultado.agujeros)}): "
+              + "  ".join(nota.como_tab() for nota in con_bend))
+        print(f"    los otros {len(resultado.sin_bends())} salen con aire natural.")
+    else:
+        print("\n  Ninguno pide bend: la escala entera sale con aire natural.")
 
     if resultado.necesita_overblows():
-        print(f"\nNotas de la escala que esta armonica NO da sin overblow:")
+        print("\nNotas de la escala que esta armonica NO da (harian falta overblows):")
         print(f"  {' '.join(resultado.faltantes)}")
     else:
-        print("\nEsta escala sale entera, sin overblows.")
+        print("\nNo falta ninguna nota: la escala esta entera en la armonica.")
 
     sobran, faltan = comparar_con_tabla_explicita(
         tonalidad, numero_posicion, nombre_escala
