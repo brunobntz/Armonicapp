@@ -98,17 +98,74 @@ class Nota:
         return self.como_tab()
 
 
+def todas_las_formas(tonalidad):
+    """
+    Devuelve {nota_midi: [Nota, ...]} con TODAS las maneras de tocar cada nota.
+
+    Recorre los 10 agujeros y, para cada uno, registra el soplado, el aspirado
+    y todos los bends que ese agujero permita.
+
+    La mayoría de las notas tiene una sola forma, así que la lista trae un solo
+    elemento. La excepción en la afinación Richter es el Sol4 de una armónica en
+    Do, que se puede tocar como 2 aspirado o como 3 soplado: ahí la lista trae
+    dos.
+
+    Esta función dice la verdad completa, sin elegir. La usa el módulo de teoría
+    para mostrarte todos los lugares donde podés tocar una nota de la escala.
+    Para transcribir hace falta elegir uno solo, y de eso se encarga
+    construir_tabla_inversa().
+    """
+    if tonalidad not in tablas.TONALIDADES:
+        raise ValueError(
+            f"No conozco la armonica en {tonalidad!r}. "
+            f"Las que hay son: {', '.join(tablas.TONALIDADES)}"
+        )
+
+    midi_raiz = tablas.TONALIDADES[tonalidad]
+    formas = {}
+
+    def registrar(midi, agujero, direccion, bend):
+        nota = Nota(
+            agujero=agujero,
+            direccion=direccion,
+            bend=bend,
+            midi=midi,
+            nombre=notas.midi_a_nombre(midi),
+        )
+        formas.setdefault(midi, []).append(nota)
+
+    for agujero in range(1, 11):
+        indice = agujero - 1
+
+        # --- Las dos notas naturales del agujero ---
+        midi_soplado = midi_raiz + tablas.AFINACION_SOPLADO[indice]
+        midi_aspirado = midi_raiz + tablas.AFINACION_ASPIRADO[indice]
+
+        registrar(midi_soplado, agujero, SOPLADO, 0)
+        registrar(midi_aspirado, agujero, ASPIRADO, 0)
+
+        # --- Los bends aspirados (agujeros 1 a 6) ---
+        # Cada bend baja un semitono más desde la nota aspirada.
+        for cantidad in range(1, tablas.BENDS_ASPIRADOS.get(agujero, 0) + 1):
+            registrar(midi_aspirado - cantidad, agujero, ASPIRADO, cantidad)
+
+        # --- Los bends soplados (agujeros 8, 9 y 10) ---
+        for cantidad in range(1, tablas.BENDS_SOPLADOS.get(agujero, 0) + 1):
+            registrar(midi_soplado - cantidad, agujero, SOPLADO, cantidad)
+
+    return formas
+
+
 def construir_tabla_inversa(tonalidad):
     """
-    Arma el diccionario {nota_midi: Nota} de una armónica.
+    Arma el diccionario {nota_midi: Nota} que usa la transcripción.
 
-    Recorre los 10 agujeros, y para cada uno registra el soplado, el aspirado y
-    todos los bends que ese agujero permita.
+    Es todas_las_formas() con una decisión tomada: cuando una nota se puede
+    tocar de dos maneras, elige una.
 
-    Sobre las AMBIGÜEDADES. En la afinación Richter hay una nota que se puede
-    tocar de dos formas: en una armónica en Do, el Sol4 es tanto el agujero 2
+    Sobre las AMBIGÜEDADES. En una armónica en Do, el Sol4 es tanto el agujero 2
     aspirado como el 3 soplado. Suenan igual, y escuchando el audio no hay forma
-    de distinguirlas. Hay que elegir una, y la elección está en
+    de distinguirlas. Hay que elegir, y la elección está en
     config.PREFERENCIA_AMBIGUEDAD.
 
     Por defecto preferimos el aspirado, porque el 2 aspirado es la tónica de la
@@ -119,73 +176,37 @@ def construir_tabla_inversa(tonalidad):
     venís del 1, seguro estás en el 2 aspirado; si venís del 4, probablemente
     sea el 3 soplado. Por ahora, una preferencia fija y documentada.)
     """
-    if tonalidad not in tablas.TONALIDADES:
-        raise ValueError(
-            f"No conozco la armonica en {tonalidad!r}. "
-            f"Las que hay son: {', '.join(tablas.TONALIDADES)}"
-        )
-
-    midi_raiz = tablas.TONALIDADES[tonalidad]
     tabla = {}
 
-    for agujero in range(1, 11):
-        indice = agujero - 1
-
-        # --- Las dos notas naturales del agujero ---
-        midi_soplado = midi_raiz + tablas.AFINACION_SOPLADO[indice]
-        midi_aspirado = midi_raiz + tablas.AFINACION_ASPIRADO[indice]
-
-        _agregar(tabla, midi_soplado, agujero, SOPLADO, 0)
-        _agregar(tabla, midi_aspirado, agujero, ASPIRADO, 0)
-
-        # --- Los bends aspirados (agujeros 1 a 6) ---
-        # Cada bend baja un semitono más desde la nota aspirada.
-        for cantidad in range(1, tablas.BENDS_ASPIRADOS.get(agujero, 0) + 1):
-            _agregar(tabla, midi_aspirado - cantidad, agujero, ASPIRADO, cantidad)
-
-        # --- Los bends soplados (agujeros 8, 9 y 10) ---
-        for cantidad in range(1, tablas.BENDS_SOPLADOS.get(agujero, 0) + 1):
-            _agregar(tabla, midi_soplado - cantidad, agujero, SOPLADO, cantidad)
+    for midi, candidatas in todas_las_formas(tonalidad).items():
+        tabla[midi] = _elegir_forma(candidatas)
 
     return tabla
 
 
-def _agregar(tabla, midi, agujero, direccion, bend):
+def _elegir_forma(candidatas):
     """
-    Mete una nota en la tabla inversa, resolviendo las ambigüedades.
+    De varias formas de tocar la misma nota, elige una.
 
     El guión bajo del nombre es una convención de Python: significa "esta
     función es de uso interno del módulo, no la llames desde afuera".
 
-    Regla: si la nota ya estaba, gana la que coincide con la preferencia de
-    config. Si ninguna coincide, gana la que ya estaba (la primera registrada).
-    Nunca reemplazamos una nota sin bend por una con bend: una nota natural
-    siempre es más probable que un bend.
+    Dos reglas, en orden:
+      1. Menos bend gana. Una nota natural siempre es más probable que un bend,
+         porque es más fácil de tocar.
+      2. A igual cantidad de bend, gana la dirección que diga config.
     """
-    nota = Nota(
-        agujero=agujero,
-        direccion=direccion,
-        bend=bend,
-        midi=midi,
-        nombre=notas.midi_a_nombre(midi),
-    )
+    if len(candidatas) == 1:
+        return candidatas[0]
 
-    existente = tabla.get(midi)
+    menor_bend = min(nota.bend for nota in candidatas)
+    finalistas = [nota for nota in candidatas if nota.bend == menor_bend]
 
-    if existente is None:
-        tabla[midi] = nota
-        return
+    for nota in finalistas:
+        if nota.direccion == config.PREFERENCIA_AMBIGUEDAD:
+            return nota
 
-    # Ya había una nota para este midi: hay que decidir cuál queda.
-    # Primero, una natural siempre le gana a una con bend.
-    if existente.bend != nota.bend:
-        if nota.bend < existente.bend:
-            tabla[midi] = nota
-        return
-
-    # Mismo nivel de bend: decide la preferencia de dirección de config.
-    if nota.direccion == config.PREFERENCIA_AMBIGUEDAD:
-        tabla[midi] = nota
+    return finalistas[0]
 
 
 def frecuencia_a_nota(frecuencia_hz, tonalidad=None, tabla_inversa=None,
@@ -347,6 +368,11 @@ def todas_las_notas(tonalidad):
 
 if __name__ == "__main__":
     import sys
+
+    from armonica.consola import preparar_consola
+
+    # Sin esto, imprimir una flecha revienta en la consola de Windows.
+    preparar_consola()
 
     tonalidad = sys.argv[1] if len(sys.argv) > 1 else "C"
 

@@ -122,9 +122,9 @@ PREFERENCIA_AMBIGUEDAD = "aspirado"
 # de bends. El texto se arma recién al mostrarlo. Por eso cambiar de notación
 # es cambiar esta línea, y no afecta nada más.
 #
-#   "guion"   ->  4   -4   -4'   -3''      (la que confirmaste)
-#   "flechas" ->  ↑4  ↓4   ↓4'   ↓3''      (la de tu atril)
-NOTACION = "guion"
+#   "flechas" ->  ↑4  ↓4   ↓4'   ↓3''      (la de tu atril, la elegida)
+#   "guion"   ->  4   -4   -4'   -3''      (la estandar de los metodos)
+NOTACION = "flechas"
 
 # Símbolo de los bends. El apóstrofo simple es lo estándar en tablatura de
 # armónica: uno por cada medio tono. Tu atril usa ′ ″ ‴ (primas tipográficas),
