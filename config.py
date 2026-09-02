@@ -42,6 +42,25 @@ DISPOSITIVO_ENTRADA = None
 CANALES = 1
 
 
+# Normalizar el audio de los archivos antes de analizarlo.
+#
+# POR QUÉ. La primera grabación real de Bruno llegó con un pico del 3% de la
+# escala: unos 30 dB por debajo de lo normal. Con el umbral de volumen fijo,
+# el 99% de las ventanas quedaba descartado como silencio y la app detectó
+# UNA sola nota en 18 segundos de escala.
+#
+# Normalizar sube toda la señal hasta un pico conocido, así el umbral de
+# volumen significa lo mismo sin importar cuánta ganancia tenía el micrófono.
+# No inventa información: multiplica todo por un número.
+#
+# Ponelo en False si querés ver los niveles tal cual quedaron grabados.
+NORMALIZAR_ARCHIVOS = True
+
+# A qué pico se lleva la señal al normalizar. 0.7 deja margen para que ninguna
+# suma de armónicos sature.
+PICO_NORMALIZACION = 0.7
+
+
 # =============================================================================
 # 2. DETECCIÓN DE TONO (YIN) — cómo decidimos qué frecuencia estás tocando
 # =============================================================================
@@ -52,6 +71,24 @@ CANALES = 1
 #     notas suaves o bends a medio hacer.
 #   - Más alto (0.20): más permisivo. Detecta más, pero también detecta ruido.
 UMBRAL_YIN = 0.12
+
+# Cuánta energía tiene que haber EN la frecuencia detectada para aceptarla.
+# Se mide como amplitud del fundamental dividida por el volumen del bloque.
+#
+# POR QUÉ EXISTE. Si tocás dos agujeros a la vez (por ejemplo el 6 y el 7
+# soplados, que dan Sol5 y Do6), la onda combinada se repite a la frecuencia
+# de un Do dos octavas más abajo, aunque ese Do no suene. Se llama "fundamental
+# ausente" y es un fenómeno real de la acústica: el oído también lo escucha.
+#
+# YIN mide repetición, así que reporta ese Do grave. No se equivoca: la onda
+# de verdad se repite ahí. Pero para una tablatura es una nota que no tocaste.
+#
+# La defensa es preguntar si en esa frecuencia HAY energía. En la grabación de
+# Bruno, las notas reales dieron entre 0.11 y 0.85; el instante en que sonaron
+# dos agujeros juntos dio 0.006. El umbral 0.05 los separa con mucho margen.
+#
+# Ponelo en 0.0 para desactivar la verificación.
+ENERGIA_FUNDAMENTAL_MINIMA = 0.05
 
 # Rango de frecuencias que consideramos válidas, en Hz.
 # La nota más grave de nuestras armónicas es G3 = 196 Hz (armónica en G, agujero 1

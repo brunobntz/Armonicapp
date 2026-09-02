@@ -451,3 +451,65 @@ def test_el_limite_del_rango_agudo_sigue_funcionando():
         detectada, _ = tono.detectar_frecuencia(seno(frecuencia), FS)
         assert detectada is not None
         assert abs(error_en_cents(detectada, nombre)) < 10.0
+
+
+# =============================================================================
+# El fundamental ausente: dos agujeros sonando juntos
+# =============================================================================
+
+def test_dos_agujeros_juntos_no_se_reportan_como_una_nota_grave():
+    """
+    EL CASO REAL DE LA PRIMERA GRABACION DE BRUNO.
+
+    Al pasar del agujero 6 al 7 sopló los dos juntos por un instante. Eso da
+    Sol5 (784 Hz) y Do6 (1046 Hz) sonando a la vez. Como están en relación 3 a
+    4, la onda combinada se repite a la frecuencia de un Do4, 261 Hz, aunque
+    ese Do no exista en el sonido: es el "fundamental ausente".
+
+    YIN reportaba ese Do4 con confianza 1.00, y aparecía en la tablatura como
+    un agujero 1 soplado que nunca tocó.
+
+    La defensa es verificar que en la frecuencia detectada haya energía de
+    verdad. Acá no la hay, así que la ventana se descarta.
+    """
+    tiempo = np.arange(TAMANO) / FS
+    dos_agujeros = (
+        0.3 * np.sin(2 * np.pi * 784.0 * tiempo)      # Sol5, el 6 soplado
+        + 0.5 * np.sin(2 * np.pi * 1046.5 * tiempo)   # Do6, el 7 soplado
+        + 0.4 * np.sin(2 * np.pi * 1568.0 * tiempo)   # el 2do armonico del Sol5
+    )
+    frecuencia, _ = tono.detectar_frecuencia(dos_agujeros, FS)
+    assert frecuencia is None or frecuencia > 700
+
+
+def test_una_nota_sola_si_tiene_energia_en_su_fundamental():
+    """La contracara: una nota de verdad no puede quedar descartada."""
+    for nombre in ["C4", "A4", "C5", "A5", "C6"]:
+        proporcion = tono.proporcion_del_fundamental(
+            bloque_de_nota(nombre),
+            notas.midi_a_frecuencia(notas.nombre_a_midi(nombre)),
+            FS,
+        )
+        assert proporcion > config_energia_minima(), (
+            f"{nombre} tiene poca energia en su fundamental: {proporcion:.3f}"
+        )
+
+
+def config_energia_minima():
+    import config
+    return config.ENERGIA_FUNDAMENTAL_MINIMA
+
+
+def test_la_proporcion_del_fundamental_es_alta_para_una_onda_pura():
+    """Un seno puro tiene toda su energía en una sola frecuencia."""
+    proporcion = tono.proporcion_del_fundamental(seno(440.0), 440.0, FS)
+    assert proporcion > 1.0
+
+
+def test_la_proporcion_del_fundamental_es_casi_cero_donde_no_hay_nada():
+    proporcion = tono.proporcion_del_fundamental(seno(440.0), 1234.0, FS)
+    assert proporcion < 0.05
+
+
+def test_el_silencio_da_proporcion_cero_sin_dividir_por_cero():
+    assert tono.proporcion_del_fundamental(np.zeros(TAMANO), 440.0, FS) == 0.0

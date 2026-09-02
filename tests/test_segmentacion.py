@@ -437,3 +437,76 @@ def test_funciona_igual_con_otra_armonica():
         mapeo.construir_tabla_inversa("G"),
     )
     assert [e.como_tab("guion") for e in eventos] == generar_wav.CORRIDA_12A
+
+
+# =============================================================================
+# La afinación de la armónica
+# =============================================================================
+
+def evento_con(tablatura, cents):
+    """Un evento armado a mano, para probar los cálculos de afinación."""
+    nota = mapeo.tab_a_nota(tablatura, "C")
+    return segmentacion.Evento(nota, 0.0, 0.5, 440.0, cents, 0.99, 20)
+
+
+def test_la_afinacion_se_estima_solo_con_las_notas_naturales():
+    """
+    Las notas sin bend las da la lengüeta y no dependen de cómo soples: son la
+    referencia honesta de cómo está afinado el instrumento.
+
+    Los bends no cuentan, porque ahí el desvío es tuyo y no del instrumento.
+    """
+    eventos = [
+        evento_con("4", 20.0), evento_con("-4", 18.0),
+        evento_con("-5", 22.0), evento_con("6", 20.0),
+        evento_con("-3'", -40.0),      # un bend muy desafinado
+        evento_con("-3''", -35.0),     # y otro
+    ]
+    afinacion, cuantas = segmentacion.estimar_afinacion_armonica(eventos)
+
+    assert cuantas == 4                       # solo las cuatro naturales
+    assert afinacion == pytest.approx(20.0, abs=1.0)
+
+
+def test_sin_suficientes_notas_naturales_no_se_estima_nada():
+    """Preferimos decir "no sé" antes que estimar con dos notas."""
+    afinacion, cuantas = segmentacion.estimar_afinacion_armonica(
+        [evento_con("4", 20.0), evento_con("-4", 18.0)]
+    )
+    assert afinacion is None
+    assert cuantas == 2
+
+
+def test_la_afinacion_usa_la_mediana_y_no_se_arruina_con_una_nota_mala():
+    eventos = [evento_con(t, c) for t, c in
+               [("4", 20.0), ("-4", 19.0), ("-5", 21.0), ("6", 20.0),
+                ("7", -45.0)]]     # una nota tocada pésimo
+    afinacion, _ = segmentacion.estimar_afinacion_armonica(eventos)
+    assert afinacion == pytest.approx(20.0, abs=1.0)
+
+
+def test_la_afinacion_equivalente_en_hz():
+    """
+    Los fabricantes hablan en Hz, no en cents. Una armónica +16 cents es una
+    armónica afinada con La = 444 Hz, que es lo que entrega Hohner.
+    """
+    assert segmentacion.afinacion_equivalente_hz(0.0) == pytest.approx(440.0)
+    assert segmentacion.afinacion_equivalente_hz(16.0) == pytest.approx(444.0, abs=0.5)
+    assert segmentacion.afinacion_equivalente_hz(-100.0) == pytest.approx(415.3, abs=0.5)
+
+
+def test_los_cents_relativos_descuentan_la_afinacion_del_instrumento():
+    """
+    EL CALCULO QUE SEPARA AL MUSICO DEL INSTRUMENTO.
+
+    Si la armónica está +16 cents y tocaste un bend a -18, contra el estándar
+    parece un error chico. Contra tu propia armónica son 34 cents de más: casi
+    un tercio de semitono.
+    """
+    evento = evento_con("-3'", -18.0)
+    assert segmentacion.cents_relativos(evento, 16.0) == pytest.approx(-34.0)
+
+
+def test_sin_afinacion_estimada_los_cents_relativos_son_los_absolutos():
+    evento = evento_con("-3'", -18.0)
+    assert segmentacion.cents_relativos(evento, None) == pytest.approx(-18.0)

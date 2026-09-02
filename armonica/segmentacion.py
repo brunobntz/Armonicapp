@@ -295,3 +295,62 @@ def resumen_corto(eventos):
         f"(duracion media {duracion_media * 1000:.0f} ms, "
         f"{len(reconocidas)} reconocidas)"
     )
+
+
+def estimar_afinacion_armonica(eventos, minimo_notas=4):
+    """
+    Estima a qué afinación está tu armónica, mirando solo las notas naturales.
+
+    Devuelve (cents_de_desvio, cantidad_de_notas_usadas), o (None, 0) si no hay
+    suficientes notas naturales para decir algo.
+
+    POR QUÉ IMPORTA
+
+    La app mide la afinación contra La = 440 Hz, que es el estándar de
+    orquesta. Pero las armónicas casi nunca se afinan ahí: Hohner las entrega
+    afinadas a 442 o 443 Hz, y encima la presión del aire sube o baja el tono.
+
+    Si tu armónica está 20 cents alta, TODAS tus notas van a leerse como
+    "20 cents altas", y no es culpa tuya: es el instrumento. Peor todavía, tus
+    bends van a parecer más afinados de lo que son, porque el error del
+    instrumento tira para arriba y el del bend tira para abajo.
+
+    Este cálculo separa las dos cosas. Usa SOLO las notas sin bend, porque esas
+    las da la lengüeta y no dependen de vos. Lo que salga de ahí es la afinación
+    de la armónica; lo que se desvíe de ese valor, es tu forma de tocar.
+
+    Usamos la mediana para que una nota mal tocada no arrastre el resultado.
+    """
+    naturales = [
+        evento.cents for evento in eventos
+        if evento.nota is not None and evento.nota.bend == 0
+    ]
+
+    if len(naturales) < minimo_notas:
+        return None, len(naturales)
+
+    return median(naturales), len(naturales)
+
+
+def afinacion_equivalente_hz(cents):
+    """
+    Traduce un desvío en cents al La de referencia equivalente.
+
+    Ejemplo: +20 cents equivale a una armónica afinada con La = 445 Hz.
+    Es más fácil de entender así, porque es como lo dicen los fabricantes.
+    """
+    return 440.0 * (2.0 ** (cents / 1200.0))
+
+
+def cents_relativos(evento, afinacion_armonica):
+    """
+    Cuán desafinada estuvo una nota RESPECTO DE TU PROPIA ARMONICA.
+
+    Es el número que de verdad habla de cómo tocaste. Si tu armónica está
+    +20 cents y tocaste un bend a -28, contra el estándar parece un error de
+    28 cents, pero contra tu instrumento son 48: estás bajando el bend casi
+    medio semitono de más.
+    """
+    if afinacion_armonica is None:
+        return evento.cents
+    return evento.cents - afinacion_armonica

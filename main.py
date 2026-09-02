@@ -32,6 +32,11 @@ def transcribir_archivo(ruta, tonalidad, posicion=None, escala=None,
     """
     muestras, frecuencia_muestreo = audio.leer_wav(ruta)
 
+    # Normalizar antes de analizar. Sin esto, una grabación con poco volumen
+    # se descarta entera como si fuera silencio. Ver config.NORMALIZAR_ARCHIVOS.
+    if config.NORMALIZAR_ARCHIVOS:
+        muestras = audio.normalizar(muestras)
+
     mediciones = tono.detectar_en_senal(muestras, frecuencia_muestreo)
 
     tabla = mapeo.construir_tabla_inversa(tonalidad)
@@ -121,33 +126,55 @@ def _imprimir_afinacion(eventos):
     """
     Cuán afinado tocaste cada agujero, con foco en los bends.
 
-    Los bends son notas continuas: no hay una lengüeta que te dé la nota justa,
-    la tenés que encontrar vos. Por eso son los que más se desafinan y los que
-    más sentido tiene medir.
+    Primero calcula la afinación de la armónica usando solo las notas naturales,
+    y después mide los bends CONTRA ESA REFERENCIA. Sin ese paso estaríamos
+    mezclando dos cosas distintas: cómo está afinado el instrumento y cómo
+    tocaste vos.
     """
+    afinacion, cuantas = segmentacion.estimar_afinacion_armonica(eventos)
+
+    print("AFINACION")
+    print("-" * 72)
+
+    if afinacion is None:
+        print(f"  No hay suficientes notas naturales ({cuantas}) para estimar")
+        print("  la afinacion de la armonica. Se muestra todo contra La = 440.")
+    else:
+        equivalente = segmentacion.afinacion_equivalente_hz(afinacion)
+        print(f"  Tu armonica esta {afinacion:+.0f} cents respecto de La = 440 Hz,")
+        print(f"  o sea afinada como si La fuera {equivalente:.0f} Hz.")
+        print(f"  (Medido sobre {cuantas} notas naturales, que las da la lengueta")
+        print("  y no dependen de como soples.)")
+        print()
+        print("  Lo que sigue mide CONTRA TU ARMONICA, no contra el estandar.")
+
     por_agujero = {}
     for evento in eventos:
         if evento.nota is None:
             continue
-        clave = evento.como_tab()
-        por_agujero.setdefault(clave, []).append(evento.cents)
+        relativo = segmentacion.cents_relativos(evento, afinacion)
+        por_agujero.setdefault(evento.como_tab(), []).append(relativo)
 
     bends = {k: v for k, v in por_agujero.items() if "'" in k}
     if not bends:
         return
 
-    print("AFINACION DE LOS BENDS")
-    print("-" * 72)
-    print(f"{'agujero':>8} {'veces':>6} {'cents medio':>12}   {'medidor':<25}")
+    print()
+    print(f"{'bend':>8} {'veces':>6} {'cents':>7}   {'medidor':<27}")
 
-    for tablatura, lista in sorted(bends.items()):
+    for tablatura, lista in sorted(bends.items(), key=lambda x: -abs(sum(x[1]) / len(x[1]))):
         promedio = sum(lista) / len(lista)
-        print(f"{tablatura:>8} {len(lista):6} {promedio:+12.1f}   "
-              f"{_barra_de_cents(promedio)}")
+        aviso = ""
+        if promedio < -20:
+            aviso = "  te pasas de bend"
+        elif promedio > 20:
+            aviso = "  te falta bend"
+        print(f"{tablatura:>8} {len(lista):6} {promedio:+7.0f}   "
+              f"{_barra_de_cents(promedio)}{aviso}")
 
     print()
-    print("  El medidor va de -50 a +50 cents. El | del medio es la afinacion")
-    print("  justa. A la izquierda estas bajo, a la derecha alto.")
+    print("  El medidor va de -50 a +50 cents. El | del medio es la nota justa.")
+    print("  A la izquierda bajaste de mas; a la derecha te quedaste corto.")
 
 
 def _barra_de_cents(cents, ancho=25):

@@ -147,3 +147,30 @@ def volumen_rms(bloque):
     if bloque.size == 0:
         return 0.0
     return float(np.sqrt(np.mean(bloque ** 2)))
+
+
+def normalizar(muestras, pico=None):
+    """
+    Sube (o baja) toda la señal para que su pico llegue a un valor conocido.
+
+    POR QUÉ HACE FALTA. La ganancia del micrófono cambia todo. Dos grabaciones
+    de lo mismo, una con el micrófono cerca y otra lejos, dan volúmenes muy
+    distintos. Si el umbral de volumen es un número fijo, sirve para una y no
+    para la otra.
+
+    Normalizar resuelve eso: multiplica toda la señal por un número para que el
+    pico quede siempre en el mismo lugar. No agrega ni saca información, igual
+    que expresar un balance en miles en vez de en unidades.
+
+    Devuelve la señal sin tocar si es puro silencio, para no dividir por cero.
+    """
+    if pico is None:
+        pico = config.PICO_NORMALIZACION
+
+    muestras = np.asarray(muestras, dtype=np.float32)
+    maximo = float(np.max(np.abs(muestras))) if muestras.size else 0.0
+
+    if maximo < 1e-9:
+        return muestras
+
+    return muestras * (pico / maximo)

@@ -230,3 +230,56 @@ def test_el_umbral_de_config_separa_bien_el_ruido_de_una_nota():
 
     assert audio.volumen_rms(nota_floja) > config.UMBRAL_VOLUMEN_RMS
     assert audio.volumen_rms(ruido) < config.UMBRAL_VOLUMEN_RMS
+
+
+# =============================================================================
+# Normalizar
+# =============================================================================
+
+def test_normalizar_lleva_el_pico_al_valor_pedido():
+    floja = seno(440.0, amplitud=0.03)
+    normalizada = audio.normalizar(floja, pico=0.7)
+    assert np.max(np.abs(normalizada)) == pytest.approx(0.7, abs=1e-5)
+
+
+def test_normalizar_tambien_baja_una_senal_saturada():
+    fuerte = seno(440.0, amplitud=0.99)
+    normalizada = audio.normalizar(fuerte, pico=0.5)
+    assert np.max(np.abs(normalizada)) == pytest.approx(0.5, abs=1e-5)
+
+
+def test_normalizar_no_cambia_la_forma_de_la_onda():
+    """
+    Multiplicar todo por un número no altera la música: las proporciones entre
+    las muestras quedan iguales, y por eso la frecuencia no se mueve.
+    """
+    original = seno(440.0, amplitud=0.03)
+    normalizada = audio.normalizar(original, pico=0.7)
+    factor = normalizada[100] / original[100]
+    assert np.allclose(normalizada, original * factor, atol=1e-6)
+
+
+def test_normalizar_no_rompe_con_silencio():
+    """Sin esta guarda dividiríamos por cero."""
+    silencio = np.zeros(1000, dtype=np.float32)
+    assert np.array_equal(audio.normalizar(silencio), silencio)
+
+
+def test_normalizar_arregla_una_grabacion_demasiado_baja():
+    """
+    El caso real que motivó esta función. La primera grabación de Bruno llegó
+    con un pico del 3% de la escala y un RMS de 0.0033: con el umbral de volumen
+    fijo, el 99% de las ventanas se descartaba como silencio y la app detectó
+    UNA nota en 18 segundos de escala.
+
+    Los números de acá son los de esa grabación: una amplitud que da un RMS de
+    unos 0.003, justo por debajo del umbral.
+    """
+    floja = seno(440.0, duracion_seg=0.5, amplitud=0.0047)
+
+    volumen_original = audio.volumen_rms(floja)
+    assert volumen_original == pytest.approx(0.0033, abs=0.0005)
+    assert volumen_original < config.UMBRAL_VOLUMEN_RMS
+
+    normalizada = audio.normalizar(floja)
+    assert audio.volumen_rms(normalizada) > config.UMBRAL_VOLUMEN_RMS

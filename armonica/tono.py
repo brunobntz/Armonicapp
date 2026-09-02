@@ -125,12 +125,70 @@ def detectar_frecuencia(bloque, frecuencia_muestreo=None, umbral=None,
     if not (frecuencia_minima <= frecuencia <= frecuencia_maxima):
         return None, 0.0
 
+    # Última verificación: ¿hay energía DE VERDAD en esa frecuencia?
+    # Ver proporcion_del_fundamental() para el porqué. Es lo que distingue una
+    # nota real de dos agujeros sonando juntos.
+    if config.ENERGIA_FUNDAMENTAL_MINIMA > 0:
+        proporcion = proporcion_del_fundamental(bloque, frecuencia,
+                                                frecuencia_muestreo)
+        if proporcion < config.ENERGIA_FUNDAMENTAL_MINIMA:
+            return None, 0.0
+
     # La confianza es lo contrario de la "aperiodicidad" que mide YIN.
     # normalizada[tau] cerca de 0 = muy periódica = confianza cerca de 1.
     confianza = float(1.0 - normalizada[tau])
     confianza = max(0.0, min(1.0, confianza))
 
     return float(frecuencia), confianza
+
+
+def proporcion_del_fundamental(bloque, frecuencia_hz, frecuencia_muestreo):
+    """
+    Cuánta de la energía del bloque está realmente en esa frecuencia.
+
+    Devuelve la amplitud de esa frecuencia dividida por el volumen del bloque.
+    Cerca de 0 significa que la frecuencia detectada no suena.
+
+    POR QUÉ HACE FALTA ESTO
+
+    YIN mide cada cuánto se repite la onda, y eso NO siempre coincide con una
+    nota que estés tocando. El caso concreto que apareció en la primera
+    grabación de Bruno: soplar dos agujeros a la vez, el 6 y el 7, da Sol5 y
+    Do6 sonando juntos. Esas dos frecuencias están en relación 3 a 4, así que
+    la onda combinada se repite a la frecuencia de un Do dos octavas más abajo,
+    aunque ese Do no exista en el sonido.
+
+    Se llama FUNDAMENTAL AUSENTE, y es un fenómeno real: el oído humano también
+    lo escucha, y es la razón por la que un parlante chico de teléfono puede
+    hacerte sentir el bajo de una canción sin poder reproducirlo.
+
+    YIN reporta ese Do grave, y no se equivoca: la onda de verdad se repite ahí.
+    Pero para una tablatura es una nota que nunca tocaste.
+
+    La forma de distinguirlos es preguntar si EN esa frecuencia hay energía.
+    Comparamos la señal contra un seno y un coseno de esa frecuencia; si la
+    señal la contiene, la comparación da un número grande. Es la misma idea de
+    la transformada de Fourier, pero para una sola frecuencia, y por eso cuesta
+    apenas dos multiplicaciones de vectores.
+    """
+    bloque = np.asarray(bloque, dtype=np.float64)
+    cantidad = len(bloque)
+    if cantidad == 0:
+        return 0.0
+
+    volumen = np.sqrt(np.mean(bloque ** 2))
+    if volumen < 1e-12:
+        return 0.0
+
+    tiempo = np.arange(cantidad) / frecuencia_muestreo
+    parte_coseno = np.dot(bloque, np.cos(2 * np.pi * frecuencia_hz * tiempo))
+    parte_seno = np.dot(bloque, np.sin(2 * np.pi * frecuencia_hz * tiempo))
+
+    # np.hypot(a, b) es la raíz de a^2 + b^2: la amplitud combinada de las dos
+    # partes. El 2/cantidad convierte esa suma en la amplitud de la onda.
+    amplitud = 2.0 * np.hypot(parte_coseno, parte_seno) / cantidad
+
+    return float(amplitud / volumen)
 
 
 def _funcion_diferencia(bloque, tau_maximo):
