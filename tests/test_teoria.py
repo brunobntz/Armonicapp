@@ -323,3 +323,117 @@ def test_muestra_las_dos_formas_de_tocar_una_nota_ambigua():
     tablaturas = resultado.tablaturas("guion")
     assert "-2" in tablaturas
     assert "3" in tablaturas
+
+
+# =============================================================================
+# La escala de blues MAYOR — la del estudio de Carlos del Junco
+# =============================================================================
+
+def test_la_escala_de_blues_mayor_es_la_pentatonica_mayor_mas_la_tercera_menor():
+    """
+    Los grados son 1, 2, b3, 3, 5, 6. La gracia es que tiene las DOS terceras
+    pegadas, y pasar de una a la otra es el sonido caracteristico del blues.
+    """
+    mayor = set(tablas.ESCALAS_INTERVALOS["pentatonica_mayor"])
+    blues_mayor = set(tablas.ESCALAS_INTERVALOS["blues_mayor"])
+    assert mayor.issubset(blues_mayor)
+    assert blues_mayor - mayor == {3}      # la tercera menor
+
+
+def test_no_es_la_misma_escala_que_la_de_blues_menor():
+    """
+    Las dos se llaman blues y son distintas. En Fa:
+        blues mayor -> F G Ab A C D
+        blues        -> F Ab Bb B C Eb
+    Solo comparten la tonica, la tercera menor y la quinta.
+    """
+    en_fa_mayor = teoria.notas_de_escala("F", "blues_mayor")
+    en_fa_menor = teoria.notas_de_escala("F", "blues")
+    assert en_fa_mayor == ["F", "G", "Ab", "A", "C", "D"]
+    assert en_fa_menor == ["F", "Ab", "Bb", "B", "C", "Eb"]
+    assert en_fa_mayor != en_fa_menor
+
+
+def test_la_corrida_de_blues_mayor_en_doceava_es_la_que_toca_bruno():
+    """
+    ESTE TEST FIJA LA DIGITACION QUE BRUNO PRACTICA.
+
+    Es la corrida de dos octavas del estudio de Carlos del Junco en 12a
+    posicion, tal como la escribio el 02/09, verificada nota por nota contra
+    la afinacion de la armonica.
+
+    La unica diferencia con lo que el escribio es el "-6" (La5): en su version
+    salta del "-6'" (Lab5) directo al "7" (Do6). La app lo incluye porque es
+    nota de la escala; que la toque o no es decision suya.
+    """
+    resultado = teoria.agujeros_para_escala("C", 12, "blues_mayor")
+    corrida = [nota.como_tab("guion") for nota in resultado.desde_la_tonica(octavas=2)]
+
+    assert corrida == [
+        "-2''", "-2", "-3'''", "-3''", "4", "-4",
+        "-5", "6", "-6'", "-6", "7", "-8", "-9",
+    ]
+
+    nombres = [nota.nombre for nota in resultado.desde_la_tonica(octavas=2)]
+    assert nombres == [
+        "F4", "G4", "Ab4", "A4", "C5", "D5",
+        "F5", "G5", "Ab5", "A5", "C6", "D6", "F6",
+    ]
+
+
+def test_la_corrida_arranca_en_la_tonica_no_en_el_agujero_mas_grave():
+    """
+    La diferencia entre las dos vistas. El inventario completo empieza en el
+    "1" (Do4), porque el Do es la quinta de Fa y es la nota mas grave de la
+    escala que la armonica alcanza. La corrida empieza en el "-2''" (Fa4),
+    que es la tonica y es donde arranca cualquier hoja de estudio.
+    """
+    resultado = teoria.agujeros_para_escala("C", 12, "blues_mayor")
+    assert resultado.agujeros[0].como_tab("guion") == "1"
+    assert resultado.agujeros[0].nombre == "C4"
+    assert resultado.desde_la_tonica()[0].como_tab("guion") == "-2''"
+    assert resultado.desde_la_tonica()[0].nombre == "F4"
+
+
+def test_la_corrida_no_repite_la_misma_nota_dos_veces():
+    """
+    El Sol4 se puede tocar como "-2" o como "3". En el inventario aparecen las
+    dos opciones; en la corrida, una sola, para que se lea como una escala.
+    """
+    resultado = teoria.agujeros_para_escala("C", 12, "blues_mayor")
+    midis = [nota.midi for nota in resultado.desde_la_tonica()]
+    assert len(midis) == len(set(midis))
+
+    inventario = [nota.como_tab("guion") for nota in resultado.agujeros]
+    assert "-2" in inventario and "3" in inventario
+
+
+def test_las_dos_terceras_de_la_doceava_estan_en_los_mismos_agujeros():
+    """
+    El movimiento central de la 12a: Lab contra La. Abajo son los bends del 3
+    (tercero y segundo), en el registro central son el bend del 6 y el 6 pelado.
+    """
+    resultado = teoria.agujeros_para_escala("C", 12, "blues_mayor")
+    tabs = resultado.tablaturas("guion")
+    for tablatura in ["-3'''", "-3''", "-6'", "-6"]:
+        assert tablatura in tabs
+
+
+def test_el_bend_del_ocho_no_pertenece_a_la_escala_de_blues_mayor():
+    """
+    El "8'" es Mib, la septima menor de Fa. Esta en la escala de blues MENOR,
+    no en la mayor. Por eso no aparece en la corrida de Carlos del Junco.
+    """
+    resultado_mayor = teoria.agujeros_para_escala("C", 12, "blues_mayor")
+    resultado_menor = teoria.agujeros_para_escala("C", 12, "blues")
+    assert "8'" not in resultado_mayor.tablaturas("guion")
+    assert "8'" in resultado_menor.tablaturas("guion")
+
+
+def test_la_corrida_se_puede_pedir_de_una_sola_octava():
+    resultado = teoria.agujeros_para_escala("C", 12, "blues_mayor")
+    una = resultado.desde_la_tonica(octavas=1)
+    dos = resultado.desde_la_tonica(octavas=2)
+    assert len(una) < len(dos)
+    assert una[0].nombre == "F4"
+    assert una[-1].nombre == "F5"

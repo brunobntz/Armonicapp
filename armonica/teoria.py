@@ -69,6 +69,61 @@ class EscalaEnArmonica:
         """Los agujeros como lista de texto: ['↓5', '6', '↓6', ...]."""
         return [nota.como_tab(notacion) for nota in self.agujeros]
 
+    def desde_la_tonica(self, octavas=2, sin_repetir_nota=True):
+        """
+        La escala como se estudia: arrancando en la tónica y subiendo.
+
+        Es distinto de `agujeros`, que trae todo lo que la armónica puede dar
+        ordenado de grave a agudo. Esa lista empieza en el agujero más grave que
+        pertenezca a la escala, que casi nunca es la tónica.
+
+        Ejemplo en 12a posición con armónica de Do: `agujeros` empieza en el
+        ↑1 (Do), porque el Do es la quinta de Fa y es la nota más grave de la
+        escala que la armónica alcanza. Pero la corrida que practicás empieza en
+        el ↓2'' (Fa), que es la tónica. Eso es lo que devuelve esta función.
+
+        `sin_repetir_nota` saca los duplicados: cuando una nota se puede tocar de
+        dos formas (el Sol4 en armónica de Do), deja una sola, para que la
+        corrida se lea como una escala y no como una lista de opciones.
+
+        `octavas` corta la corrida después de esa cantidad de octavas desde la
+        tónica. Con 2 sale lo que suele entrar en una hoja de estudio.
+        """
+        if not self.agujeros:
+            return []
+
+        clase_tonica = self.agujeros[0].midi % 12
+        for nota in self.agujeros:
+            if notas.nombre_de_clase(nota.midi % 12) == self.tonica:
+                clase_tonica = nota.midi % 12
+                break
+
+        # Buscamos la tónica más grave que la armónica alcance.
+        primera = None
+        for nota in self.agujeros:
+            if nota.midi % 12 == clase_tonica:
+                primera = nota
+                break
+        if primera is None:
+            return list(self.agujeros)
+
+        limite = primera.midi + 12 * octavas
+        corrida = [
+            nota for nota in self.agujeros
+            if primera.midi <= nota.midi <= limite
+        ]
+
+        if sin_repetir_nota:
+            vistas = set()
+            unicas = []
+            for nota in corrida:
+                if nota.midi not in vistas:
+                    vistas.add(nota.midi)
+                    unicas.append(nota)
+            corrida = unicas
+
+        return corrida
+
     def sin_bends(self):
         """
         Solo los agujeros que salen con aire natural, sin ningún bend.
@@ -257,13 +312,18 @@ if __name__ == "__main__":
     print(f"Escala:   {tablas.NOMBRES_ESCALAS[resultado.escala]} de {resultado.tonica}")
     print(f"Notas:    {' '.join(resultado.nombres_notas)}\n")
 
+    # PRIMERO la corrida desde la tónica, que es como se estudia y como la
+    # escribe Leandro en las hojas. Va arriba porque es lo que uno busca.
+    corrida = resultado.desde_la_tonica(octavas=2)
+    print(f"LA CORRIDA, dos octavas desde la tonica ({resultado.tonica}):")
+    print("  " + "  ".join(nota.como_tab() for nota in corrida))
+    print("  " + "  ".join(nota.nombre.ljust(len(nota.como_tab())) for nota in corrida))
+
     con_bend = [nota for nota in resultado.agujeros if nota.bend > 0]
 
-    # La lista completa. Los que piden bend van marcados con un asterisco, para
-    # que se vea de un golpe cuáles son los caros. Antes esta lista iba seguida
-    # de otra con los agujeros naturales, y era fácil confundir la segunda con
-    # la escala entera: ahora hay UNA sola lista y el detalle va debajo.
-    print(f"LA ESCALA COMPLETA ({len(resultado.agujeros)} agujeros):")
+    # DESPUÉS el inventario completo, que incluye los otros registros y las dos
+    # formas de tocar una nota ambigua. Los que piden bend van con asterisco.
+    print(f"\nTODOS LOS AGUJEROS DE LA ESCALA EN LA ARMONICA ({len(resultado.agujeros)}):")
     linea = "  "
     for nota in resultado.agujeros:
         marca = "*" if nota.bend > 0 else " "

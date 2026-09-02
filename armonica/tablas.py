@@ -181,14 +181,34 @@ ESCALAS_INTERVALOS = {
 
     # La pentatónica menor + la "blue note" (quinta bemol). Esa nota extra es
     # la que da la tensión característica del blues.
+    # También se la llama "escala de blues menor" para distinguirla de la de abajo.
     "blues": [0, 3, 5, 6, 7, 10],
+
+    # ESCALA DE BLUES MAYOR: la pentatónica mayor con la tercera menor metida
+    # adentro. Los grados son 1, 2, b3, 3, 5, 6.
+    #
+    # Es la escala que Bruno trabaja en 12a posición con el estudio de Carlos
+    # del Junco. La gracia está en que tiene las DOS terceras, la menor y la
+    # mayor, pegadas: pasar de una a la otra es el sonido más característico
+    # del blues, y es el "sabor" del que habló Leandro el 04/08.
+    #
+    # No es lo mismo que la escala de blues de arriba, aunque las dos se llamen
+    # blues. En Fa: esta da F G Ab A C D, la otra da F Ab Bb B C Eb.
+    #
+    # Se puede pensar de dos maneras, y las dos son la misma escala:
+    #   - pentatónica MAYOR de Fa (F G A C D) + el Lab
+    #   - pentatónica MENOR de Re (D F G A C) + el Lab, o sea la relativa menor
+    # Por eso Leandro dice "escala de blues de Re menor sobre el acorde de Fa"
+    # y a la vez "el 1 soplado es la 5a": las dos frases describen esto mismo.
+    "blues_mayor": [0, 2, 3, 4, 7, 9],
 }
 
 # Nombres para mostrar en pantalla.
 NOMBRES_ESCALAS = {
     "pentatonica_mayor": "Pentatonica mayor",
     "pentatonica_menor": "Pentatonica menor",
-    "blues": "Escala de blues",
+    "blues": "Escala de blues (menor)",
+    "blues_mayor": "Escala de blues mayor",
 }
 
 
@@ -244,6 +264,11 @@ ESCALAS_POR_POSICION = {
         "1", "-2''", "-2'", "-2", "3", "-3'", "4", "-5", "6",
         "7", "8'", "-9", "9'", "9", "10''", "10",
     ],
+    (1, "blues_mayor"): [
+        # C D Eb E G A — la pentatonica mayor de Do con la tercera menor
+        "1", "-1", "2", "-2", "3", "-3''", "4", "-4", "5", "6", "-6", "7", "-8",
+        "8'", "8", "9", "-10", "10",
+    ],
 
     # -------------------------------------------------------------------------
     # 2a POSICIÓN — la del blues. Armónica en C -> tocás en G.
@@ -266,6 +291,13 @@ ESCALAS_POR_POSICION = {
         "1", "-1'", "-1", "-2''", "-2", "3", "-3'", "4", "-4'", "-4", "-5",
         "6", "7", "-8", "-9", "9", "10''", "10",
     ],
+    (2, "blues_mayor"): [
+        # G A Bb B D E — el sonido clasico del blues de 2a: las dos terceras
+        # pegadas, "-3'" (Sib) y "-3" (Si). Alternar entre ellas es el "sabor"
+        # del que hablo Leandro el 04/08.
+        "-1", "2", "-2", "3", "-3''", "-3'", "-3", "-4", "5", "6", "-6", "-7",
+        "-8", "8", "9", "-10", "10''", "10'",
+    ],
 
     # -------------------------------------------------------------------------
     # 3a POSICIÓN — la menor. Armónica en C -> tocás en D.
@@ -287,6 +319,11 @@ ESCALAS_POR_POSICION = {
         # y en el agudo haría falta un overblow. Por eso aparece una sola vez.
         "1", "-1", "-2''", "-2", "3", "-3'''", "-3''", "4", "-4", "-5",
         "6", "-6'", "-6", "7", "-8", "-9", "9", "-10", "10",
+    ],
+    (3, "blues_mayor"): [
+        # D E F Gb A B
+        "-1", "2", "-2''", "-2'", "-3''", "-3", "-4", "5", "-5", "-6", "-7",
+        "-8", "8", "-9", "9'", "-10", "10'",
     ],
 
     # -------------------------------------------------------------------------
@@ -312,6 +349,11 @@ ESCALAS_POR_POSICION = {
         "1", "-1", "2", "-2", "3", "-3''", "4", "-4", "5", "6", "-6", "7", "-8",
         "8'", "8", "9", "-10", "10",
     ],
+    (4, "blues_mayor"): [
+        # A B C Db E Gb
+        "1", "-1'", "2", "-2'", "-3''", "-3", "4", "-4'", "5", "-6", "-7", "7",
+        "8", "9'", "-10", "10'", "10",
+    ],
 
     # -------------------------------------------------------------------------
     # 5a POSICIÓN — Armónica en C -> tocás en E. La usaste para el E7 de
@@ -330,6 +372,11 @@ ESCALAS_POR_POSICION = {
         # E G A Bb B D
         "-1", "2", "-2", "3", "-3''", "-3'", "-3", "-4", "5", "6", "-6", "-7",
         "-8", "8", "9", "-10", "10''", "10'",
+    ],
+    (5, "blues_mayor"): [
+        # E Gb G Ab B Db
+        "-1'", "2", "-2'", "-2", "3", "-3'''", "-3", "-4'", "5", "6", "-6'",
+        "-7", "8", "9'", "9", "10'",
     ],
 
     # -------------------------------------------------------------------------
@@ -358,6 +405,17 @@ ESCALAS_POR_POSICION = {
         # y en "-3". Es la nota azul regalada de la 12a posición.
         "1", "-2''", "-3'''", "-3'", "-3", "4", "-5", "-6'", "-7", "7", "8'", "-9",
         "10''", "10'", "10",
+    ],
+    (12, "blues_mayor"): [
+        # F G Ab A C D — ESTA es la que Bruno trabaja con el estudio de Carlos
+        # del Junco. Tiene las dos terceras de Fa pegadas: el tercer bend del 3
+        # (Lab) y el segundo (La) abajo, y "-6'" (Lab) contra "-6" (La) en el
+        # registro central. Pasar de una a la otra es el sonido de la 12a.
+        #
+        # La corrida de dos octavas desde la tonica sale asi:
+        #   -2''  -2  -3'''  -3''  4  -4  -5  6  -6'  -6  7  -8  -9
+        "1", "-1", "-2''", "-2", "3", "-3'''", "-3''", "4", "-4", "-5", "6",
+        "-6'", "-6", "7", "-8", "-9", "9", "-10", "10",
     ],
 }
 
