@@ -81,6 +81,25 @@ UMBRAL_VOLUMEN_RMS = 0.01
 #   - Más alto (0.15): solo notas claras y sostenidas, pero perdés frases rápidas.
 DURACION_MINIMA_SEG = 0.06
 
+# Corrección del instante de inicio de cada nota, en segundos.
+#
+# POR QUÉ HACE FALTA. El detector trabaja por ventanas de 46 ms. Cuando una nota
+# empieza, la primera ventana que la reconoce ARRANCÓ ANTES de que la nota
+# sonara: le alcanza con que la nota ocupe una parte para detectarla. Resultado:
+# la app cree que empezaste antes de lo que empezaste.
+#
+# Medido contra audio generado, donde sabemos el instante exacto, el sesgo va de
+# 23 a 34 milisegundos, siempre hacia atrás. Sumando 28 ms el error residual
+# queda en unos 6 ms, que es bastante menos que la resolución de una ventana.
+#
+# ESTO IMPORTA MUCHO para el análisis de ritmo del paso 5b. Los desvíos de
+# tiempo que queremos medir rondan los 70 ms, así que un sesgo fijo de 30 ms
+# sería casi la mitad de la señal: mediría el retardo del algoritmo en vez de
+# tu forma de tocar.
+#
+# Ponelo en 0.0 si querés ver los tiempos crudos, sin corregir.
+CORRECCION_INICIO_SEG = 0.028
+
 # Cuántas ventanas seguidas SIN detección toleramos antes de cerrar una nota.
 # Sirve para que un solo frame malo (un golpe de aire, un instante de duda) no
 # parta una nota larga en dos notas cortas.
