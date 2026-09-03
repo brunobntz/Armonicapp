@@ -153,6 +153,30 @@ TOLERANCIA_CENTS = 50.0
 
 
 # =============================================================================
+# 3b. RITMO — cuánto desvío del pulso aceptamos
+# =============================================================================
+
+# Cuántos milisegundos de desvío respecto del pulso todavía cuentan como
+# "a tiempo".
+#
+# Referencias para calibrar esto:
+#   - Menos de 20 ms: casi nadie lo escucha.
+#   - 30 a 50 ms: un músico entrenado lo nota.
+#   - Más de 50 ms: suena claramente adelantado o atrasado.
+#
+# Empezamos en 40, que es exigente pero alcanzable. Si al principio te da un
+# porcentaje muy bajo y se vuelve desmoralizante, subilo a 60 y bajalo a
+# medida que mejores. La app mide lo mismo; solo cambia dónde ponés la vara.
+TOLERANCIA_RITMO_MS = 40.0
+
+# Contra qué figura medimos el pulso, por defecto.
+#   1 = negras, 2 = corcheas, 3 = tresillos (el shuffle del blues), 4 = semis.
+# Si tocás corcheas y medís contra negras, la mitad de las notas aparecen con
+# medio pulso de desvío y el reporte no sirve. En blues suele convenir 2 o 3.
+SUBDIVISION_RITMO = 2
+
+
+# =============================================================================
 # 4. MAPEO A LA ARMÓNICA — resolución de ambigüedades
 # =============================================================================
 

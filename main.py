@@ -18,7 +18,7 @@ import argparse
 import sys
 
 import config
-from armonica import audio, mapeo, posiciones, segmentacion, tablas, tono
+from armonica import audio, mapeo, posiciones, ritmo, segmentacion, tablas, tono
 from armonica.consola import preparar_consola
 
 
@@ -217,6 +217,14 @@ def crear_parser():
                         help="escala de referencia")
     parser.add_argument("--detalle", action="store_true",
                         help="muestra una fila por nota, con tiempos y afinacion")
+    parser.add_argument("--bpm", type=float, default=None,
+                        help="velocidad de la base, para analizar el ritmo")
+    parser.add_argument("--subdivision", type=int, default=None,
+                        help="1=negras 2=corcheas 3=tresillos (por defecto, config)")
+    parser.add_argument("--compas", type=int, default=4,
+                        help="pulsos por compas (4 para un 4/4)")
+    parser.add_argument("--estimar-bpm", action="store_true",
+                        help="intenta adivinar la velocidad de la base")
     return parser
 
 
@@ -249,7 +257,77 @@ def main():
         argumentos.wav, argumentos.tonalidad,
         argumentos.posicion, argumentos.escala, argumentos.detalle,
     )
+
+    if argumentos.estimar_bpm and argumentos.bpm is None:
+        argumentos.bpm = _estimar_y_avisar(eventos, argumentos.subdivision)
+
+    if argumentos.bpm and eventos:
+        _imprimir_ritmo(eventos, argumentos.bpm, argumentos.compas,
+                        argumentos.subdivision, argumentos.detalle)
+
     return 0
+
+
+def _estimar_y_avisar(eventos, subdivision):
+    """Estima el BPM y avisa que hay que mirarlo con desconfianza."""
+    if subdivision is None:
+        subdivision = config.SUBDIVISION_RITMO
+
+    bpm, error = ritmo.estimar_bpm(eventos, subdivision=subdivision)
+    if bpm is None:
+        print()
+        print("No hay notas suficientes para estimar la velocidad.")
+        return None
+
+    print()
+    print(f"Velocidad estimada: {bpm:.0f} BPM")
+    print("  Ojo: estimar el tempo desde las notas es poco confiable. Si tocaste")
+    print("  parejo, el doble y la mitad explican lo mismo. Cuando sepas el BPM")
+    print("  de tu base, pasalo con --bpm y confia en ese.")
+    return bpm
+
+
+def _imprimir_ritmo(eventos, bpm, compas, subdivision, detalle):
+    """
+    El reporte de ritmo: lo que Leandro viene marcando hace ocho meses.
+
+    Va al final del informe a propósito, pero es lo que hay que leer primero.
+    """
+    if subdivision is None:
+        subdivision = config.SUBDIVISION_RITMO
+
+    analisis = ritmo.analizar(eventos, bpm, compas=compas, subdivision=subdivision)
+
+    figura = {1: "negras", 2: "corcheas", 3: "tresillos",
+              4: "semicorcheas"}.get(subdivision, f"1/{subdivision}")
+
+    print()
+    print("=" * 72)
+    print("  RITMO")
+    print("=" * 72)
+    print(f"  Base a {bpm:.0f} BPM, compas de {compas}, midiendo contra {figura}.")
+    print(f"  Cada pulso dura {analisis.duracion_pulso_seg * 1000:.0f} ms; "
+          f"la grilla tiene un punto cada "
+          f"{ritmo.paso_de_grilla(bpm, subdivision) * 1000:.0f} ms.")
+    print()
+
+    print(f"  {'Dispersion':<14} {analisis.dispersion_ms():6.0f} ms   "
+          f"<- el numero a bajar")
+    print(f"  {'Promedio':<14} {analisis.sesgo_ms():+6.0f} ms   "
+          f"({'te adelantas' if analisis.sesgo_ms() < 0 else 'llegas tarde'})")
+    print(f"  {'Mediana':<14} {analisis.mediana_ms():+6.0f} ms")
+    print(f"  {'A tiempo':<14} {analisis.porcentaje_a_tiempo():6.0f} %    "
+          f"(dentro de {config.TOLERANCIA_RITMO_MS:.0f} ms)")
+    print()
+
+    for frase in ritmo.diagnostico(analisis):
+        print(f"  - {frase}")
+
+    if detalle:
+        print()
+        print("NOTA POR NOTA")
+        print("-" * 72)
+        print(ritmo.linea_de_tiempo(analisis))
 
 
 if __name__ == "__main__":
