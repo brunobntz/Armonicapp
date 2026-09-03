@@ -18,7 +18,8 @@ import argparse
 import sys
 
 import config
-from armonica import audio, mapeo, posiciones, ritmo, segmentacion, tablas, tono
+from armonica import (audio, mapeo, posiciones, prioridades, ritmo,
+                      segmentacion, tablas, tono)
 from armonica.consola import preparar_consola
 
 
@@ -261,9 +262,19 @@ def main():
     if argumentos.estimar_bpm and argumentos.bpm is None:
         argumentos.bpm = _estimar_y_avisar(eventos, argumentos.subdivision)
 
+    analisis = None
     if argumentos.bpm and eventos:
-        _imprimir_ritmo(eventos, argumentos.bpm, argumentos.compas,
-                        argumentos.subdivision, argumentos.detalle)
+        analisis = _imprimir_ritmo(eventos, argumentos.bpm, argumentos.compas,
+                                   argumentos.subdivision, argumentos.detalle)
+
+    if eventos:
+        hallazgos, sin_medir = prioridades.analizar(
+            eventos, analisis, argumentos.tonalidad,
+            argumentos.posicion, argumentos.escala,
+        )
+        print()
+        print(prioridades.imprimir(hallazgos, sin_medir))
+        print()
 
     return 0
 
@@ -311,6 +322,14 @@ def _imprimir_ritmo(eventos, bpm, compas, subdivision, detalle):
           f"{ritmo.paso_de_grilla(bpm, subdivision) * 1000:.0f} ms.")
     print()
 
+    ajuste = analisis.ajuste_vs_azar()
+    if ajuste is not None and not analisis.la_grilla_explica_algo():
+        print(f"  ATENCION: la grilla no explica lo que tocaste "
+              f"(ajuste {ajuste:.2f}, donde 1.00 es azar puro).")
+        print("  Los numeros de abajo NO son un diagnostico. Puede ser que el BPM")
+        print("  o el compas esten mal, o que el material no sea metrico.")
+        print()
+
     print(f"  {'Dispersion':<14} {analisis.dispersion_ms():6.0f} ms   "
           f"<- el numero a bajar")
     print(f"  {'Promedio':<14} {analisis.sesgo_ms():+6.0f} ms   "
@@ -320,14 +339,21 @@ def _imprimir_ritmo(eventos, bpm, compas, subdivision, detalle):
           f"(dentro de {config.TOLERANCIA_RITMO_MS:.0f} ms)")
     print()
 
-    for frase in ritmo.diagnostico(analisis):
-        print(f"  - {frase}")
+    # Las frases de diagnostico SOLO si la grilla explica algo. Si no, seria
+    # afirmar cosas sobre una medicion que no significa nada.
+    if analisis.la_grilla_explica_algo():
+        for frase in ritmo.diagnostico(analisis):
+            print(f"  - {frase}")
+    else:
+        print("  Sin diagnostico de ritmo: ver el aviso de arriba.")
 
     if detalle:
         print()
         print("NOTA POR NOTA")
         print("-" * 72)
         print(ritmo.linea_de_tiempo(analisis))
+
+    return analisis
 
 
 if __name__ == "__main__":

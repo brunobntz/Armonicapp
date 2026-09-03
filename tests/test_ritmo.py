@@ -428,3 +428,67 @@ def test_la_tolerancia_por_defecto_es_razonable():
     de 50 ya suena claramente corrido.
     """
     assert 20 <= config.TOLERANCIA_RITMO_MS <= 60
+
+
+# =============================================================================
+# El ajuste contra el azar: saber cuando NO sabemos
+# =============================================================================
+
+def test_notas_perfectas_dan_un_ajuste_muy_bajo():
+    """Si tocaste justo sobre la grilla, el ajuste tiene que ser casi cero."""
+    analisis = ritmo.analizar(tocando([0, 2, -1, 3, -2, 1]), bpm=60,
+                              subdivision=1, offset_seg=0.0)
+    assert analisis.ajuste_vs_azar() < 0.05
+    assert analisis.la_grilla_explica_algo()
+
+
+def test_notas_al_azar_dan_un_ajuste_cercano_a_uno():
+    """
+    ESTE TEST PROTEGE CONTRA EL PEOR ERROR POSIBLE DE LA APP: informar un
+    diagnostico de ritmo sobre una medicion que no significa nada.
+
+    Repartimos las notas de forma pareja dentro del espacio entre pulsos, que
+    es lo que pasaria si no estuvieran siguiendo ninguna grilla. El ajuste
+    tiene que delatarlo.
+    """
+    import random
+
+    generador = random.Random(7)
+    paso_ms = ritmo.paso_de_grilla(60, 1) * 1000
+    desvios = [generador.uniform(-paso_ms / 2, paso_ms / 2) for _ in range(60)]
+
+    analisis = ritmo.analizar(tocando(desvios), bpm=60, subdivision=1,
+                              offset_seg=0.0)
+    assert analisis.ajuste_vs_azar() > 0.75
+    assert not analisis.la_grilla_explica_algo()
+
+
+def test_con_pocas_notas_no_se_arriesga_una_conclusion():
+    analisis = ritmo.analizar(tocando([0, 10]), bpm=60, subdivision=1,
+                              offset_seg=0.0)
+    assert analisis.ajuste_vs_azar() is None
+    assert not analisis.la_grilla_explica_algo()
+
+
+def test_el_ajuste_no_premia_a_las_grillas_mas_densas():
+    """
+    La trampa que este numero resuelve. Las mismas notas al azar, medidas
+    contra grillas cada vez mas densas, dan dispersiones cada vez menores.
+    Sin normalizar, pareceria que tocaste mejor solo por cambiar la unidad.
+    """
+    import random
+
+    generador = random.Random(11)
+    eventos = [nota_en(generador.uniform(0, 30)) for _ in range(80)]
+
+    dispersiones = []
+    ajustes = []
+    for subdivision in (1, 2, 4):
+        analisis = ritmo.analizar(eventos, bpm=60, subdivision=subdivision)
+        dispersiones.append(analisis.dispersion_ms())
+        ajustes.append(analisis.ajuste_vs_azar())
+
+    # La dispersion cruda baja con cada subdivision, y eso enganaria.
+    assert dispersiones[0] > dispersiones[1] > dispersiones[2]
+    # El ajuste, en cambio, se mantiene alto en las tres.
+    assert all(a > 0.7 for a in ajustes)

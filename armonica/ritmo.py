@@ -49,6 +49,7 @@ hay margen de sobra: medimos con una precisión diez veces mejor que el
 fenómeno.
 """
 
+import math
 from dataclasses import dataclass, field
 from statistics import mean, median, pstdev
 
@@ -137,6 +138,52 @@ class AnalisisRitmico:
     def mediana_ms(self):
         valores = self.desvios_ms()
         return median(valores) if valores else 0.0
+
+    def ajuste_vs_azar(self):
+        """
+        Cuánto mejor que el AZAR explica la grilla lo que tocaste.
+
+        POR QUE ESTE NUMERO ES IMPRESCINDIBLE
+
+        La dispersión sola engaña. Si medís contra una grilla muy densa,
+        cualquier nota cae cerca de algún punto y la dispersión baja sin que
+        hayas tocado mejor. Hace falta un punto de comparación.
+
+        Si las notas cayeran completamente al azar dentro de la grilla, la
+        dispersión valdría paso/raiz(12), que es 0.289 veces el paso. Ese es el
+        techo. Dividimos la dispersión medida por ese valor:
+
+            1.00 o más -> la grilla no explica nada. O el tempo esta mal, o el
+                          compás está mal, o no estabas tocando a tiempo.
+            0.60       -> hay estructura, pero floja
+            0.30       -> tocaste claramente sobre la grilla
+            0.10       -> muy preciso
+
+        Sin esto, la app podría informar con toda seriedad "dispersión 63 ms"
+        sobre una medición que no significa nada. Preferimos decir cuándo no
+        sabemos.
+        """
+        if len(self.desvios) < 4:
+            return None
+
+        paso_ms = paso_de_grilla(self.bpm, self.subdivision) * 1000.0
+        dispersion_del_azar = paso_ms / math.sqrt(12)
+
+        if dispersion_del_azar <= 0:
+            return None
+
+        return self.dispersion_ms() / dispersion_del_azar
+
+    def la_grilla_explica_algo(self, limite=0.75):
+        """
+        Si podemos confiar en el análisis rítmico.
+
+        Devuelve False cuando las notas están tan repartidas como si fueran al
+        azar. En ese caso los demás números de este objeto no significan nada y
+        no hay que mostrarlos como si fueran un diagnóstico.
+        """
+        ajuste = self.ajuste_vs_azar()
+        return ajuste is not None and ajuste < limite
 
     def porcentaje_a_tiempo(self, tolerancia_ms=None):
         if not self.desvios:
