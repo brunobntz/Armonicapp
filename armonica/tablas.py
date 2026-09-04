@@ -213,6 +213,86 @@ NOMBRES_ESCALAS = {
 
 
 # =============================================================================
+# 4b. ACORDES — como intervalos, igual que las escalas
+# =============================================================================
+
+# Un acorde es un puñado de notas que suenan juntas; un ARPEGIO es ese mismo
+# acorde tocado nota por nota. En la armónica siempre tocamos arpegios, porque
+# aislamos un agujero por vez.
+#
+# Se describen igual que las escalas: semitonos desde la raíz del acorde. Por
+# eso el mismo motor que calcula escalas calcula arpegios, sin cambiar nada.
+ACORDES_INTERVALOS = {
+    # Do Mi Sol. El acorde alegre de siempre.
+    "mayor": [0, 4, 7],
+
+    # Do Mib Sol. La tercera baja medio tono y cambia el carácter.
+    "menor": [0, 3, 7],
+
+    # Do Mi Sol Sib. EL ACORDE DEL BLUES. Es un acorde mayor con la séptima
+    # menor encima, y esa combinación es inestable: pide resolver. Todo el
+    # blues de doce compases está hecho de estos tres.
+    "dominante": [0, 4, 7, 10],
+
+    # Do Mib Sol Sib. El de "Minor Swing" y del blues menor.
+    "menor7": [0, 3, 7, 10],
+
+    # Do Mi Sol Si. Suena a bossa, no a blues.
+    "mayor7": [0, 4, 7, 11],
+
+    # Do Mib Solb La. El acorde disminuido del compás 7 del blues de dieciséis
+    # que trabajaste el 14/04.
+    "disminuido7": [0, 3, 6, 9],
+}
+
+NOMBRES_ACORDES = {
+    "mayor": "mayor",
+    "menor": "menor",
+    "dominante": "dominante (7)",
+    "menor7": "menor 7",
+    "mayor7": "mayor 7",
+    "disminuido7": "disminuido 7",
+}
+
+# Cómo se llama cada intervalo, para poder decir "esta nota es la 7a del acorde"
+# en vez de "esta nota está a 10 semitonos".
+NOMBRES_GRADOS = {
+    0: "tonica",
+    1: "9a menor",
+    2: "9a",
+    3: "3a menor",
+    4: "3a mayor",
+    5: "4a",
+    6: "5a bemol",
+    7: "5a",
+    8: "5a aumentada",
+    9: "6a",
+    10: "7a menor",
+    11: "7a mayor",
+}
+
+# LAS NOTAS GUIA de un acorde dominante son su tercera y su séptima.
+#
+# Por qué esas dos y no la tónica: la tónica y la quinta no dicen nada, están
+# en casi todos los acordes. La tercera dice si es mayor o menor, y la séptima
+# es la que lo hace dominante. Tocando esas dos ya se escucha el acorde.
+#
+# Es el concepto central de lo que Leandro te viene enseñando desde agosto:
+# aterrizar en una nota guía en el tiempo 1 del cambio.
+GRADOS_GUIA = [3, 4, 10, 11]
+
+# El blues de doce compases: qué grado suena en cada compás.
+#   I = la tónica, IV = la cuarta (+5 semitonos), V = la quinta (+7)
+# Es la progresión de tu base de Band in a Box, la misma del estudio de Carlos
+# del Junco: Fa7 Sib7 Fa7 Fa7 Sib7 Sib7 Fa7 Fa7 Do7 Sib7 Fa7 Do7
+BLUES_DOCE_COMPASES = ["I", "IV", "I", "I", "IV", "IV",
+                       "I", "I", "V", "IV", "I", "V"]
+
+# Cuántos semitonos por encima de la tónica está cada grado de la progresión.
+GRADOS_DE_LA_PROGRESION = {"I": 0, "IV": 5, "V": 7}
+
+
+# =============================================================================
 # 5. ESCALAS POR POSICIÓN — tablas explícitas, en agujeros
 # =============================================================================
 

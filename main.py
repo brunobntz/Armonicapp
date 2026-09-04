@@ -491,6 +491,8 @@ def modo_teoria(tonalidad, posicion, escala):
         print("  Coincide con la tabla escrita a mano. Conciliado.")
     else:
         print(f"  DIFERENCIA con la tabla escrita a mano: {sobran} / {faltan}")
+
+    _imprimir_acordes(tonalidad, posicion)
     print()
 
     return 0
@@ -640,9 +642,15 @@ def modo_afinador(tonalidad, objetivo=None):
 
 
 def _sin_argumentos(argumentos):
-    """Si el usuario no pidio ningun modo, va el menu."""
+    """
+    Si el usuario no pidio ningun modo, va el menu.
+
+    OJO AL AGREGAR MODOS NUEVOS: hay que sumarlos a esta lista. Cuando se
+    agrego --acorde y no se lo sumo aca, correr "main.py --acorde Bb7" abria
+    el menu y se quedaba esperando que alguien tecleara.
+    """
     return not any([argumentos.wav, argumentos.vivo, argumentos.calibrar,
-                    argumentos.teoria, argumentos.afinador])
+                    argumentos.teoria, argumentos.afinador, argumentos.acorde])
 
 
 def _desde_el_menu(argumentos):
@@ -673,6 +681,137 @@ def _desde_el_menu(argumentos):
     return argumentos
 
 
+def _imprimir_acordes(tonalidad, posicion):
+    """
+    Los tres acordes del blues en esta posicion, con sus notas guia.
+
+    LAS NOTAS GUIA son la 3a y la 7a del acorde, y son el concepto central de
+    lo que Leandro viene enseniando desde agosto. La tonica y la quinta estan
+    en casi todos los acordes y no dicen nada; la 3a dice si es mayor o menor
+    y la 7a es la que lo hace dominante. Con esas dos ya se escucha el acorde.
+
+    Por eso el ejercicio del miercoles de tu atril es "una nota por acorde":
+    si esa nota es una guia, con una sola nota por compas ya suena la
+    progresion entera.
+    """
+    from armonica import teoria
+
+    progresion = teoria.progresion_de_blues(tonalidad, posicion)
+
+    print()
+    print("EL BLUES DE DOCE COMPASES EN ESTA POSICION")
+    print("-" * 72)
+
+    fila = "  "
+    for compas in progresion:
+        fila += f"{compas['acorde'].nombre():<7}"
+        if compas["compas"] % 4 == 0:
+            print(fila)
+            fila = "  "
+
+    print()
+    print("LAS NOTAS GUIA (la 3a y la 7a de cada acorde)")
+    print("-" * 72)
+    print("  Son las dos notas que definen el acorde. Si aterrizas en una de")
+    print("  ellas en el tiempo 1 del cambio, con una sola nota por compas ya")
+    print("  suena la progresion entera.")
+    print()
+    print(f"  {'acorde':>7}  {'3a':<18} {'7a':<18} {'tonica':<10}")
+
+    ya_vistos = set()
+    for compas in progresion:
+        acorde = compas["acorde"]
+        if acorde.nombre() in ya_vistos:
+            continue
+        ya_vistos.add(acorde.nombre())
+
+        guias = acorde.notas_guia()
+        tonica = acorde.grados[0]
+
+        def describir(grado):
+            facil = grado.el_mas_facil()
+            if facil is None:
+                return f"{grado.nombre_nota} (no sale)"
+            otros = len(grado.agujeros) - 1
+            extra = f" (+{otros})" if otros > 0 else ""
+            return f"{grado.nombre_nota} = {facil.como_tab()}{extra}"
+
+        print(f"  {acorde.nombre():>7}  "
+              f"{describir(guias[0]):<18} {describir(guias[1]):<18} "
+              f"{describir(tonica):<10}")
+
+    print()
+    print("  El (+n) dice en cuantos lugares mas de la armonica esta esa nota.")
+
+    faltan = []
+    for compas in progresion:
+        for grado in compas["acorde"].faltantes():
+            texto = f"la {grado.nombre_grado} de {compas['acorde'].nombre()} ({grado.nombre_nota})"
+            if texto not in faltan:
+                faltan.append(texto)
+    if faltan:
+        print()
+        print("  Esta armonica no da: " + ", ".join(faltan) + ".")
+        print("  Harian falta overblows, que no estan en V1.")
+
+
+def _imprimir_arpegio(tonalidad, raiz, tipo):
+    """Un acorde suelto, con todos los lugares donde cae cada grado."""
+    from armonica import teoria
+
+    acorde = teoria.arpegio(tonalidad, raiz, tipo)
+
+    print()
+    print("=" * 72)
+    print(f"  ARPEGIO DE {acorde.nombre()}  en armonica de {tonalidad}")
+    print("=" * 72)
+    print()
+
+    for grado in acorde.grados:
+        marca = "  <- nota guia" if grado.es_guia else ""
+        if not grado.disponible():
+            print(f"  {grado.nombre_grado:>12}  {grado.nombre_nota:<3}  "
+                  f"no sale sin overblow{marca}")
+            continue
+        lugares = "  ".join(nota.como_tab() for nota in grado.agujeros)
+        print(f"  {grado.nombre_grado:>12}  {grado.nombre_nota:<3}  {lugares}{marca}")
+
+    print()
+    print("  Lo mas facil de cada grado, prefiriendo el registro central:")
+    piezas = []
+    for grado in acorde.grados:
+        facil = grado.el_mas_facil()
+        if facil is not None:
+            piezas.append(f"{grado.nombre_grado} {facil.como_tab()}")
+    print("    " + "   ".join(piezas))
+    print()
+
+
+def _partir_acorde(texto):
+    """
+    Separa "F7" en ("F", "dominante"), "Bbm" en ("Bb", "menor").
+
+    Los sufijos son los que se usan en cualquier cifrado: nada para mayor,
+    "m" para menor, "7" para dominante, "m7", "maj7", "dim7".
+    """
+    texto = texto.strip()
+
+    sufijos = [
+        ("maj7", "mayor7"),
+        ("dim7", "disminuido7"),
+        ("dim", "disminuido7"),
+        ("m7", "menor7"),
+        ("7", "dominante"),
+        ("m", "menor"),
+    ]
+
+    for sufijo, tipo in sufijos:
+        if texto.endswith(sufijo) and len(texto) > len(sufijo):
+            return texto[:-len(sufijo)], tipo
+
+    return texto, "mayor"
+
+
 def crear_parser():
     parser = argparse.ArgumentParser(
         description="Transcribe armonica a tablatura.",
@@ -696,6 +835,8 @@ def crear_parser():
                         help="practica la afinacion de un bend")
     parser.add_argument("--bend", default=None,
                         help="que bend practicar en el afinador (ej: -3'')")
+    parser.add_argument("--acorde", default=None,
+                        help="muestra el arpegio de un acorde (ej: F7, Bbm, C)")
     parser.add_argument("--tonalidad", default="C",
                         choices=sorted(tablas.TONALIDADES),
                         help="tonalidad de la armonica (por defecto C)")
@@ -740,6 +881,15 @@ def main():
 
     if argumentos.calibrar:
         return _calibrar()
+
+    if argumentos.acorde:
+        raiz, tipo = _partir_acorde(argumentos.acorde)
+        try:
+            _imprimir_arpegio(argumentos.tonalidad, raiz, tipo)
+        except ValueError as error:
+            print(error)
+            return 1
+        return 0
 
     if argumentos.teoria:
         if argumentos.posicion is None:

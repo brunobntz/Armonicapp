@@ -39,7 +39,7 @@ Python puro: importa tablas, notas y mapeo. Nada de audio ni de pantalla.
 
 from dataclasses import dataclass, field
 
-from armonica import mapeo, notas, tablas
+from armonica import mapeo, notas, posiciones, tablas
 
 
 @dataclass
@@ -284,6 +284,170 @@ def posiciones_utiles(tonalidad_armonica, escala, maximo_bends=2):
     resultados.sort(key=lambda r: (r["notas_imposibles"], -r["agujeros_sin_bend"]))
     return resultados
 
+
+
+# =============================================================================
+# ACORDES Y ARPEGIOS
+# =============================================================================
+
+@dataclass
+class GradoDelAcorde:
+    """
+    Un grado de un acorde y dónde cae en la armónica.
+
+    Campos:
+        intervalo     semitonos desde la raíz del acorde (0, 4, 7, 10...)
+        nombre_grado  "tonica", "3a mayor", "7a menor"...
+        nombre_nota   "A", "Eb"
+        agujeros      todas las formas de tocarlo, de grave a agudo
+        es_guia       si es la 3a o la 7a, o sea si define el acorde
+    """
+
+    intervalo: int
+    nombre_grado: str
+    nombre_nota: str
+    agujeros: list = field(default_factory=list)
+    es_guia: bool = False
+
+    def disponible(self):
+        return len(self.agujeros) > 0
+
+    def sin_bends(self):
+        return [nota for nota in self.agujeros if nota.bend == 0]
+
+    def el_mas_facil(self):
+        """
+        El agujero más cómodo para tocar este grado.
+
+        Es la respuesta a "¿por dónde agarro esta nota?" cuando estás tocando y
+        no tenés tiempo de pensar. Dos criterios, en orden:
+
+        1. MENOS BENDS. Una nota natural sale sola; un bend hay que encontrarlo.
+
+        2. MAS CERCA DEL REGISTRO CENTRAL. Entre dos agujeros igual de fáciles,
+           gana el más cercano al 5 y el 6.
+
+        El segundo criterio parece un detalle y no lo es. Al principio la
+        función devolvía el agujero más GRAVE, y para el Re de Sib7 proponía el
+        ↓1 en vez del ↓4. Los dos dan la nota, pero el registro grave cuesta
+        aislarlo, suena flojo y es donde están los bends difíciles. Tu propio
+        atril de 12a llama al registro central "la octava que no pide nada".
+        """
+        if not self.agujeros:
+            return None
+
+        # 5.5 es el centro entre el agujero 5 y el 6.
+        return min(self.agujeros,
+                   key=lambda nota: (nota.bend, abs(nota.agujero - 5.5)))
+
+
+@dataclass
+class ArpegioEnArmonica:
+    """Un acorde, y dónde caen todas sus notas en tu armónica."""
+
+    tonalidad_armonica: str
+    raiz: str
+    tipo: str
+    grados: list = field(default_factory=list)
+
+    def nombre(self):
+        """Como se escribe el acorde: "F7", "Am", "Bb7"."""
+        sufijos = {"mayor": "", "menor": "m", "dominante": "7",
+                   "menor7": "m7", "mayor7": "maj7", "disminuido7": "dim7"}
+        return f"{self.raiz}{sufijos.get(self.tipo, self.tipo)}"
+
+    def notas_guia(self):
+        """La 3a y la 7a: las dos notas que definen el acorde."""
+        return [grado for grado in self.grados if grado.es_guia]
+
+    def faltantes(self):
+        """Los grados que esta armónica no puede dar sin overblow."""
+        return [grado for grado in self.grados if not grado.disponible()]
+
+
+def arpegio(tonalidad_armonica, raiz, tipo="dominante"):
+    """
+    Calcula dónde caen las notas de un acorde en tu armónica.
+
+    `raiz` es el nombre de la nota fundamental del acorde ("F", "Bb").
+    `tipo` es una clave de tablas.ACORDES_INTERVALOS.
+
+    Es el mismo motor que calcula escalas: un acorde también es una lista de
+    intervalos. La diferencia está en lo que se muestra, porque acá importa
+    QUE GRADO es cada nota, y no solo que pertenezca.
+    """
+    if tonalidad_armonica not in tablas.TONALIDADES:
+        raise ValueError(f"No conozco la armonica en {tonalidad_armonica!r}")
+    if tipo not in tablas.ACORDES_INTERVALOS:
+        raise ValueError(
+            f"No conozco el acorde {tipo!r}. "
+            f"Los que hay son: {', '.join(tablas.ACORDES_INTERVALOS)}"
+        )
+
+    clase_raiz = _clase_de_nombre(raiz)
+    formas = mapeo.todas_las_formas(tonalidad_armonica)
+
+    grados = []
+    for intervalo in tablas.ACORDES_INTERVALOS[tipo]:
+        clase = (clase_raiz + intervalo) % 12
+
+        agujeros = []
+        for midi in sorted(formas):
+            if midi % 12 == clase:
+                agujeros.extend(formas[midi])
+
+        grados.append(GradoDelAcorde(
+            intervalo=intervalo,
+            nombre_grado=tablas.NOMBRES_GRADOS.get(intervalo, f"{intervalo} semitonos"),
+            nombre_nota=notas.nombre_de_clase(clase),
+            agujeros=agujeros,
+            es_guia=intervalo in tablas.GRADOS_GUIA,
+        ))
+
+    return ArpegioEnArmonica(
+        tonalidad_armonica=tonalidad_armonica, raiz=raiz, tipo=tipo,
+        grados=grados,
+    )
+
+
+def progresion_de_blues(tonalidad_armonica, posicion, tipo="dominante"):
+    """
+    Los doce compases del blues en la posición que elijas.
+
+    Devuelve una lista de doce diccionarios, uno por compás, con el grado
+    (I, IV, V), el nombre del acorde y su arpegio ya calculado.
+
+    Es la progresión de tu base de Band in a Box y la del estudio de Carlos
+    del Junco. En 12a posición con armónica de Do da Fa7, Sib7 y Do7.
+    """
+    tonica = posiciones.tonalidad_resultante(tonalidad_armonica, posicion)
+    clase_tonica = _clase_de_nombre(tonica)
+
+    # Calculamos los tres acordes una sola vez y después los repartimos.
+    acordes = {}
+    for grado, semitonos in tablas.GRADOS_DE_LA_PROGRESION.items():
+        raiz = notas.nombre_de_clase((clase_tonica + semitonos) % 12)
+        acordes[grado] = arpegio(tonalidad_armonica, raiz, tipo)
+
+    compases = []
+    for numero, grado in enumerate(tablas.BLUES_DOCE_COMPASES, start=1):
+        compases.append({
+            "compas": numero,
+            "grado": grado,
+            "acorde": acordes[grado],
+            "cambia": numero == 1 or grado != tablas.BLUES_DOCE_COMPASES[numero - 2],
+        })
+
+    return compases
+
+
+def _clase_de_nombre(nombre):
+    """De "Bb" a 10. Acepta bemoles y sostenidos."""
+    if nombre in tablas.NOMBRES_NOTAS:
+        return tablas.NOMBRES_NOTAS.index(nombre)
+    if nombre in tablas.NOMBRES_NOTAS_SOSTENIDOS:
+        return tablas.NOMBRES_NOTAS_SOSTENIDOS.index(nombre)
+    raise ValueError(f"No reconozco la nota {nombre!r}")
 
 # =============================================================================
 # Modo de demostración
