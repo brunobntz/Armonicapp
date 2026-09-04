@@ -30,9 +30,10 @@ import argparse
 import sys
 
 import config
-from armonica import (audio, exportacion, mapeo, microfono, pantalla,
-                      posiciones, prioridades, resumen as modulo_resumen,
-                      ritmo, segmentacion, tablas, tono)
+from armonica import (afinador, audio, exportacion, mapeo, menu, microfono,
+                      pantalla, posiciones, prioridades,
+                      resumen as modulo_resumen, ritmo, segmentacion,
+                      tablas, tono)
 from armonica.consola import preparar_consola
 
 
@@ -419,6 +420,259 @@ def sesion_en_vivo(argumentos):
     return 0
 
 
+# =============================================================================
+# Modo teoria: consultar una escala sin tocar
+# =============================================================================
+
+def modo_teoria(tonalidad, posicion, escala):
+    """
+    Muestra una escala: qué notas tiene, en qué agujeros, y cuáles piden bend.
+
+    No usa el micrófono. Sirve para estudiar en el atril, o para responder
+    "¿dónde está el Lab en 12a?" sin tener que buscarlo en una hoja.
+    """
+    from armonica import teoria
+
+    if not escala:
+        print("Para el modo teoria hace falta elegir una escala.")
+        return 1
+
+    resultado = teoria.agujeros_para_escala(tonalidad, posicion, escala)
+
+    print()
+    print("=" * 72)
+    print(f"  {posiciones.descripcion_completa(tonalidad, posicion, escala)}")
+    print("=" * 72)
+    print()
+    print(f"  Notas de la escala:  {' '.join(resultado.nombres_notas)}")
+    print()
+
+    corrida = resultado.desde_la_tonica(octavas=2)
+    print(f"LA CORRIDA, dos octavas desde la tonica ({resultado.tonica})")
+    print("-" * 72)
+    print("  " + "  ".join(nota.como_tab() for nota in corrida))
+    print("  " + "  ".join(nota.nombre.ljust(len(nota.como_tab()))
+                           for nota in corrida))
+    print()
+
+    con_bend = [n for n in resultado.agujeros if n.bend > 0]
+    print(f"TODOS LOS AGUJEROS ({len(resultado.agujeros)})")
+    print("-" * 72)
+    linea = "  "
+    for nota in resultado.agujeros:
+        marca = "*" if nota.bend > 0 else " "
+        pedazo = f"{nota.como_tab()} {nota.nombre}{marca}".ljust(12)
+        if len(linea) + len(pedazo) > 78:
+            print(linea)
+            linea = "  "
+        linea += pedazo
+    print(linea)
+
+    print()
+    if con_bend:
+        print(f"  * pide bend ({len(con_bend)} de {len(resultado.agujeros)}): "
+              + "  ".join(n.como_tab() for n in con_bend))
+        print(f"    los otros {len(resultado.sin_bends())} salen con aire natural.")
+    else:
+        print("  Ninguno pide bend: la escala entera sale con aire natural.")
+
+    print()
+    if resultado.necesita_overblows():
+        print("  Notas de la escala que esta armonica NO da (harian falta overblows):")
+        print(f"    {' '.join(resultado.faltantes)}")
+    else:
+        print("  No falta ninguna nota: la escala esta entera en la armonica.")
+
+    sobran, faltan = teoria.comparar_con_tabla_explicita(tonalidad, posicion, escala)
+    print()
+    if sobran is None:
+        print("  (Esta posicion no tiene tabla escrita a mano para comparar.)")
+    elif not sobran and not faltan:
+        print("  Coincide con la tabla escrita a mano. Conciliado.")
+    else:
+        print(f"  DIFERENCIA con la tabla escrita a mano: {sobran} / {faltan}")
+    print()
+
+    return 0
+
+
+# =============================================================================
+# Modo afinador: practicar un bend con el medidor a la vista
+# =============================================================================
+
+def modo_afinador(tonalidad, objetivo=None):
+    """
+    Escucha el microfono y va midiendo cada intento sobre una nota.
+
+    Es el modo que cierra el circulo del diagnostico: si el informe dice que el
+    bend del 3 te cae 34 cents bajo, aca lo corregis viendo el numero al
+    instante en vez de leerlo en un informe media hora despues.
+    """
+    from rich.console import Console
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.text import Text
+
+    tabla = mapeo.construir_tabla_inversa(tonalidad)
+    practica = afinador.PracticaDeBend(objetivo=objetivo)
+
+    print()
+    if objetivo is not None:
+        print(f"Practicando el {objetivo.como_tab()} ({objetivo.nombre}) "
+              f"en armonica de {tonalidad}.")
+        print("Tocá la nota, sostenela, soltá. Repetí.")
+    else:
+        print(f"Afinador libre, armonica de {tonalidad}.")
+    print("Ctrl+C para terminar y ver el resumen.")
+    print()
+
+    mediciones = []
+    contados = set()
+    frecuencia_muestreo = config.FRECUENCIA_MUESTREO
+
+    def dibujar(nota, cents, volumen):
+        lineas = []
+        if nota is None:
+            lineas.append(Text("   ---   ", style="dim"))
+            lineas.append(Text(afinador.barra_grande(0.0), style="dim"))
+        else:
+            color = ("bold green" if abs(cents) <= 10
+                     else "bold yellow" if abs(cents) <= 25 else "bold red")
+            lineas.append(Text(f"  {nota.como_tab()}   {nota.nombre}", style=color))
+            lineas.append(Text(afinador.barra_grande(cents), style=color))
+            lineas.append(Text(f"  {cents:+.0f} cents", style=color))
+
+        lineas.append(Text(""))
+        if practica.cantidad():
+            lineas.append(Text(
+                f"  {practica.cantidad()} intentos   "
+                f"promedio {practica.promedio():+.0f}   "
+                f"dispersion {practica.dispersion():.0f}   "
+                f"{practica.porcentaje_de_aciertos():.0f}% dentro de "
+                f"{practica.tolerancia_cents:.0f} cents",
+                style="dim"))
+        else:
+            lineas.append(Text("  (todavia no hay intentos)", style="dim"))
+
+        titulo = (f"Practica del {objetivo.como_tab()}" if objetivo
+                  else "Afinador")
+        from rich.console import Group
+        return Panel(Group(*lineas), title=titulo, border_style="blue")
+
+    try:
+        with microfono.CapturaMicrofono() as captura:
+            frecuencia_muestreo = captura.frecuencia_muestreo
+            ultimo_dibujo = -1.0
+            nota_actual, cents_actual, volumen_actual = None, 0.0, 0.0
+
+            with Live(dibujar(None, 0.0, 0.0),
+                      refresh_per_second=config.REFRESCOS_POR_SEGUNDO) as vivo:
+
+                for instante, ventana in captura.ventanas():
+                    volumen_actual = audio.volumen_rms(ventana)
+
+                    if volumen_actual < config.UMBRAL_VOLUMEN_RMS:
+                        frecuencia, confianza = None, 0.0
+                    else:
+                        frecuencia, confianza = tono.detectar_frecuencia(
+                            ventana, frecuencia_muestreo)
+
+                    mediciones.append({
+                        "tiempo_seg": instante, "frecuencia": frecuencia,
+                        "confianza": confianza, "volumen": volumen_actual,
+                    })
+
+                    if frecuencia is not None:
+                        nota_actual, cents_actual = mapeo.frecuencia_a_nota(
+                            frecuencia, tabla_inversa=tabla)
+
+                    if instante - ultimo_dibujo >= 1.0 / config.REFRESCOS_POR_SEGUNDO:
+                        ultimo_dibujo = instante
+
+                        # Rehacemos la segmentacion y contamos los intentos
+                        # nuevos. Usamos el instante de inicio como identidad:
+                        # un evento ya contado no se vuelve a contar.
+                        eventos = segmentacion.segmentar(
+                            mediciones, tabla,
+                            frecuencia_muestreo=frecuencia_muestreo)
+                        for evento in eventos:
+                            clave = round(evento.inicio_seg, 3)
+                            if clave in contados:
+                                continue
+                            # Solo contamos eventos ya terminados, o sea que no
+                            # sean el ultimo: ese todavia puede crecer.
+                            if evento is eventos[-1]:
+                                continue
+                            if practica.registrar(evento):
+                                contados.add(clave)
+
+                        vivo.update(dibujar(nota_actual, cents_actual,
+                                            volumen_actual))
+
+    except KeyboardInterrupt:
+        pass
+    except Exception as error:
+        print(f"\nSe corto la captura: {error}")
+        return 1
+
+    # Al terminar contamos tambien el ultimo evento, que ya no va a crecer.
+    eventos = segmentacion.segmentar(mediciones, tabla,
+                                     frecuencia_muestreo=frecuencia_muestreo)
+    for evento in eventos:
+        clave = round(evento.inicio_seg, 3)
+        if clave not in contados and practica.registrar(evento):
+            contados.add(clave)
+
+    # Si la armonica esta corrida, lo descontamos: eso es del instrumento.
+    afinacion, cuantas = segmentacion.estimar_afinacion_armonica(eventos)
+    if afinacion is not None:
+        practica.afinacion_armonica = afinacion
+        for intento in practica.intentos:
+            intento.cents -= afinacion
+        print()
+        print(f"Tu armonica midio {afinacion:+.0f} cents sobre {cuantas} notas")
+        print("naturales. Lo que sigue esta medido CONTRA TU ARMONICA.")
+
+    print()
+    print(afinador.resumen_en_texto(practica))
+    print()
+    return 0
+
+
+def _sin_argumentos(argumentos):
+    """Si el usuario no pidio ningun modo, va el menu."""
+    return not any([argumentos.wav, argumentos.vivo, argumentos.calibrar,
+                    argumentos.teoria, argumentos.afinador])
+
+
+def _desde_el_menu(argumentos):
+    """
+    Corre el menu y vuelca lo elegido en el mismo objeto de argumentos.
+
+    Asi el resto de main.py no se entera de si vino del menu o de las banderas.
+    """
+    try:
+        eleccion = menu.correr()
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return None
+
+    modo = eleccion.get("modo")
+    argumentos.calibrar = modo == "calibrar"
+    argumentos.teoria = modo == "teoria"
+    argumentos.afinador = modo == "afinador"
+    argumentos.vivo = modo == "vivo"
+
+    for clave in ("tonalidad", "posicion", "escala", "wav", "bpm", "subdivision"):
+        if clave in eleccion and eleccion[clave] is not None:
+            setattr(argumentos, clave, eleccion[clave])
+
+    if modo == "afinador" and eleccion.get("objetivo") is not None:
+        argumentos.bend = eleccion["objetivo"].como_tab("guion")
+
+    return argumentos
+
+
 def crear_parser():
     parser = argparse.ArgumentParser(
         description="Transcribe armonica a tablatura.",
@@ -436,6 +690,12 @@ def crear_parser():
                         help="escucha el microfono en tiempo real")
     parser.add_argument("--calibrar", action="store_true",
                         help="mide el ruido de fondo y sugiere el umbral")
+    parser.add_argument("--teoria", action="store_true",
+                        help="consulta una escala, sin microfono")
+    parser.add_argument("--afinador", action="store_true",
+                        help="practica la afinacion de un bend")
+    parser.add_argument("--bend", default=None,
+                        help="que bend practicar en el afinador (ej: -3'')")
     parser.add_argument("--tonalidad", default="C",
                         choices=sorted(tablas.TONALIDADES),
                         help="tonalidad de la armonica (por defecto C)")
@@ -470,14 +730,36 @@ def main():
         print("Para usar --escala hay que indicar tambien --posicion.")
         return 1
 
+    # Sin ningun argumento arrancamos el menu interactivo, que despues rellena
+    # los mismos campos que las banderas. Menu y linea de comandos terminan en
+    # el mismo codigo.
+    if _sin_argumentos(argumentos):
+        argumentos = _desde_el_menu(argumentos)
+        if argumentos is None:
+            return 0
+
     if argumentos.calibrar:
         return _calibrar()
+
+    if argumentos.teoria:
+        if argumentos.posicion is None:
+            print("Para el modo teoria hace falta --posicion.")
+            return 1
+        return modo_teoria(argumentos.tonalidad, argumentos.posicion,
+                           argumentos.escala)
+
+    if argumentos.afinador:
+        objetivo = None
+        if argumentos.bend:
+            objetivo = mapeo.tab_a_nota(argumentos.bend, argumentos.tonalidad)
+        return modo_afinador(argumentos.tonalidad, objetivo)
 
     if argumentos.vivo:
         return sesion_en_vivo(argumentos)
 
     if not argumentos.wav:
-        print("Elegi un modo: --wav <archivo>, --vivo o --calibrar.")
+        print("Elegi un modo: --wav <archivo>, --vivo, --teoria,")
+        print("--afinador o --calibrar. O corre sin argumentos para el menu.")
         return 1
 
     try:
