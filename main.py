@@ -34,7 +34,7 @@ import config
 from armonica import (afinador, audio, exportacion, frases, mapeo, menu,
                       microfono, pantalla, posiciones, prioridades,
                       resumen as modulo_resumen, ritmo, segmentacion,
-                      tablas, tono)
+                      tablas, tonalidad as modulo_tonalidad, tono)
 from armonica.consola import preparar_consola
 
 
@@ -1047,6 +1047,56 @@ def modo_monofonia(ruta):
     return 0
 
 
+def modo_que_tono(ruta):
+    """
+    Deduce con que armonica y en que tono se grabo un archivo.
+
+    Sirve cuando te pasan una grabacion y no sabes que agarrar para tocarla
+    encima.
+    """
+    try:
+        muestras, frecuencia_muestreo = audio.leer_wav(ruta)
+    except (ValueError, FileNotFoundError) as error:
+        print(f"No pude leer {ruta}: {error}")
+        return 1
+
+    if config.NORMALIZAR_ARCHIVOS:
+        muestras = audio.normalizar(muestras)
+
+    # Antes de deducir nada, chequeamos que el audio sea transcribible.
+    # Sobre una banda entera las notas detectadas son basura, y deducir un tono
+    # a partir de basura da un tono inventado.
+    calidad = tono.medir_monofonia(muestras, frecuencia_muestreo)
+    if calidad["puntaje"] < 0.55:
+        print()
+        print(tono.informe_de_monofonia(calidad, f"NO SE PUEDE ANALIZAR {ruta}"))
+        print()
+        print("  Las notas que se detectan en este audio no son confiables, asi")
+        print("  que deducir un tono a partir de ellas seria inventarlo.")
+        print()
+        return 1
+
+    # Probamos con las cuatro armonicas y nos quedamos con la transcripcion de
+    # la que mejor cubra lo tocado. Con la armonica equivocada muchas notas
+    # caerian fuera de su alcance y se perderian.
+    mejor = None
+    for candidata in tablas.TONALIDADES:
+        eventos = segmentacion.segmentar(
+            tono.detectar_en_senal(muestras, frecuencia_muestreo),
+            mapeo.construir_tabla_inversa(candidata),
+            frecuencia_muestreo=frecuencia_muestreo,
+        )
+        reconocidas = sum(1 for e in eventos if e.nota is not None)
+        if mejor is None or reconocidas > mejor[0]:
+            mejor = (reconocidas, eventos)
+
+    analisis = modulo_tonalidad.analizar(mejor[1])
+    print()
+    print(modulo_tonalidad.informe(analisis, ruta))
+    print()
+    return 0
+
+
 def crear_parser():
     parser = argparse.ArgumentParser(
         description="Transcribe armonica a tablatura.",
@@ -1080,6 +1130,8 @@ def crear_parser():
                         help="lista las frases guardadas")
     parser.add_argument("--monofonia", action="store_true",
                         help="mide si un .wav se puede transcribir")
+    parser.add_argument("--que-tono", action="store_true",
+                        help="deduce la armonica y el tono de un .wav")
     parser.add_argument("--tonalidad", default="C",
                         choices=sorted(tablas.TONALIDADES),
                         help="tonalidad de la armonica (por defecto C)")
@@ -1124,6 +1176,12 @@ def main():
 
     if argumentos.calibrar:
         return _calibrar()
+
+    if argumentos.que_tono:
+        if not argumentos.wav:
+            print("Para deducir el tono hace falta --wav <archivo>.")
+            return 1
+        return modo_que_tono(argumentos.wav)
 
     if argumentos.monofonia:
         if not argumentos.wav:
