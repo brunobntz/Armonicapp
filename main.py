@@ -4,23 +4,35 @@ main.py — El punto de entrada de la app.
 Por ahora tiene un solo modo: transcribir un archivo .wav. El micrófono en vivo
 llega en el paso 7, y el menú interactivo en el paso 8.
 
-    python main.py --wav audio_prueba/corrida_12a.wav
-    python main.py --wav grabacion.wav --tonalidad C --posicion 12 --escala blues_mayor
-    python main.py --wav grabacion.wav --detalle
+    python main.py --calibrar
+    python main.py --vivo --posicion 12 --escala blues_mayor
+    python main.py --wav grabacion.wav --posicion 12 --escala blues_mayor --detalle
 
-Trabajar primero con archivos y recién después con el micrófono es a propósito.
-Con un archivo podés correr la transcripción cien veces cambiando umbrales en
-config.py y comparar los resultados, sin volver a tocar. Cuando llegue el
-micrófono, el pipeline ya va a estar calibrado.
+TRES MODOS
+
+  --calibrar   Mide el ruido de fondo de tu habitación y te dice qué umbral de
+               volumen poner. Es lo primero que conviene correr, sobre todo si
+               cambiaste de micrófono o de lugar.
+
+  --vivo       Escucha el micrófono y dibuja la pantalla mientras tocás.
+               Ctrl+C termina la sesión y guarda todo en sesiones/.
+
+  --wav        Transcribe un archivo. Es el modo para calibrar y para analizar
+               una grabación con calma.
+
+Por qué el modo archivo se construyó primero: con un .wav podés correr la
+transcripción cien veces cambiando umbrales en config.py y comparar los
+resultados, sin volver a tocar. Cuando llegó el micrófono, el pipeline ya
+estaba calibrado.
 """
 
 import argparse
 import sys
 
 import config
-from armonica import (audio, exportacion, mapeo, posiciones, prioridades,
-                      resumen as modulo_resumen, ritmo, segmentacion,
-                      tablas, tono)
+from armonica import (audio, exportacion, mapeo, microfono, pantalla,
+                      posiciones, prioridades, resumen as modulo_resumen,
+                      ritmo, segmentacion, tablas, tono)
 from armonica.consola import preparar_consola
 
 
@@ -195,6 +207,218 @@ def _barra_de_cents(cents, ancho=25):
     return "[" + "".join(casillas) + "]"
 
 
+# =============================================================================
+# El modo en vivo
+# =============================================================================
+
+def _calibrar():
+    """
+    Mide el ruido de fondo de tu habitación y sugiere el umbral de volumen.
+
+    Es lo primero que conviene correr antes de una sesión, sobre todo si
+    cambiaste de micrófono o de lugar. Un umbral mal puesto es la causa número
+    uno de que la app no detecte nada o detecte de más.
+    """
+    print()
+    print("MICROFONOS DISPONIBLES")
+    print("-" * 72)
+    for numero, nombre, canales in microfono.listar_dispositivos():
+        marca = "  <- el que usa la app" if numero == config.DISPOSITIVO_ENTRADA else ""
+        print(f"  {numero:3}  {nombre[:44]:44} ({canales} can.){marca}")
+
+    print()
+    print("Midiendo el ruido de fondo. NO TOQUES NADA durante 3 segundos...")
+    mediana, pico = microfono.medir_ruido_de_fondo()
+
+    if mediana is None:
+        print("\nNo llego audio. Revisa que el microfono este conectado.")
+        return 1
+
+    sugerido = microfono.umbral_sugerido(pico)
+    print()
+    print(f"  Ruido de fondo: mediana {mediana:.5f}, pico {pico:.5f}")
+    print(f"  Umbral actual:  {config.UMBRAL_VOLUMEN_RMS}")
+    print()
+    print(f"  Poné esto en config.py:   UMBRAL_VOLUMEN_RMS = {sugerido:.4f}")
+    print()
+    print("  Es tres veces el pico del ruido: alto para que el silencio no")
+    print("  cuente como nota, bajo para que una nota floja si.")
+    print()
+    return 0
+
+
+def sesion_en_vivo(argumentos):
+    """
+    Escucha el micrófono y dibuja la pantalla hasta que cortes con Ctrl+C.
+
+    COMO ESTA ARMADO EL BUCLE
+
+    Por cada ventana de audio que llega del micrófono hacemos lo mismo que en
+    el modo archivo, pero de a una: medir volumen, detectar el tono, mapearlo a
+    un agujero. La diferencia es que la segmentación en notas se rehace sobre
+    todas las mediciones acumuladas.
+
+    Eso último es deliberadamente simple y algo derrochador. Segmentar de forma
+    incremental sería más eficiente, pero mucho más difícil de leer y de
+    verificar, y esto anda de sobra: rehacer la segmentación de una sesión de
+    diez minutos lleva milisegundos.
+
+    LA PANTALLA SE REFRESCA APARTE
+
+    El análisis corre 86 veces por segundo y la pantalla solo 12. Si
+    redibujáramos en cada ventana, gastaríamos tiempo en dibujos que nadie
+    llega a ver, y la pantalla parpadearía.
+    """
+    from rich.live import Live
+
+    tonalidad = argumentos.tonalidad
+    tabla = mapeo.construir_tabla_inversa(tonalidad)
+    estado = pantalla.EstadoPantalla(tonalidad, argumentos.posicion,
+                                     argumentos.escala)
+
+    print()
+    print(posiciones.descripcion_completa(tonalidad, argumentos.posicion,
+                                          argumentos.escala)
+          if argumentos.posicion else f"Armonica en {tonalidad}")
+    print()
+    print("Escuchando. Toca cuando quieras; Ctrl+C para terminar y guardar.")
+    if argumentos.bpm:
+        print("Acordate de los auriculares: si la base entra por el microfono,")
+        print("el detector de tono no tiene nada que hacer.")
+    print()
+
+    mediciones = []
+    eventos = []
+    frecuencia_muestreo = config.FRECUENCIA_MUESTREO
+    audio_grabado = None
+    hubo_descartes = False
+
+    try:
+        with microfono.CapturaMicrofono() as captura:
+            frecuencia_muestreo = captura.frecuencia_muestreo
+            ultimo_dibujo = -1.0
+
+            with Live(pantalla.armar(estado),
+                      refresh_per_second=config.REFRESCOS_POR_SEGUNDO,
+                      screen=False) as vivo:
+
+                for instante, ventana in captura.ventanas():
+                    volumen = audio.volumen_rms(ventana)
+
+                    if volumen < config.UMBRAL_VOLUMEN_RMS:
+                        frecuencia, confianza = None, 0.0
+                    else:
+                        frecuencia, confianza = tono.detectar_frecuencia(
+                            ventana, frecuencia_muestreo
+                        )
+
+                    mediciones.append({
+                        "tiempo_seg": instante,
+                        "frecuencia": frecuencia,
+                        "confianza": confianza,
+                        "volumen": volumen,
+                    })
+
+                    nota, cents = (None, 0.0)
+                    if frecuencia is not None:
+                        nota, cents = mapeo.frecuencia_a_nota(
+                            frecuencia, tabla_inversa=tabla
+                        )
+
+                    estado.actualizar(nota, cents, volumen, instante)
+
+                    # Redibujar solo cuando corresponde por reloj.
+                    if instante - ultimo_dibujo >= 1.0 / config.REFRESCOS_POR_SEGUNDO:
+                        ultimo_dibujo = instante
+                        eventos = segmentacion.segmentar(
+                            mediciones, tabla,
+                            frecuencia_muestreo=frecuencia_muestreo,
+                        )
+                        if argumentos.posicion and argumentos.escala:
+                            segmentacion.marcar_escala(
+                                eventos, tonalidad, argumentos.posicion,
+                                argumentos.escala,
+                            )
+                        estado.registrar_eventos(eventos)
+                        vivo.update(pantalla.armar(estado))
+
+            audio_grabado = captura.audio_grabado()
+            hubo_descartes = captura.hubo_descartes()
+
+    except KeyboardInterrupt:
+        # Es la forma NORMAL de terminar una sesion, no un error.
+        pass
+    except Exception as error:
+        print(f"\nSe corto la captura: {error}")
+        return 1
+
+    print()
+    print("Sesion terminada.")
+
+    if hubo_descartes:
+        print()
+        print("  AVISO: el sistema descarto audio en algun momento, asi que la")
+        print("  transcripcion puede tener huecos. Suele pasar si la computadora")
+        print("  estaba ocupada con otra cosa.")
+
+    # Rehacemos la segmentacion final sobre todo lo grabado.
+    eventos = segmentacion.segmentar(mediciones, tabla,
+                                     frecuencia_muestreo=frecuencia_muestreo)
+    if argumentos.posicion and argumentos.escala:
+        segmentacion.marcar_escala(eventos, tonalidad, argumentos.posicion,
+                                   argumentos.escala)
+
+    if not eventos:
+        print()
+        print("No se detecto ninguna nota.")
+        print(f"El umbral de volumen esta en {config.UMBRAL_VOLUMEN_RMS}.")
+        print("Corre  python main.py --calibrar  para medir el de tu habitacion.")
+        return 0
+
+    print()
+    print("TABLATURA")
+    print("-" * 72)
+    print(segmentacion.como_tablatura(eventos))
+    print()
+
+    datos = modulo_resumen.resumir(eventos, tonalidad, argumentos.posicion,
+                                   argumentos.escala)
+
+    analisis = None
+    if argumentos.bpm:
+        subdivision = argumentos.subdivision or config.SUBDIVISION_RITMO
+        analisis = ritmo.analizar(eventos, argumentos.bpm,
+                                  compas=argumentos.compas,
+                                  subdivision=subdivision)
+
+    print(modulo_resumen.como_texto(datos, analisis))
+
+    hallazgos, sin_medir = prioridades.analizar(
+        eventos, analisis, tonalidad, argumentos.posicion, argumentos.escala
+    )
+    print()
+    print(prioridades.imprimir(hallazgos, sin_medir))
+
+    # La sesion en vivo SIEMPRE se guarda. Es la diferencia con el modo
+    # archivo: ahi el audio ya existe, aca se pierde si no lo escribimos.
+    rutas = exportacion.guardar_sesion(
+        eventos, tonalidad=tonalidad, posicion=argumentos.posicion,
+        escala=argumentos.escala, muestras=audio_grabado,
+        frecuencia_muestreo=frecuencia_muestreo, analisis_ritmico=analisis,
+    )
+    print()
+    print("SESION GUARDADA")
+    print("-" * 72)
+    for que, ruta in rutas.items():
+        print(f"  {que:>8}: {ruta}")
+    print()
+    print("  El .wav te deja volver a analizar esta misma sesion con otros")
+    print("  umbrales, sin tener que tocar de nuevo.")
+    print()
+
+    return 0
+
+
 def crear_parser():
     parser = argparse.ArgumentParser(
         description="Transcribe armonica a tablatura.",
@@ -206,8 +430,12 @@ def crear_parser():
             "--escala blues_mayor --detalle\n"
         ),
     )
-    parser.add_argument("--wav", required=True,
+    parser.add_argument("--wav", default=None,
                         help="archivo .wav a transcribir")
+    parser.add_argument("--vivo", action="store_true",
+                        help="escucha el microfono en tiempo real")
+    parser.add_argument("--calibrar", action="store_true",
+                        help="mide el ruido de fondo y sugiere el umbral")
     parser.add_argument("--tonalidad", default="C",
                         choices=sorted(tablas.TONALIDADES),
                         help="tonalidad de la armonica (por defecto C)")
@@ -240,6 +468,16 @@ def main():
 
     if argumentos.escala and argumentos.posicion is None:
         print("Para usar --escala hay que indicar tambien --posicion.")
+        return 1
+
+    if argumentos.calibrar:
+        return _calibrar()
+
+    if argumentos.vivo:
+        return sesion_en_vivo(argumentos)
+
+    if not argumentos.wav:
+        print("Elegi un modo: --wav <archivo>, --vivo o --calibrar.")
         return 1
 
     try:
