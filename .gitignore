@@ -14,3 +14,7 @@ audio_prueba/*
 # no va al repositorio porque es contenido de un tercero.
 material/*
 !material/LEEME.md
+
+# Frases de referencia (grabaciones propias)
+frases/*
+!frases/.gitkeep

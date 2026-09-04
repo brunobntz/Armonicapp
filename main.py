@@ -27,11 +27,12 @@ estaba calibrado.
 """
 
 import argparse
+import os
 import sys
 
 import config
-from armonica import (afinador, audio, exportacion, mapeo, menu, microfono,
-                      pantalla, posiciones, prioridades,
+from armonica import (afinador, audio, exportacion, frases, mapeo, menu,
+                      microfono, pantalla, posiciones, prioridades,
                       resumen as modulo_resumen, ritmo, segmentacion,
                       tablas, tono)
 from armonica.consola import preparar_consola
@@ -650,7 +651,9 @@ def _sin_argumentos(argumentos):
     el menu y se quedaba esperando que alguien tecleara.
     """
     return not any([argumentos.wav, argumentos.vivo, argumentos.calibrar,
-                    argumentos.teoria, argumentos.afinador, argumentos.acorde])
+                    argumentos.teoria, argumentos.afinador, argumentos.acorde,
+                    argumentos.frases, argumentos.grabar_frase,
+                    argumentos.practicar])
 
 
 def _desde_el_menu(argumentos):
@@ -812,6 +815,202 @@ def _partir_acorde(texto):
     return texto, "mayor"
 
 
+# =============================================================================
+# Modo frases: grabar una referencia y practicar contra ella
+# =============================================================================
+
+def _escuchar_hasta_ctrl_c(tonalidad, posicion, escala, titulo):
+    """
+    Escucha el microfono y devuelve (eventos, audio, frecuencia_muestreo).
+
+    Es el nucleo comun de grabar una frase y de practicarla. La diferencia
+    entre los dos modos es que se hace DESPUES, no como se escucha.
+    """
+    tabla = mapeo.construir_tabla_inversa(tonalidad)
+    estado = pantalla.EstadoPantalla(tonalidad, posicion, escala)
+
+    print()
+    print(titulo)
+    print("Ctrl+C cuando termines.")
+    print()
+
+    mediciones = []
+    audio_grabado = None
+    frecuencia_muestreo = config.FRECUENCIA_MUESTREO
+
+    from rich.live import Live
+
+    try:
+        with microfono.CapturaMicrofono() as captura:
+            frecuencia_muestreo = captura.frecuencia_muestreo
+            ultimo_dibujo = -1.0
+
+            with Live(pantalla.armar(estado),
+                      refresh_per_second=config.REFRESCOS_POR_SEGUNDO) as vivo:
+                for instante, ventana in captura.ventanas():
+                    volumen = audio.volumen_rms(ventana)
+
+                    if volumen < config.UMBRAL_VOLUMEN_RMS:
+                        frecuencia, confianza = None, 0.0
+                    else:
+                        frecuencia, confianza = tono.detectar_frecuencia(
+                            ventana, frecuencia_muestreo)
+
+                    mediciones.append({
+                        "tiempo_seg": instante, "frecuencia": frecuencia,
+                        "confianza": confianza, "volumen": volumen,
+                    })
+
+                    nota, cents = (None, 0.0)
+                    if frecuencia is not None:
+                        nota, cents = mapeo.frecuencia_a_nota(
+                            frecuencia, tabla_inversa=tabla)
+                    estado.actualizar(nota, cents, volumen, instante)
+
+                    if instante - ultimo_dibujo >= 1.0 / config.REFRESCOS_POR_SEGUNDO:
+                        ultimo_dibujo = instante
+                        eventos = segmentacion.segmentar(
+                            mediciones, tabla,
+                            frecuencia_muestreo=frecuencia_muestreo)
+                        estado.registrar_eventos(eventos)
+                        vivo.update(pantalla.armar(estado))
+
+            audio_grabado = captura.audio_grabado()
+
+    except KeyboardInterrupt:
+        pass
+
+    eventos = segmentacion.segmentar(mediciones, tabla,
+                                     frecuencia_muestreo=frecuencia_muestreo)
+    if posicion and escala:
+        segmentacion.marcar_escala(eventos, tonalidad, posicion, escala)
+
+    return eventos, audio_grabado, frecuencia_muestreo
+
+
+def modo_grabar_frase(argumentos):
+    """
+    Graba una frase y la guarda como referencia para practicar despues.
+
+    La referencia es una GRABACION y no una tablatura escrita, porque la
+    tablatura no lleva ritmo. Tu propio atril lo dice: "la tablatura no
+    transmite el ritmo preciso". Una grabacion lo trae incluido.
+    """
+    nombre = argumentos.grabar_frase
+
+    eventos, audio_grabado, frecuencia_muestreo = _escuchar_hasta_ctrl_c(
+        argumentos.tonalidad, argumentos.posicion, argumentos.escala,
+        f"Grabando la frase de referencia: {nombre}\nToca la frase como querrias tocarla.",
+    )
+
+    reconocidas = [e for e in eventos if e.nota is not None]
+    if not reconocidas:
+        print()
+        print("No se reconocio ninguna nota. La frase no se guardo.")
+        print("Corre  python main.py --calibrar  si el microfono no engancha.")
+        return 1
+
+    try:
+        frase = frases.desde_eventos(
+            eventos, nombre, argumentos.tonalidad,
+            argumentos.posicion, argumentos.escala,
+        )
+    except ValueError as error:
+        print(f"\n{error}")
+        return 1
+
+    ruta = frases.guardar(frase)
+
+    print()
+    print("=" * 72)
+    print(f"  FRASE GUARDADA: {frase.nombre}")
+    print("=" * 72)
+    print()
+    print(f"  {frase.cantidad} notas en {frase.duracion_seg:.1f} segundos")
+    print()
+    print(frase.como_texto())
+    print()
+    print(f"  Archivo: {ruta}")
+    print()
+    print(f"  Para practicarla:")
+    print(f"    python main.py --practicar \"{frase.nombre}\"")
+    print()
+
+    # Guardamos tambien el audio, por si despues queres volver a escucharla.
+    if audio_grabado is not None and len(audio_grabado):
+        ruta_audio = os.path.splitext(ruta)[0] + "_audio.wav"
+        audio.escribir_wav(ruta_audio, audio_grabado, frecuencia_muestreo)
+        print(f"  El audio quedo en {ruta_audio}")
+        print()
+
+    return 0
+
+
+def modo_practicar_frase(argumentos):
+    """Toca contra una frase guardada y compara."""
+    frase = frases.buscar(argumentos.practicar)
+    if frase is None:
+        print(f"No encontre la frase {argumentos.practicar!r}.")
+        guardadas = frases.listar()
+        if guardadas:
+            print("\nLas que tenes guardadas:")
+            for nombre, _ in guardadas:
+                print(f"  - {nombre}")
+        else:
+            print("\nTodavia no hay ninguna. Grabá una con:")
+            print("  python main.py --grabar-frase \"nombre\"")
+        return 1
+
+    print()
+    print("=" * 72)
+    print(f"  LA FRASE: {frase.nombre}")
+    print("=" * 72)
+    print()
+    print(frase.como_texto())
+    print()
+    print(f"  {frase.cantidad} notas, {frase.duracion_seg:.1f} segundos, "
+          f"armonica en {frase.tonalidad}")
+
+    eventos, _, _ = _escuchar_hasta_ctrl_c(
+        frase.tonalidad, frase.posicion, frase.escala,
+        "Ahora toca vos la misma frase.",
+    )
+
+    comparacion = frases.comparar(frase, eventos)
+
+    print()
+    print(frases.informe(comparacion))
+    print()
+
+    return 0
+
+
+def modo_listar_frases():
+    """Las frases guardadas."""
+    guardadas = frases.listar()
+
+    print()
+    if not guardadas:
+        print("Todavia no hay frases guardadas.")
+        print()
+        print("Para grabar una:")
+        print("  python main.py --grabar-frase \"lick de 3a\" --posicion 3")
+        print()
+        return 0
+
+    print("FRASES GUARDADAS")
+    print("-" * 72)
+    for nombre, ruta in guardadas:
+        frase = frases.cargar(ruta)
+        posicion = f"{frase.posicion}a pos" if frase.posicion else "sin posicion"
+        print(f"  {nombre}")
+        print(f"      {frase.cantidad} notas, {frase.duracion_seg:.1f} s, "
+              f"armonica en {frase.tonalidad}, {posicion}")
+        print(f"      {frase.como_texto(por_linea=14).splitlines()[0]}")
+    print()
+    return 0
+
+
 def crear_parser():
     parser = argparse.ArgumentParser(
         description="Transcribe armonica a tablatura.",
@@ -837,6 +1036,12 @@ def crear_parser():
                         help="que bend practicar en el afinador (ej: -3'')")
     parser.add_argument("--acorde", default=None,
                         help="muestra el arpegio de un acorde (ej: F7, Bbm, C)")
+    parser.add_argument("--grabar-frase", default=None, metavar="NOMBRE",
+                        help="graba una frase de referencia")
+    parser.add_argument("--practicar", default=None, metavar="NOMBRE",
+                        help="practica contra una frase guardada")
+    parser.add_argument("--frases", action="store_true",
+                        help="lista las frases guardadas")
     parser.add_argument("--tonalidad", default="C",
                         choices=sorted(tablas.TONALIDADES),
                         help="tonalidad de la armonica (por defecto C)")
@@ -881,6 +1086,15 @@ def main():
 
     if argumentos.calibrar:
         return _calibrar()
+
+    if argumentos.frases:
+        return modo_listar_frases()
+
+    if argumentos.grabar_frase:
+        return modo_grabar_frase(argumentos)
+
+    if argumentos.practicar:
+        return modo_practicar_frase(argumentos)
 
     if argumentos.acorde:
         raiz, tipo = _partir_acorde(argumentos.acorde)
