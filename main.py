@@ -18,8 +18,9 @@ import argparse
 import sys
 
 import config
-from armonica import (audio, mapeo, posiciones, prioridades, ritmo,
-                      segmentacion, tablas, tono)
+from armonica import (audio, exportacion, mapeo, posiciones, prioridades,
+                      resumen as modulo_resumen, ritmo, segmentacion,
+                      tablas, tono)
 from armonica.consola import preparar_consola
 
 
@@ -226,6 +227,10 @@ def crear_parser():
                         help="pulsos por compas (4 para un 4/4)")
     parser.add_argument("--estimar-bpm", action="store_true",
                         help="intenta adivinar la velocidad de la base")
+    parser.add_argument("--guardar", action="store_true",
+                        help="escribe la sesion en sesiones/ (tab, resumen, json, audio)")
+    parser.add_argument("--resumen", action="store_true",
+                        help="muestra las estadisticas de la sesion")
     return parser
 
 
@@ -267,6 +272,13 @@ def main():
         analisis = _imprimir_ritmo(eventos, argumentos.bpm, argumentos.compas,
                                    argumentos.subdivision, argumentos.detalle)
 
+    if eventos and argumentos.resumen:
+        datos = modulo_resumen.resumir(
+            eventos, argumentos.tonalidad, argumentos.posicion, argumentos.escala
+        )
+        print()
+        print(modulo_resumen.como_texto(datos, analisis))
+
     if eventos:
         hallazgos, sin_medir = prioridades.analizar(
             eventos, analisis, argumentos.tonalidad,
@@ -274,6 +286,22 @@ def main():
         )
         print()
         print(prioridades.imprimir(hallazgos, sin_medir))
+        print()
+
+    if eventos and argumentos.guardar:
+        rutas = exportacion.guardar_sesion(
+            eventos,
+            tonalidad=argumentos.tonalidad,
+            posicion=argumentos.posicion,
+            escala=argumentos.escala,
+            muestras=muestras,
+            frecuencia_muestreo=frecuencia_muestreo,
+            analisis_ritmico=analisis,
+        )
+        print("SESION GUARDADA")
+        print("-" * 72)
+        for que, ruta in rutas.items():
+            print(f"  {que:>8}: {ruta}")
         print()
 
     return 0
