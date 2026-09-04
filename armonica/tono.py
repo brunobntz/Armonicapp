@@ -389,6 +389,184 @@ def detectar_en_senal(muestras, frecuencia_muestreo=None, umbral_volumen=None):
     return mediciones
 
 
+
+# =============================================================================
+# ¿Este audio se puede transcribir?
+# =============================================================================
+
+def medir_monofonia(muestras, frecuencia_muestreo=None, umbral_volumen=None):
+    """
+    Mide qué tan monofónico es un audio, o sea qué tan transcribible.
+
+    POR QUE EXISTE ESTA FUNCION
+
+    YIN solo sabe de una nota por vez. Si le das una banda entera devuelve
+    basura, pero no avisa: devuelve frecuencias con toda seriedad. Antes de
+    transcribir algo conviene saber si tiene sentido intentarlo.
+
+    Es la misma idea que ritmo.ajuste_vs_azar(): un número que dice cuándo NO
+    hay que confiar en el resto de los números.
+
+    QUE MIDE
+
+      deteccion   qué proporción de las ventanas con sonido dieron una nota.
+                  Con una armónica sola ronda 0.9; con una banda baja mucho,
+                  porque YIN no encuentra un período claro.
+
+      confianza   qué tan periódica era la señal donde sí dio nota.
+
+      fundamental cuánta energía había realmente en la frecuencia detectada.
+                  Con varios instrumentos aparecen fundamentales ausentes, y
+                  este número los delata.
+
+      estabilidad qué proporción de ventanas seguidas dieron la MISMA nota.
+                  Una melodía sostiene cada nota decenas de ventanas; una
+                  mezcla salta de una frecuencia a otra todo el tiempo.
+
+    Devuelve un diccionario con esas cuatro medidas, un puntaje combinado y un
+    veredicto en palabras.
+    """
+    from armonica import audio
+
+    if frecuencia_muestreo is None:
+        frecuencia_muestreo = config.FRECUENCIA_MUESTREO
+    if umbral_volumen is None:
+        umbral_volumen = config.UMBRAL_VOLUMEN_RMS
+
+    bloques = audio.cortar_en_bloques(muestras)
+    if not bloques:
+        return _sin_datos("El audio es mas corto que una ventana de analisis.")
+
+    con_sonido = 0
+    con_nota = 0
+    confianzas = []
+    fundamentales = []
+    frecuencias = []
+
+    for _, bloque in bloques:
+        if audio.volumen_rms(bloque) < umbral_volumen:
+            frecuencias.append(None)
+            continue
+
+        con_sonido += 1
+        frecuencia, confianza = detectar_frecuencia(bloque, frecuencia_muestreo)
+        frecuencias.append(frecuencia)
+
+        if frecuencia is None:
+            continue
+
+        con_nota += 1
+        confianzas.append(confianza)
+        fundamentales.append(
+            proporcion_del_fundamental(bloque, frecuencia, frecuencia_muestreo)
+        )
+
+    if con_sonido == 0:
+        return _sin_datos("No hay ninguna ventana por encima del umbral de volumen.")
+
+    deteccion = con_nota / con_sonido
+    confianza_tipica = _mediana(confianzas)
+    fundamental_tipico = _mediana(fundamentales)
+    estabilidad = _medir_estabilidad(frecuencias)
+
+    # El puntaje pondera la detección y la estabilidad por encima del resto,
+    # porque son las dos que más se derrumban con varios instrumentos juntos.
+    puntaje = (
+        0.35 * deteccion
+        + 0.35 * estabilidad
+        + 0.20 * confianza_tipica
+        + 0.10 * min(1.0, fundamental_tipico / 0.4)
+    )
+
+    return {
+        "ventanas": len(bloques),
+        "con_sonido": con_sonido,
+        "deteccion": deteccion,
+        "confianza": confianza_tipica,
+        "fundamental": fundamental_tipico,
+        "estabilidad": estabilidad,
+        "puntaje": puntaje,
+        "veredicto": _veredicto(puntaje),
+        "explicacion": "",
+    }
+
+
+def _sin_datos(motivo):
+    return {
+        "ventanas": 0, "con_sonido": 0, "deteccion": 0.0, "confianza": 0.0,
+        "fundamental": 0.0, "estabilidad": 0.0, "puntaje": 0.0,
+        "veredicto": "sin datos", "explicacion": motivo,
+    }
+
+
+def _mediana(valores):
+    if not valores:
+        return 0.0
+    ordenados = sorted(valores)
+    return ordenados[len(ordenados) // 2]
+
+
+def _medir_estabilidad(frecuencias):
+    """
+    Qué proporción de ventanas seguidas dieron la misma nota.
+
+    Es la señal más clara de que hay una sola melodía. Una nota sostenida ocupa
+    decenas de ventanas iguales; una mezcla de instrumentos salta de una
+    frecuencia a otra en cada ventana, porque YIN engancha ora uno ora otro.
+
+    "La misma nota" quiere decir dentro de medio semitono, no la misma
+    frecuencia exacta: un vibrato no tiene que contar como inestabilidad.
+    """
+    seguidas = 0
+    comparaciones = 0
+
+    for anterior, siguiente in zip(frecuencias, frecuencias[1:]):
+        if anterior is None or siguiente is None:
+            continue
+        comparaciones += 1
+        # Medio semitono es una relación de frecuencias de 1.0293.
+        proporcion = max(anterior, siguiente) / min(anterior, siguiente)
+        if proporcion < 1.03:
+            seguidas += 1
+
+    if comparaciones == 0:
+        return 0.0
+    return seguidas / comparaciones
+
+
+def _veredicto(puntaje):
+    if puntaje >= 0.75:
+        return "monofonico: se puede transcribir"
+    if puntaje >= 0.55:
+        return "casi monofonico: la transcripcion va a tener errores"
+    if puntaje >= 0.35:
+        return "mezclado: la transcripcion no va a servir"
+    return "polifonico: no tiene sentido transcribir esto"
+
+
+def informe_de_monofonia(medidas, titulo=""):
+    """El resultado de medir_monofonia, en texto."""
+    lineas = []
+    if titulo:
+        lineas.append(titulo)
+        lineas.append("-" * max(len(titulo), 42))
+
+    if medidas["veredicto"] == "sin datos":
+        lineas.append("  " + medidas["explicacion"])
+        return "\n".join(lineas)
+
+    def barra(valor):
+        return "#" * int(valor * 30)
+
+    for clave in ("deteccion", "estabilidad", "confianza", "fundamental"):
+        valor = medidas[clave]
+        lineas.append(f"  {clave:<12} {valor:5.2f}  {barra(min(1.0, valor))}")
+
+    lineas.append("")
+    lineas.append(f"  PUNTAJE: {medidas['puntaje']:.2f}   {medidas['veredicto']}")
+    return "\n".join(lineas)
+
+
 # =============================================================================
 # Modo de demostración
 # =============================================================================

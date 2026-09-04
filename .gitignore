@@ -18,3 +18,7 @@ material/*
 # Frases de referencia (grabaciones propias)
 frases/*
 !frases/.gitkeep
+
+# Pistas separadas con Demucs (pesan mucho, se regeneran)
+separado/
+.venv-demucs/

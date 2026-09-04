@@ -1011,6 +1011,42 @@ def modo_listar_frases():
     return 0
 
 
+def modo_monofonia(ruta):
+    """
+    Mide si un archivo se puede transcribir, antes de intentarlo.
+
+    YIN solo sabe de una nota por vez. Si le das una banda entera devuelve
+    frecuencias con toda seriedad, pero son basura. Este modo pregunta primero.
+    """
+    try:
+        muestras, frecuencia_muestreo = audio.leer_wav(ruta)
+    except (ValueError, FileNotFoundError) as error:
+        print(f"No pude leer {ruta}: {error}")
+        return 1
+
+    if config.NORMALIZAR_ARCHIVOS:
+        muestras = audio.normalizar(muestras)
+
+    medidas = tono.medir_monofonia(muestras, frecuencia_muestreo)
+
+    print()
+    print(tono.informe_de_monofonia(medidas, f"SE PUEDE TRANSCRIBIR {ruta}?"))
+    print()
+    print("  deteccion    cuantas ventanas dieron una nota clara")
+    print("  estabilidad  cuantas veces dos ventanas seguidas dieron la misma")
+    print("  confianza    que tan periodica era la senal")
+    print("  fundamental  cuanta energia habia en la frecuencia detectada")
+    print()
+
+    if medidas["puntaje"] < 0.55:
+        print("  Con varios instrumentos a la vez la transcripcion no sirve.")
+        print("  Para probar si separando las pistas mejora:")
+        print(f"    python -m herramientas.prueba_demucs \"{ruta}\"")
+        print()
+
+    return 0
+
+
 def crear_parser():
     parser = argparse.ArgumentParser(
         description="Transcribe armonica a tablatura.",
@@ -1042,6 +1078,8 @@ def crear_parser():
                         help="practica contra una frase guardada")
     parser.add_argument("--frases", action="store_true",
                         help="lista las frases guardadas")
+    parser.add_argument("--monofonia", action="store_true",
+                        help="mide si un .wav se puede transcribir")
     parser.add_argument("--tonalidad", default="C",
                         choices=sorted(tablas.TONALIDADES),
                         help="tonalidad de la armonica (por defecto C)")
@@ -1086,6 +1124,12 @@ def main():
 
     if argumentos.calibrar:
         return _calibrar()
+
+    if argumentos.monofonia:
+        if not argumentos.wav:
+            print("Para medir la monofonia hace falta --wav <archivo>.")
+            return 1
+        return modo_monofonia(argumentos.wav)
 
     if argumentos.frases:
         return modo_listar_frases()
