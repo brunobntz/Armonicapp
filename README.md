@@ -29,7 +29,17 @@ Te dice qué número poner en `UMBRAL_VOLUMEN_RMS` dentro de `config.py`.
 Sin eso, la app puede no detectar nada (si el umbral está muy alto) o detectar
 tu respiración (si está muy bajo).
 
-Y después, simplemente:
+Y después, la interfaz web:
+
+```powershell
+python main.py --web --posicion 12 --escala blues_mayor
+```
+
+Se abre el navegador con el medidor de afinación grande, el diagrama de la
+armónica y el histórico de tus sesiones. El servidor corre en tu propia
+máquina: no hay nada en internet.
+
+O en la terminal, si preferís:
 
 ```powershell
 python main.py
@@ -48,6 +58,7 @@ valor por defecto, así que después de la primera vez son cuatro Enter.
 
 | Qué querés | Comando |
 |---|---|
+| Abrir la interfaz web | `python main.py --web --posicion 12 --escala blues_mayor` |
 | Tocar y ver la pantalla en vivo | `python main.py --vivo --posicion 12 --escala blues_mayor` |
 | Practicar la afinación de un bend | `python main.py --afinador --bend "-3''"` |
 | Consultar una escala sin tocar | `python main.py --teoria --posicion 12 --escala blues_mayor` |
@@ -179,7 +190,8 @@ una versión web o de teléfono.
 | `resumen.py` | Las estadísticas de una sesión. Cuenta, no opina. |
 | `prioridades.py` | Qué atacar primero. Opina, pero solo con datos confiables. |
 | `exportacion.py` | Los archivos de sesión. |
-| `pantalla.py` | El dibujo con `rich`. La única parte que sabe de presentación. |
+| `pantalla.py` | El dibujo con `rich`, para la terminal. |
+| `servidor.py` | La interfaz web. Solo biblioteca estándar. |
 | `menu.py` | El menú interactivo. |
 
 ### Dos ideas que se repiten en todo el proyecto
@@ -194,6 +206,28 @@ pasa entre los compases de cambio de acorde de `ritmo.py` y los que deduce
 la estimación del pulso, en la afinación de la armónica y en el ajuste de
 velocidad al comparar frases. Un solo valor disparatado arruina un promedio y
 la mediana ni se entera.
+
+---
+
+## La interfaz web
+
+```powershell
+python main.py --web --posicion 12 --escala blues_mayor
+```
+
+Dos solapas. **En vivo** tiene el medidor de afinación con una aguja que se
+mueve suave (en la terminal parpadea quince veces por segundo y no se puede
+leer mientras soplás), el diagrama de la armónica con la escala en verde, y la
+tablatura que vas tocando. **Historial** grafica cómo viene cada bend sesión
+por sesión, leyendo los JSON que ya se guardaban.
+
+No agrega ninguna dependencia. Usa `http.server` de la biblioteca estándar, y
+para mandar el estado en vivo usa *server-sent events*: una respuesta HTTP
+común que nunca se cierra, por la que el servidor va escribiendo líneas. Es
+más simple que un WebSocket y alcanza, porque los datos van en una sola
+dirección.
+
+Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 
 ---
 
@@ -229,4 +263,7 @@ python -m herramientas.generar_wav
   tono polifónica, que es otro proyecto.
 - **Ritmo escrito en la tablatura.** La tab dice qué agujero, no si es negra o
   corchea. Por eso las frases de referencia son grabaciones y no texto.
-- **Interfaz gráfica.** Todo es terminal.
+- **Correr en el teléfono.** La interfaz web corre en tu computadora y el
+  micrófono lo captura Python. Para una versión de teléfono habría que
+  portar los módulos puros a JavaScript y reescribir YIN con Web Audio.
+  Están escritos para eso, pero es otro proyecto.

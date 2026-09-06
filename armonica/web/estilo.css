@@ -1,0 +1,218 @@
+/* estilo.css — La apariencia de la interfaz web.
+ *
+ * Fondo oscuro a propósito: la pantalla se mira mientras tocás, muchas veces
+ * de noche, y el blanco cansa. Los tamaños son grandes porque la vas a leer
+ * de reojo, a medio metro, con la armónica en la boca.
+ */
+
+:root {
+  --fondo: #14161a;
+  --panel: #1d2026;
+  --borde: #2c313a;
+  --texto: #e7e9ee;
+  --tenue: #8b93a3;
+  --verde: #4ec97a;
+  --amarillo: #e8c14a;
+  --rojo: #e8654a;
+  --azul: #5aa9f0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font: 16px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 22px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--borde);
+}
+
+h1 { font-size: 17px; font-weight: 600; margin: 0; }
+h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px; color: var(--tenue);
+     text-transform: uppercase; letter-spacing: 0.06em; }
+
+nav { display: flex; gap: 6px; }
+
+.solapa {
+  background: transparent;
+  border: 1px solid var(--borde);
+  color: var(--tenue);
+  padding: 7px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.solapa.activa { background: var(--azul); border-color: var(--azul); color: #0d1117; }
+
+.panel { max-width: 860px; margin: 0 auto; padding: 22px; }
+section { margin-bottom: 30px; }
+
+/* --- Los botones --- */
+
+.controles { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+button.principal, button.secundario {
+  border: none;
+  border-radius: 7px;
+  padding: 11px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.principal { background: var(--verde); color: #0d1117; }
+button.secundario { background: var(--borde); color: var(--texto); }
+button:disabled { opacity: 0.4; cursor: default; }
+
+#contadores { color: var(--tenue); font-size: 14px; }
+
+/* --- El medidor de afinación --- */
+
+.medidor {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 22px;
+  text-align: center;
+}
+
+#nota-grande {
+  font-size: 62px;
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+#nombre-nota { color: var(--tenue); font-size: 17px; margin-bottom: 6px; }
+
+#aguja { width: 100%; max-width: 460px; height: auto; }
+
+#zona-buena { fill: rgba(78, 201, 122, 0.16); }
+.centro { stroke: var(--tenue); stroke-width: 2; }
+.marcas line { stroke: var(--borde); stroke-width: 2; }
+.etiqueta { fill: var(--tenue); font-size: 11px; text-anchor: middle; }
+
+/* La transición es lo que hace que la aguja se deslice en vez de saltar.
+ * Sin esto parpadearía quince veces por segundo y sería ilegible. */
+#punto { fill: var(--tenue); transition: cx 90ms linear, fill 140ms; }
+
+#cents {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+.ayuda { color: var(--tenue); font-size: 13px; margin: 8px 0 0; }
+
+.afinado { color: var(--verde); }
+.cerca { color: var(--amarillo); }
+.lejos { color: var(--rojo); }
+.fuera-de-escala { color: var(--amarillo); }
+
+/* --- El diagrama de la armónica --- */
+
+#diagrama { display: grid; gap: 5px; }
+
+.fila-diagrama {
+  display: grid;
+  grid-template-columns: 74px repeat(10, 1fr);
+  gap: 5px;
+  align-items: stretch;
+}
+
+.etiqueta-fila {
+  color: var(--tenue);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.celda {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  padding: 7px 2px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--tenue);
+  transition: background 100ms, color 100ms;
+}
+.celda .nombre { display: block; font-size: 10px; opacity: 0.55; }
+.celda.vacia { background: transparent; border-color: transparent; }
+.celda.en-escala { color: var(--verde); border-color: rgba(78, 201, 122, 0.35); }
+.celda.actual { background: var(--azul); color: #0d1117; border-color: var(--azul); font-weight: 700; }
+.celda.actual .nombre { opacity: 0.75; }
+
+.numeros-agujeros { color: var(--tenue); font-size: 12px; text-align: center; }
+
+/* --- La tablatura --- */
+
+.tab {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 19px;
+  letter-spacing: 0.04em;
+  color: var(--tenue);
+  min-height: 54px;
+  word-spacing: 6px;
+}
+.tab .ultima { color: var(--texto); font-weight: 700; }
+
+/* --- El resumen y los hallazgos --- */
+
+.hallazgo {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--amarillo);
+  border-radius: 7px;
+  padding: 13px 16px;
+  margin-bottom: 10px;
+}
+.hallazgo h3 { margin: 0 0 6px; font-size: 15px; }
+.hallazgo p { margin: 4px 0; font-size: 14px; color: var(--tenue); }
+.hallazgo .accion { color: var(--texto); }
+
+.aviso {
+  background: rgba(90, 169, 240, 0.08);
+  border: 1px solid rgba(90, 169, 240, 0.3);
+  border-radius: 7px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--tenue);
+}
+
+/* --- Las tablas --- */
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--borde); }
+th { color: var(--tenue); font-weight: 600; font-size: 12px;
+     text-transform: uppercase; letter-spacing: 0.05em; }
+td.numero { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- Los gráficos del historial --- */
+
+.grafico-bend {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.grafico-bend h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-family: Consolas, monospace;
+}
+.grafico-bend .resumen-linea { color: var(--tenue); font-size: 13px; margin-bottom: 8px; }
+.grafico-bend svg { width: 100%; height: auto; }

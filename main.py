@@ -653,7 +653,7 @@ def _sin_argumentos(argumentos):
     return not any([argumentos.wav, argumentos.vivo, argumentos.calibrar,
                     argumentos.teoria, argumentos.afinador, argumentos.acorde,
                     argumentos.frases, argumentos.grabar_frase,
-                    argumentos.practicar])
+                    argumentos.practicar, argumentos.web])
 
 
 def _desde_el_menu(argumentos):
@@ -1132,6 +1132,10 @@ def crear_parser():
                         help="mide si un .wav se puede transcribir")
     parser.add_argument("--que-tono", action="store_true",
                         help="deduce la armonica y el tono de un .wav")
+    parser.add_argument("--web", action="store_true",
+                        help="abre la interfaz en el navegador")
+    parser.add_argument("--puerto", type=int, default=8000,
+                        help="puerto del servidor web (por defecto 8000)")
     parser.add_argument("--tonalidad", default="C",
                         choices=sorted(tablas.TONALIDADES),
                         help="tonalidad de la armonica (por defecto C)")
@@ -1173,6 +1177,11 @@ def main():
         argumentos = _desde_el_menu(argumentos)
         if argumentos is None:
             return 0
+
+    if argumentos.web:
+        from armonica import servidor
+        return servidor.arrancar(argumentos.tonalidad, argumentos.posicion,
+                                 argumentos.escala, argumentos.puerto)
 
     if argumentos.calibrar:
         return _calibrar()

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Armónica</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+
+<header>
+  <h1 id="encabezado">Armónica</h1>
+  <nav>
+    <button class="solapa activa" data-panel="vivo">En vivo</button>
+    <button class="solapa" data-panel="historial">Historial</button>
+  </nav>
+</header>
+
+<!-- ===================== EN VIVO ===================== -->
+<main id="panel-vivo" class="panel">
+
+  <section class="controles">
+    <button id="boton-empezar" class="principal">Empezar a escuchar</button>
+    <button id="boton-terminar" class="secundario" disabled>Terminar y guardar</button>
+    <span id="contadores"></span>
+  </section>
+
+  <!-- El medidor de afinación. Es lo más importante de la pantalla: es lo
+       único que no podés saber de oído mientras tocás. -->
+  <section class="medidor">
+    <div id="nota-grande">—</div>
+    <div id="nombre-nota"></div>
+
+    <svg id="aguja" viewBox="0 0 400 110" preserveAspectRatio="xMidYMid meet">
+      <!-- La zona verde: dentro de estos cents la nota está afinada -->
+      <rect id="zona-buena" x="180" y="30" width="40" height="40" rx="4"></rect>
+      <line x1="200" y1="20" x2="200" y2="80" class="centro"></line>
+
+      <!-- Marcas cada 10 cents -->
+      <g class="marcas">
+        <line x1="40"  y1="42" x2="40"  y2="58"></line>
+        <line x1="80"  y1="45" x2="80"  y2="55"></line>
+        <line x1="120" y1="42" x2="120" y2="58"></line>
+        <line x1="160" y1="45" x2="160" y2="55"></line>
+        <line x1="240" y1="45" x2="240" y2="55"></line>
+        <line x1="280" y1="42" x2="280" y2="58"></line>
+        <line x1="320" y1="45" x2="320" y2="55"></line>
+        <line x1="360" y1="42" x2="360" y2="58"></line>
+      </g>
+      <text x="40"  y="98" class="etiqueta">-40</text>
+      <text x="120" y="98" class="etiqueta">-20</text>
+      <text x="200" y="98" class="etiqueta">0</text>
+      <text x="280" y="98" class="etiqueta">+20</text>
+      <text x="360" y="98" class="etiqueta">+40</text>
+
+      <circle id="punto" cx="200" cy="50" r="11"></circle>
+    </svg>
+
+    <div id="cents">sin nota</div>
+    <div id="pista" class="ayuda"></div>
+  </section>
+
+  <!-- El diagrama de la armónica -->
+  <section>
+    <h2>La armónica</h2>
+    <div id="diagrama"></div>
+    <p class="ayuda">
+      En verde, los agujeros de la escala de referencia.
+      El que estás tocando queda resaltado.
+    </p>
+  </section>
+
+  <!-- La tablatura que venís tocando -->
+  <section>
+    <h2>Lo que tocaste</h2>
+    <div id="tab" class="tab">—</div>
+  </section>
+
+  <!-- El resumen, al terminar -->
+  <section id="seccion-resumen" hidden>
+    <h2>Resumen de la sesión</h2>
+    <div id="resumen"></div>
+  </section>
+
+</main>
+
+<!-- ===================== HISTORIAL ===================== -->
+<main id="panel-historial" class="panel" hidden>
+
+  <section>
+    <h2>Cómo vienen tus bends</h2>
+    <p class="ayuda">
+      Cada línea es un bend, sesión por sesión. La franja verde es la zona
+      afinada. Está medido <strong>contra tu propia armónica</strong>, que está
+      unos cents alta: eso es del instrumento y no tuyo.
+    </p>
+    <div id="grafico-bends"></div>
+  </section>
+
+  <section>
+    <h2>Las sesiones</h2>
+    <div id="tabla-sesiones"></div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
