@@ -390,3 +390,45 @@ select:disabled { opacity: 0.4; }
   cursor: pointer;
 }
 .tramo button:disabled { opacity: 0.4; cursor: default; }
+
+/* --- La barra de nivel de entrada --- */
+
+.nivel { margin-bottom: 22px; }
+
+.barra-nivel {
+  position: relative;
+  height: 16px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.barra-nivel.ancha { height: 22px; margin-top: 12px; }
+
+/* Sube de golpe y baja despacio, como un vumetro de verdad. */
+#barra-nivel, #barra-nivel-ajustes {
+  height: 100%;
+  width: 0;
+  background: var(--verde);
+  transition: width 80ms linear, background 150ms;
+}
+#barra-nivel.callado, #barra-nivel-ajustes.callado { background: var(--borde); }
+#barra-nivel.saturado, #barra-nivel-ajustes.saturado { background: var(--rojo); }
+
+/* La marca del umbral: por debajo de ahi la app no escucha nada. */
+#marca-umbral, #marca-umbral-ajustes {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--amarillo);
+  opacity: 0.75;
+}
+
+#estado-microfono { color: var(--tenue); font-size: 14px; }
+
+/* El reproductor de cada frase */
+.frase audio {
+  height: 34px;
+  max-width: 240px;
+}

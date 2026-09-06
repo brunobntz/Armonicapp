@@ -92,6 +92,11 @@ class EstadoCompartido:
         self.posicion = posicion
         self.escala = escala
 
+        # Que microfono usar. None = el predeterminado de Windows, que casi
+        # nunca es el que queres: en esta maquina el predeterminado era la
+        # camara web, a un metro de distancia, y no se movia nada en pantalla.
+        self.dispositivo = config.DISPOSITIVO_ENTRADA
+
         # En que modo esta escuchando. Cambia SOLO lo que pasa al terminar:
         #   "sesion"     -> guarda la sesion en sesiones/
         #   "frase"      -> guarda lo tocado como frase de referencia
@@ -110,6 +115,12 @@ class EstadoCompartido:
         self.audio_grabado = None
         self.frecuencia_muestreo = config.FRECUENCIA_MUESTREO
         self.ultimo_guardado = None
+        self.error_de_audio = ""
+
+        # El volumen mas alto de los ultimos instantes. El volumen crudo cae a
+        # cero entre nota y nota y la barra parpadearia sin parar; el pico se
+        # queda un momento arriba y se puede leer de reojo mientras tocas.
+        self.pico = 0.0
 
     # --- Lo que escribe el hilo de audio ---
 
@@ -119,6 +130,8 @@ class EstadoCompartido:
                 self.nota_actual = nota
                 self.cents = cents
             self.volumen = volumen
+            # El pico baja despacio y sube de golpe, como un vumetro.
+            self.pico = max(volumen, self.pico * 0.90)
             self.segundos = segundos
             self.eventos = eventos
 
@@ -129,6 +142,8 @@ class EstadoCompartido:
             self.nota_actual = None
             self.cents = 0.0
             self.volumen = 0.0
+            self.pico = 0.0
+            self.error_de_audio = ""
             self.segundos = 0.0
             self.eventos = []
             self.mediciones = []
@@ -151,6 +166,8 @@ class EstadoCompartido:
                 "posicion": self.posicion,
                 "escala": self.escala,
                 "volumen": round(self.volumen, 4),
+                "pico": round(self.pico, 4),
+                "error_de_audio": self.error_de_audio,
                 "segundos": round(self.segundos, 1),
                 "cents": round(self.cents, 1),
                 "cantidad_notas": len(eventos),
@@ -264,7 +281,7 @@ def escuchar(estado, detener):
     mediciones = []
 
     try:
-        with microfono.CapturaMicrofono() as captura:
+        with microfono.CapturaMicrofono(dispositivo=estado.dispositivo) as captura:
             estado.frecuencia_muestreo = captura.frecuencia_muestreo
             ultimo_recalculo = -1.0
             eventos = []
@@ -312,7 +329,12 @@ def escuchar(estado, detener):
             estado.audio_grabado = captura.audio_grabado()
 
     except Exception as error:      # noqa: BLE001
+        # Antes esto solo se imprimia en la terminal, que es justo la ventana
+        # que nadie mira cuando esta usando la app. Ahora tambien viaja a la
+        # pantalla: un microfono ocupado por otro programa, o desenchufado,
+        # se veia identico a "no estoy tocando lo bastante fuerte".
         print(f"  El hilo de audio se corto: {error}")
+        estado.error_de_audio = str(error)
 
     estado.mediciones = mediciones
     estado.escuchando = False
@@ -507,6 +529,10 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(historial())
         if self.path == "/api/frases":
             return self._responder_json(self._listar_frases())
+        if self.path == "/api/dispositivos":
+            return self._responder_json(self._listar_dispositivos())
+        if self.path.startswith("/api/frases/audio"):
+            return self._mandar_audio_de_frase(self.path.partition("?")[2])
         if self.path == "/api/resumen":
             return self._responder_json(self._resumen_actual())
         return super().do_GET()
@@ -533,6 +559,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._terminar())
         if self.path == "/api/frases/borrar":
             return self._responder_json(self._borrar_frase(cuerpo))
+        if self.path == "/api/configuracion":
+            return self._responder_json(self._cambiar_configuracion(cuerpo))
         self.send_error(404)
 
     def _leer_cuerpo(self):
@@ -576,17 +604,26 @@ class Manejador(SimpleHTTPRequestHandler):
             "hasta": _numero(parametros.get("hasta", [""])[0]),
         }
 
-        if not nombre:
-            return None, None, opciones, "falta el nombre de la frase"
-
         largo = int(self.headers.get("Content-Length") or 0)
         if largo <= 0:
             return None, None, opciones, "no llego ningun audio"
         if largo > MAXIMO_SUBIDA_BYTES:
             megas = MAXIMO_SUBIDA_BYTES // (1024 * 1024)
+            self.close_connection = True
             return None, None, opciones, f"el archivo pasa los {megas} MB"
 
+        # EL CUERPO SE LEE ANTES DE VALIDAR NADA.
+        #
+        # Parece al reves: si falta el nombre, para que gastar en leer un
+        # archivo que vamos a descartar. Pero el navegador todavia lo esta
+        # mandando, y contestarle y cerrar en el medio le corta la conexion:
+        # en vez del mensaje "falta el nombre" recibe un error de red. Un test
+        # lo agarro justo, y de manera intermitente, que es la peor forma de
+        # tener un error.
         datos = self.rfile.read(largo)
+
+        if not nombre:
+            return None, None, opciones, "falta el nombre de la frase"
 
         # La extension del temporal la pone el que sube: si mandaste un .m4a,
         # ffmpeg necesita saberlo para poder convertirlo.
@@ -614,6 +651,8 @@ class Manejador(SimpleHTTPRequestHandler):
         modo = peticion.get("modo", "sesion")
         nombre = (peticion.get("nombre") or "").strip()
 
+        if modo == "prueba":
+            nombre = ""
         if modo in ("frase", "practicar") and not nombre:
             return {"ok": False, "motivo": "falta el nombre de la frase"}
 
@@ -646,6 +685,11 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._terminar_grabando_frase(estado)
         if estado.modo == "practicar":
             return self._terminar_practicando(estado)
+        if estado.modo == "prueba":
+            # Probar el microfono no deja rastro: no es una sesion.
+            notas = len([e for e in estado.eventos if e.nota is not None])
+            estado.reiniciar()
+            return {"ok": True, "modo": "prueba", "notas": notas}
 
         rutas = guardar(estado)
         return {
@@ -888,6 +932,8 @@ class Manejador(SimpleHTTPRequestHandler):
                 "posicion": frase.posicion,
                 "fecha": (frase.fecha or "")[:10],
                 "tab": frase.tablatura()[:16],
+                "hay_audio": os.path.isfile(
+                    os.path.splitext(ruta)[0] + "_audio.wav"),
             })
         return {"frases": salida}
 
@@ -898,6 +944,127 @@ class Manejador(SimpleHTTPRequestHandler):
                 os.remove(ruta)
                 return {"ok": True}
         return {"ok": False, "motivo": "no la encontre"}
+
+    def _listar_dispositivos(self):
+        """
+        Los microfonos que ve el sistema.
+
+        POR QUE ESTO NO ES UN DETALLE
+
+        En Windows hay siempre media docena de entradas, y la predeterminada
+        rara vez es la que queres: en la maquina donde se escribio esto, la
+        predeterminada era el microfono de la camara web, a un metro de la
+        cara. La app "no andaba" y en realidad estaba escuchando otra cosa.
+
+        Se filtran los duplicados por nombre. Windows lista el mismo microfono
+        una vez por cada API de audio (MME, DirectSound, WASAPI, WDM-KS), y
+        una lista de veinte entradas con seis nombres repetidos no ayuda a
+        nadie a elegir.
+        """
+        from armonica import microfono
+
+        try:
+            entradas = microfono.listar_dispositivos()
+        except Exception as error:      # noqa: BLE001
+            return {"ok": False, "motivo": str(error), "dispositivos": []}
+
+        vistos = set()
+        salida = []
+        for numero, nombre, canales in entradas:
+            limpio = nombre.strip()
+            if limpio.lower() in vistos:
+                continue
+            vistos.add(limpio.lower())
+            salida.append({
+                "numero": numero,
+                "nombre": limpio,
+                "canales": canales,
+            })
+
+        return {
+            "ok": True,
+            "dispositivos": salida,
+            "elegido": type(self).estado.dispositivo,
+        }
+
+    def _cambiar_configuracion(self, peticion):
+        """
+        Cambia la armonica, la posicion, la escala o el microfono sin reiniciar.
+
+        No se puede mientras esta escuchando: el hilo de audio ya armo su tabla
+        de notas con la armonica anterior, y cambiarla en el medio dejaria la
+        primera mitad de la sesion transcrita con una y la segunda con otra.
+        """
+        clase = type(self)
+        estado = clase.estado
+
+        if estado.escuchando:
+            return {"ok": False,
+                    "motivo": "no se puede cambiar mientras esta escuchando"}
+
+        peticion = peticion or {}
+
+        if "tonalidad" in peticion:
+            tonalidad = peticion["tonalidad"]
+            if tonalidad not in tablas.TONALIDADES:
+                return {"ok": False, "motivo": f"no conozco la armonica {tonalidad!r}"}
+            estado.tonalidad = tonalidad
+
+        if "posicion" in peticion:
+            posicion = peticion["posicion"]
+            if posicion in ("", None):
+                estado.posicion = None
+            else:
+                posicion = int(posicion)
+                if posicion not in tablas.POSICIONES_CON_TABLA:
+                    return {"ok": False,
+                            "motivo": f"todavia no tengo tablas para la {posicion}a"}
+                estado.posicion = posicion
+
+        if "escala" in peticion:
+            escala = peticion["escala"] or None
+            if escala is not None and escala not in tablas.ESCALAS_INTERVALOS:
+                return {"ok": False, "motivo": f"no conozco la escala {escala!r}"}
+            estado.escala = escala
+
+        if "dispositivo" in peticion:
+            valor = peticion["dispositivo"]
+            estado.dispositivo = None if valor in ("", None) else int(valor)
+
+        return {"ok": True, "inicio": self._datos_iniciales()}
+
+    def _mandar_audio_de_frase(self, consulta):
+        """
+        Manda el .wav de una frase para que el navegador lo pueda reproducir.
+
+        Una frase de referencia se lee, pero sobre todo se ESCUCHA: la
+        tablatura no lleva el ritmo, y el ritmo es justo lo que estas tratando
+        de copiar. Sin esto, el audio estaba guardado en el disco y no habia
+        forma de oirlo desde la app.
+        """
+        parametros = urllib.parse.parse_qs(consulta)
+        nombre = (parametros.get("nombre", [""])[0] or "").strip()
+
+        ruta = None
+        for guardada, ruta_json in frases.listar():
+            if guardada == nombre:
+                candidata = os.path.splitext(ruta_json)[0] + "_audio.wav"
+                if os.path.isfile(candidata):
+                    ruta = candidata
+                break
+
+        if ruta is None:
+            return self.send_error(404, "esa frase no tiene audio guardado")
+
+        with open(ruta, "rb") as archivo:
+            datos = archivo.read()
+
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/wav")
+        self.send_header("Content-Length", str(len(datos)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(datos)
 
     def _resumen_actual(self):
         estado = type(self).estado
@@ -950,6 +1117,16 @@ class Manejador(SimpleHTTPRequestHandler):
                                 if estado.posicion else ""),
             "tono_resultante": tono_resultante,
             "tonalidades": list(tablas.TONALIDADES_DISPONIBLES),
+            "posiciones": [
+                {"numero": numero,
+                 "nombre": tablas.NOMBRES_POSICIONES.get(numero, f"{numero}a")}
+                for numero in tablas.POSICIONES_CON_TABLA
+            ],
+            "escalas": [
+                {"clave": clave, "nombre": tablas.NOMBRES_ESCALAS.get(clave, clave)}
+                for clave in tablas.ESCALAS_INTERVALOS
+            ],
+            "umbral_volumen": config.UMBRAL_VOLUMEN_RMS,
             "diagrama": diagrama_de_la_armonica(
                 estado.tonalidad, estado.posicion, estado.escala
             ),

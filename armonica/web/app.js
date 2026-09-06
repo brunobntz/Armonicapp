@@ -26,12 +26,14 @@ let celdasPorClave = {};
 document.addEventListener("DOMContentLoaded", async () => {
   configurarSolapas();
   configurarBotones();
+  configurarPrueba();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
 
   mostrarEncabezado();
   llenarTonalidades();
+  marcarUmbral();
   dibujarDiagrama(inicio.diagrama);
   ajustarZonaBuena();
 
@@ -68,12 +70,13 @@ function configurarSolapas() {
         otro.classList.toggle("activa", otro === boton));
 
       const cual = boton.dataset.panel;
-      ["vivo", "frases", "historial"].forEach((nombre) => {
+      ["vivo", "frases", "historial", "ajustes"].forEach((nombre) => {
         document.getElementById("panel-" + nombre).hidden = nombre !== cual;
       });
 
       if (cual === "historial") cargarHistorial();
       if (cual === "frases") cargarFrases();
+      if (cual === "ajustes") cargarAjustes();
     });
   });
 }
@@ -377,6 +380,7 @@ function dibujarEstado(estado) {
   dibujarMedidor(estado);
   resaltarAgujero(estado.nota);
   dibujarTab(estado.tab);
+  dibujarNivel(estado);
   sincronizarBotones(estado);
 
   const minutos = Math.floor(estado.segundos / 60);
@@ -733,9 +737,16 @@ function sincronizarBotones(estado) {
       ? "Grabando \u00ab" + estado.nombre_frase + "\u00bb. Toca la frase y dale Terminar."
       : "Practicando \u00ab" + estado.nombre_frase + "\u00bb. Tocala y dale Terminar.");
   } else if (escuchando) {
-    avisarFrase("Hay una sesi\u00f3n en vivo andando. Terminala primero.");
+    avisarFrase(AVISO_SESION);
+  } else if (document.getElementById("estado-frase").textContent === AVISO_SESION) {
+    // El aviso valia mientras la sesion estaba andando. Si sigue ahi
+    // despues de terminar, dice una mentira: se limpia solo.
+    avisarFrase("");
   }
 }
+
+
+const AVISO_SESION = "Hay una sesi\u00f3n en vivo andando. Terminala primero.";
 
 
 async function cargarFrases() {
@@ -760,6 +771,10 @@ async function cargarFrases() {
           (frase.posicion ? " \u00b7 " + frase.posicion + "\u00aa posici\u00f3n" : "") +
           (frase.fecha ? " \u00b7 " + frase.fecha : "") + "</div>" +
       "</div>" +
+      (frase.hay_audio
+        ? '<audio controls preload="none" src="/api/frases/audio?nombre=' +
+          encodeURIComponent(frase.nombre) + '"></audio>'
+        : '<span class="ayuda">sin audio</span>') +
       '<button data-practicar="' + escapar(frase.nombre) + '">Practicar</button>' +
       '<label class="audio">Con un .wav' +
         '<input type="file" accept=".wav,audio/wav" data-intento="' +
@@ -884,4 +899,197 @@ function mostrarComparacion(c) {
 function escapar(texto) {
   return String(texto).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+
+/* ==========================================================================
+   El nivel de entrada
+
+   Es lo primero que hay que poder ver cuando "no anda nada". Sin esta barra,
+   un microfono equivocado y una armonica tocada bajito se ven exactamente
+   igual: la pantalla quieta.
+   ========================================================================== */
+
+/* Cuanto de la barra ocupa el volumen. La escala es logaritmica porque el
+ * oido lo es: en escala lineal, todo lo que se toca de verdad se amontona
+ * contra el borde izquierdo y no se distingue nada. */
+function aPorcentaje(volumen) {
+  if (!volumen || volumen <= 0) return 0;
+  const db = 20 * Math.log10(volumen);       // 0 = saturado, -60 = casi nada
+  return Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+}
+
+
+function marcarUmbral() {
+  const umbral = aPorcentaje(inicio.umbral_volumen || 0.01);
+  ["marca-umbral", "marca-umbral-ajustes"].forEach((id) => {
+    const marca = document.getElementById(id);
+    if (marca) marca.style.left = umbral + "%";
+  });
+}
+
+
+function dibujarNivel(estado) {
+  const ancho = aPorcentaje(estado.pico);
+  const umbral = inicio.umbral_volumen || 0.01;
+
+  ["barra-nivel", "barra-nivel-ajustes"].forEach((id) => {
+    const barra = document.getElementById(id);
+    if (!barra) return;
+    barra.style.width = ancho + "%";
+    barra.classList.toggle("callado", estado.pico < umbral);
+    barra.classList.toggle("saturado", estado.pico > 0.95);
+  });
+
+  const texto = document.getElementById("texto-nivel");
+  if (!texto) return;
+
+  if (estado.error_de_audio) {
+    texto.innerHTML = "<strong>El micr\u00f3fono fall\u00f3:</strong> " +
+      escapar(estado.error_de_audio) +
+      " \u2014 prob\u00e1 con otro en <strong>Ajustes</strong>.";
+    texto.className = "ayuda lejos";
+    return;
+  }
+
+  texto.className = "ayuda";
+
+  if (!estado.escuchando) {
+    texto.innerHTML = "Dale a <strong>Empezar a escuchar</strong> y sopl\u00e1: " +
+      "esta barra se tiene que mover. Si no se mueve, and\u00e1 a " +
+      "<strong>Ajustes</strong> y eleg\u00ed otro micr\u00f3fono.";
+  } else if (estado.pico < umbral) {
+    texto.innerHTML = "Escuchando, pero no llega nada por encima del umbral. " +
+      "Si est\u00e1s tocando, el micr\u00f3fono elegido no es el que us\u00e1s.";
+  } else if (estado.pico > 0.95) {
+    texto.textContent = "Est\u00e1 saturando: baj\u00e1 el volumen de entrada " +
+      "o alejate un poco del micr\u00f3fono.";
+  } else {
+    texto.textContent = "Entrando bien.";
+  }
+}
+
+
+/* ==========================================================================
+   Los ajustes
+   ========================================================================== */
+
+async function cargarAjustes() {
+  llenarSelector("ajuste-tonalidad",
+    (inicio.tonalidades || []).map((clave) => ({ valor: clave, texto: clave })),
+    inicio.tonalidad);
+
+  llenarSelector("ajuste-posicion",
+    [{ valor: "", texto: "sin posici\u00f3n" }].concat(
+      (inicio.posiciones || []).map((posicion) =>
+        ({ valor: posicion.numero, texto: posicion.nombre }))),
+    inicio.posicion === null ? "" : inicio.posicion);
+
+  llenarSelector("ajuste-escala",
+    [{ valor: "", texto: "sin escala de referencia" }].concat(
+      (inicio.escalas || []).map((escala) =>
+        ({ valor: escala.clave, texto: escala.nombre }))),
+    inicio.escala || "");
+
+  mostrarResultadoDeAjustes();
+
+  const datos = await pedir("/api/dispositivos");
+  llenarSelector("selector-microfono",
+    [{ valor: "", texto: "el predeterminado de Windows" }].concat(
+      (datos.dispositivos || []).map((aparato) =>
+        ({ valor: aparato.numero, texto: aparato.numero + ". " + aparato.nombre }))),
+    datos.elegido === null || datos.elegido === undefined ? "" : datos.elegido);
+
+  if (!datos.ok) {
+    document.getElementById("estado-microfono").textContent =
+      datos.motivo || "no pude leer la lista de micr\u00f3fonos";
+  }
+}
+
+
+function llenarSelector(id, opciones, elegido) {
+  const selector = document.getElementById(id);
+  if (!selector || selector.dataset.listo === "si") return;
+
+  selector.innerHTML = opciones.map((opcion) =>
+    '<option value="' + opcion.valor + '"' +
+    (String(opcion.valor) === String(elegido) ? " selected" : "") + ">" +
+    escapar(opcion.texto) + "</option>").join("");
+
+  selector.dataset.listo = "si";
+  selector.addEventListener("change", guardarAjustes);
+}
+
+
+async function guardarAjustes() {
+  const posicion = document.getElementById("ajuste-posicion").value;
+  const dispositivo = document.getElementById("selector-microfono").value;
+
+  const respuesta = await pedir("/api/configuracion", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tonalidad: document.getElementById("ajuste-tonalidad").value,
+      posicion: posicion === "" ? null : Number(posicion),
+      escala: document.getElementById("ajuste-escala").value || null,
+      dispositivo: dispositivo === "" ? null : Number(dispositivo),
+    }),
+  });
+
+  if (!respuesta.ok) {
+    document.getElementById("resultado-ajustes").textContent = respuesta.motivo;
+    return;
+  }
+
+  // El servidor devuelve los datos iniciales de nuevo: la armonica cambio y
+  // con ella el diagrama entero, que se dibuja en Python y no aca.
+  inicio = respuesta.inicio;
+  mostrarEncabezado();
+  dibujarDiagrama(inicio.diagrama);
+  marcarUmbral();
+  mostrarResultadoDeAjustes();
+}
+
+
+function mostrarResultadoDeAjustes() {
+  const donde = document.getElementById("resultado-ajustes");
+  if (!donde) return;
+
+  donde.textContent = inicio.posicion
+    ? "Arm\u00f3nica en " + inicio.tonalidad + ", " + inicio.nombre_posicion +
+      ": toc\u00e1s en " + inicio.tono_resultante + "."
+    : "Arm\u00f3nica en " + inicio.tonalidad +
+      ". Sin posici\u00f3n no se marca ninguna escala en el diagrama.";
+}
+
+
+/* Probar el microfono: escucha un rato y no guarda nada. Es el modo mas
+ * barato de contestar la pregunta "¿me esta escuchando?". */
+function configurarPrueba() {
+  const boton = document.getElementById("boton-probar");
+  if (!boton) return;
+
+  boton.addEventListener("click", async () => {
+    const aviso = document.getElementById("estado-microfono");
+
+    if (boton.dataset.andando === "si") {
+      const respuesta = await pedir("/api/terminar", { method: "POST" });
+      boton.dataset.andando = "no";
+      boton.textContent = "Probar";
+      aviso.textContent = respuesta.notas
+        ? "Reconoci\u00f3 " + respuesta.notas + " notas. El micr\u00f3fono anda."
+        : "No reconoci\u00f3 ninguna nota.";
+      return;
+    }
+
+    await guardarAjustes();     // primero fijamos el microfono elegido
+    const respuesta = await comenzar({ modo: "prueba" });
+    if (respuesta.ok) {
+      boton.dataset.andando = "si";
+      boton.textContent = "Terminar la prueba";
+      aviso.textContent = "Sopl\u00e1: la barra de abajo se tiene que mover.";
+    } else {
+      aviso.textContent = respuesta.motivo || "no pude abrir el micr\u00f3fono";
+    }
+  });
 }

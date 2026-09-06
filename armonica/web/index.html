@@ -14,6 +14,7 @@
     <button class="solapa activa" data-panel="vivo">En vivo</button>
     <button class="solapa" data-panel="frases">Frases</button>
     <button class="solapa" data-panel="historial">Historial</button>
+    <button class="solapa" data-panel="ajustes">Ajustes</button>
   </nav>
 </header>
 
@@ -24,6 +25,20 @@
     <button id="boton-empezar" class="principal">Empezar a escuchar</button>
     <button id="boton-terminar" class="secundario" disabled>Terminar y guardar</button>
     <span id="contadores"></span>
+  </section>
+
+  <!-- La barra de nivel. Es lo primero que hay que mirar cuando "no anda
+       nada": si no se mueve al soplar, el problema es el micrófono y no
+       tu forma de tocar. -->
+  <section class="nivel">
+    <div class="barra-nivel"><div id="barra-nivel"></div>
+      <div id="marca-umbral" title="por debajo de esta marca, la app no escucha"></div>
+    </div>
+    <div id="texto-nivel" class="ayuda">
+      Dale a <strong>Empezar a escuchar</strong> y soplá: esta barra se tiene
+      que mover. Si no se mueve, andá a <strong>Ajustes</strong> y elegí otro
+      micrófono.
+    </div>
   </section>
 
   <!-- El medidor de afinación. Es lo más importante de la pantalla: es lo
@@ -141,6 +156,48 @@
   <section id="seccion-comparacion" hidden>
     <h2>Cómo te salió</h2>
     <div id="comparacion"></div>
+  </section>
+
+</main>
+
+<!-- ===================== AJUSTES ===================== -->
+<main id="panel-ajustes" class="panel" hidden>
+
+  <section>
+    <h2>El micrófono</h2>
+    <p class="ayuda">
+      Windows tiene siempre varias entradas y la que viene elegida rara vez es
+      la que querés: en esta computadora la predeterminada era el micrófono de
+      la cámara. Si la barra de nivel no se mueve cuando soplás, probá otra.
+    </p>
+    <div class="controles">
+      <select id="selector-microfono"></select>
+      <button id="boton-probar" class="principal">Probar</button>
+      <span id="estado-microfono"></span>
+    </div>
+    <div class="barra-nivel ancha"><div id="barra-nivel-ajustes"></div>
+      <div id="marca-umbral-ajustes"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Con qué estás tocando</h2>
+    <p class="ayuda">
+      La armónica que tenés en la mano y la posición en la que estás tocando.
+      De las dos sale el tono que suena y la escala que se marca en verde.
+    </p>
+    <div class="controles">
+      <label class="con-titulo">armónica en
+        <select id="ajuste-tonalidad"></select>
+      </label>
+      <label class="con-titulo">posición
+        <select id="ajuste-posicion"></select>
+      </label>
+      <label class="con-titulo">escala
+        <select id="ajuste-escala"></select>
+      </label>
+    </div>
+    <p id="resultado-ajustes" class="ayuda"></p>
   </section>
 
 </main>

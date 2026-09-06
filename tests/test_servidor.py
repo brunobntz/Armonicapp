@@ -970,3 +970,169 @@ def test_sin_recorte_se_guarda_el_audio_entero(servidor_andando, carpeta_de_fras
 
     assert respuesta["ok"] is True
     assert respuesta["frase"]["notas"] == 6
+
+
+# =============================================================================
+# Los ajustes: elegir microfono y configuracion desde la app
+# =============================================================================
+
+def test_los_datos_iniciales_traen_las_opciones_de_los_selectores(servidor_andando):
+    """
+    La pantalla no sabe que armonicas, posiciones ni escalas existen: se las
+    manda Python. Si un dia agregas una escala en tablas.py, aparece sola en
+    el selector sin tocar el javascript.
+    """
+    datos = traer_json(servidor_andando, "/api/inicio")
+
+    assert "C" in datos["tonalidades"]
+    assert any(p["numero"] == 12 for p in datos["posiciones"])
+    assert any(e["clave"] == "blues_mayor" for e in datos["escalas"])
+    assert datos["umbral_volumen"] > 0
+
+
+def test_cambiar_la_armonica_rehace_el_diagrama(servidor_andando):
+    """
+    El diagrama se dibuja en Python, asi que cambiar de armonica tiene que
+    devolverlo entero: la pantalla no sabe que nota da cada agujero.
+    """
+    antes = traer_json(servidor_andando, "/api/inicio")
+    assert antes["diagrama"][0]["celdas"][0]["nombre"] == "C4"
+
+    respuesta = mandar(servidor_andando, "/api/configuracion", {"tonalidad": "A"})
+
+    assert respuesta["ok"] is True
+    assert respuesta["inicio"]["tonalidad"] == "A"
+    assert respuesta["inicio"]["diagrama"][0]["celdas"][0]["nombre"] == "A3"
+
+
+def test_cambiar_la_posicion_cambia_el_tono_que_suena(servidor_andando):
+    respuesta = mandar(servidor_andando, "/api/configuracion", {"posicion": 2})
+
+    assert respuesta["ok"] is True
+    # Armonica en Do, 2a posicion: suena en Sol.
+    assert respuesta["inicio"]["tono_resultante"] == "G"
+
+
+def test_no_se_puede_configurar_una_armonica_que_no_existe(servidor_andando):
+    respuesta = mandar(servidor_andando, "/api/configuracion", {"tonalidad": "H"})
+
+    assert respuesta["ok"] is False
+    assert servidor.Manejador.estado.tonalidad == "C"
+
+
+def test_no_se_puede_configurar_una_posicion_sin_tabla(servidor_andando):
+    """
+    Las escalas por posicion estan escritas a mano y no estan las doce.
+    Aceptar la 7a dejaria el diagrama sin poder marcar ninguna escala.
+    """
+    respuesta = mandar(servidor_andando, "/api/configuracion", {"posicion": 7})
+
+    assert respuesta["ok"] is False
+    assert "tablas" in respuesta["motivo"]
+
+
+def test_no_se_puede_cambiar_la_configuracion_mientras_escucha(servidor_andando):
+    """
+    El hilo de audio ya armo su tabla de notas con la armonica anterior.
+    Cambiarla en el medio dejaria media sesion transcrita con una armonica y
+    media con otra, sin ninguna senal de que paso.
+    """
+    servidor.Manejador.estado.escuchando = True
+    try:
+        respuesta = mandar(servidor_andando, "/api/configuracion",
+                           {"tonalidad": "A"})
+    finally:
+        servidor.Manejador.estado.escuchando = False
+
+    assert respuesta["ok"] is False
+    assert servidor.Manejador.estado.tonalidad == "C"
+
+
+def test_se_puede_elegir_el_microfono(servidor_andando):
+    respuesta = mandar(servidor_andando, "/api/configuracion", {"dispositivo": 3})
+
+    assert respuesta["ok"] is True
+    assert servidor.Manejador.estado.dispositivo == 3
+
+    # Y volver al predeterminado del sistema.
+    mandar(servidor_andando, "/api/configuracion", {"dispositivo": None})
+    assert servidor.Manejador.estado.dispositivo is None
+
+
+def test_el_estado_en_vivo_trae_el_pico_y_el_error_de_audio():
+    """
+    Los dos datos que hacen falta para contestar "¿me esta escuchando?".
+
+    Sin el pico, un microfono equivocado y una armonica tocada bajito se ven
+    identicos: la pantalla quieta. Sin el error, un microfono ocupado por otro
+    programa tambien.
+    """
+    estado = servidor.EstadoCompartido("C", 12, "blues_mayor")
+    datos = estado.como_diccionario()
+
+    assert datos["pico"] == 0.0
+    assert datos["error_de_audio"] == ""
+
+    estado.actualizar(None, 0.0, 0.4, 1.0, [])
+    assert estado.como_diccionario()["pico"] == 0.4
+
+
+def test_el_pico_baja_despacio_y_sube_de_golpe():
+    """
+    Es un vumetro, no un termometro.
+
+    El volumen crudo cae a cero entre nota y nota: una barra que lo siguiera
+    parpadearia quince veces por segundo y no se podria leer de reojo mientras
+    tocas.
+    """
+    estado = servidor.EstadoCompartido()
+
+    estado.actualizar(None, 0.0, 0.8, 1.0, [])
+    assert estado.como_diccionario()["pico"] == 0.8
+
+    # Silencio: el pico baja, pero no de golpe.
+    for _ in range(3):
+        estado.actualizar(None, 0.0, 0.0, 1.0, [])
+    pico = estado.como_diccionario()["pico"]
+    assert 0.4 < pico < 0.8
+
+    # Y un golpe fuerte lo sube al instante.
+    estado.actualizar(None, 0.0, 0.95, 1.0, [])
+    assert estado.como_diccionario()["pico"] == 0.95
+
+
+# =============================================================================
+# Escuchar la frase guardada
+# =============================================================================
+
+def test_el_audio_de_una_frase_se_puede_bajar(servidor_andando, carpeta_de_frases):
+    """
+    Una frase de referencia se lee, pero sobre todo se ESCUCHA: la tablatura
+    no lleva el ritmo, y el ritmo es justo lo que estas tratando de copiar.
+    """
+    subir(servidor_andando, "/api/frases/importar", "para escuchar",
+          wav_de(["-2", "4", "-4"]))
+
+    codigo, cuerpo = traer(
+        servidor_andando, "/api/frases/audio?nombre=para%20escuchar")
+
+    assert codigo == 200
+    assert cuerpo[:4] == b"RIFF"
+    assert len(cuerpo) > 1000
+
+
+def test_la_lista_dice_cuales_frases_tienen_audio(servidor_andando, carpeta_de_frases):
+    subir(servidor_andando, "/api/frases/importar", "con audio",
+          wav_de(["-2", "4", "-4"]))
+
+    datos = traer_json(servidor_andando, "/api/frases")
+
+    assert datos["frases"][0]["hay_audio"] is True
+
+
+def test_pedir_el_audio_de_una_frase_que_no_esta(servidor_andando, carpeta_de_frases):
+    try:
+        traer(servidor_andando, "/api/frases/audio?nombre=fantasma")
+        assert False, "tendria que haber dado 404"
+    except urllib.error.HTTPError as fallo:
+        assert fallo.code == 404
