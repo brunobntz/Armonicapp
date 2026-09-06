@@ -65,7 +65,9 @@ valor por defecto, así que después de la primera vez son cuatro Enter.
 | Ver un acorde y sus notas guía | `python main.py --acorde F7` |
 | Transcribir una grabación | `python main.py --wav grabacion.wav --posicion 12 --escala blues_mayor --detalle` |
 | Guardar una frase de referencia | `python main.py --grabar-frase "lick de 3a" --posicion 3` (o la solapa **Frases** de la web) |
-| Importar una frase de un audio | `python main.py --grabar-frase "lick de Lean" --wav lean_01.wav --tonalidad A` |
+| Ver dónde hay armónica en una clase | `python main.py --wav clase.ogg --tramos` |
+| Importar una frase de un audio | `python main.py --grabar-frase "lick de Lean" --wav lean_01.ogg --tonalidad A` |
+| Importar solo un tramo de esa clase | `python main.py --grabar-frase "lick de Lean" --wav clase.ogg --desde 15.9 --hasta 26.6` |
 | Practicar contra esa frase | `python main.py --practicar "lick de 3a"` (o la solapa **Frases** de la web) |
 | Practicar con un audio ya grabado | `python main.py --practicar "lick de 3a" --wav mi_intento.wav` |
 | Saber con qué armónica se grabó algo | `python main.py --wav ajeno.wav --que-tono` |
@@ -163,6 +165,55 @@ con una base bajita. Por eso la recomendación es grabar la armónica sola, y no
 
 ---
 
+## Los audios de tu profesor no son frases: son clases
+
+Es la diferencia que más cuesta ver. Un audio que te manda el profesor por
+WhatsApp casi nunca es una frase suelta: habla, toca, vuelve a hablar. Medido
+sobre dos audios reales, la armónica ocupa el 64% y el 41% del archivo,
+repartida en 8 y en 10 tramos.
+
+Si importás la clase entera como frase de referencia, te queda una referencia
+de setenta segundos con silencios de ocho segundos adentro, y nunca vas a
+poder acertarle: esos silencios eran el profesor explicando.
+
+Por eso la app primero busca **dónde** hay armónica:
+
+```powershell
+python main.py --wav clase.ogg --tramos
+```
+
+```
+  8 tramos con armonica, 49 s de 76 (64% del audio).
+
+   1. 0:04.3 a 0:12.5  (8.1 s, 19 notas)  ↓3''' ↑8 ↓5 ↓5 ↓5 ↑6 ↓6' ...
+   2. 0:15.9 a 0:26.6  (10.7 s, 23 notas)  ↓6' ↑6 ↑6 ↑6 ↓4 ↓4 ↑4 ...
+```
+
+y después guardás el que quieras:
+
+```powershell
+python main.py --grabar-frase "lick de Lean" --wav clase.ogg --desde 15.9 --hasta 26.6
+```
+
+En la web es lo mismo con un botón: subís el audio, te muestra los tramos con
+su tablatura, y elegís cuál guardar. Si el audio tiene un solo tramo, no
+pregunta nada y lo guarda.
+
+**El recorte se hace sobre el audio, no sobre la lista de notas.** Es más
+trabajo y vale la pena: así todo lo que se mide después —la monofonía, la
+cobertura, los tiempos— habla del pedazo que vas a guardar y no del archivo
+entero. En el audio real, recortar subió la monofonía de 0.76 a 0.80 y la
+detección de 0.38 a 0.56. Una clase con la base sonando entre frase y frase
+puede no pasar el control aunque el tramo elegido esté limpio.
+
+Como el análisis avanza en ventanas de tamaño fijo desde el comienzo del
+archivo, recortar corre esa grilla y puede cambiar una nota o dos de veinte.
+Ninguna de las dos lecturas es la equivocada, pero mostrarte una y guardar la
+otra sí sería un error: por eso la lista de tramos ya viene calculada con el
+mismo recorte que se va a usar al guardar.
+
+---
+
 ## Los archivos que deja
 
 Cada sesión guarda cuatro archivos en `sesiones/`, con fecha y hora:
@@ -221,7 +272,7 @@ una versión web o de teléfono.
 | `audio.py` | Leer y escribir `.wav`, ventanas, volumen. |
 | `microfono.py` | La captura en vivo. |
 | `segmentacion.py` | De ventanas sueltas a notas tocadas. |
-| `frases.py` | Frases de referencia y comparación. |
+| `frases.py` | Frases de referencia, comparación, y los tramos de una grabación. |
 | `afinador.py` | La práctica de un bend, con estadísticas. |
 | `resumen.py` | Las estadísticas de una sesión. Cuenta, no opina. |
 | `prioridades.py` | Qué atacar primero. Opina, pero solo con datos confiables. |
@@ -282,7 +333,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 603 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 620 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

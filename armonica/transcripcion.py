@@ -166,6 +166,38 @@ def leer_cualquier_audio(ruta):
         os.remove(convertido.name)
 
 
+def recortar(transcripcion, desde_seg, hasta_seg, tonalidad,
+             posicion=None, escala=None, margen_seg=0.15):
+    """
+    Vuelve a analizar solo un pedazo del audio.
+
+    POR QUE SE RECORTAN LAS MUESTRAS Y NO LOS EVENTOS
+
+    Filtrar los eventos por tiempo parece equivalente y es más barato, pero
+    deja la revisión midiendo el audio ENTERO. Y esa es justamente la pregunta
+    que queremos poder responder distinto: una clase de dos minutos, con la
+    base sonando mientras el profesor explica, puede no pasar el control de
+    monofonía aunque los diez segundos que elegiste estén limpios.
+
+    Recortando las muestras, todo lo que se calcula después —la monofonía, la
+    cobertura, los tiempos de las notas— habla del pedazo que vas a guardar.
+
+    El margen le da a la primera nota su ataque: los extremos del tramo son el
+    comienzo de una nota y el final de otra, y cortar justo ahí se come la
+    ventana donde esa nota arranca.
+    """
+    fs = transcripcion.frecuencia_muestreo
+    desde = max(0, int((desde_seg - margen_seg) * fs))
+    hasta = min(len(transcripcion.muestras), int((hasta_seg + margen_seg) * fs))
+
+    if hasta <= desde:
+        return desde_muestras(transcripcion.muestras[:0], fs, tonalidad,
+                              posicion, escala)
+
+    return desde_muestras(transcripcion.muestras[desde:hasta], fs, tonalidad,
+                          posicion, escala)
+
+
 def _contar_ventanas(mediciones, tabla_inversa):
     """
     Cuántas ventanas tuvieron tono, y cuántas de esas entran en la armónica.

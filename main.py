@@ -641,7 +641,8 @@ def _sin_argumentos(argumentos):
     return not any([argumentos.wav, argumentos.vivo, argumentos.calibrar,
                     argumentos.teoria, argumentos.afinador, argumentos.acorde,
                     argumentos.frases, argumentos.grabar_frase,
-                    argumentos.practicar, argumentos.web])
+                    argumentos.practicar, argumentos.web,
+                    argumentos.tramos])
 
 
 def _desde_el_menu(argumentos):
@@ -906,6 +907,19 @@ def _frase_desde_archivo(argumentos, nombre):
         print(f"No pude leer el audio: {error}")
         return None
 
+    # El recorte va antes de la revision: importa si sirve el pedazo que vas a
+    # guardar, no el archivo entero. Una clase con la base sonando entre frase
+    # y frase puede no pasar el control aunque el tramo elegido este limpio.
+    if argumentos.desde is not None and argumentos.hasta is not None:
+        print(f"Recortando de {argumentos.desde:.1f} a {argumentos.hasta:.1f} s ...")
+        resultado = transcripcion.recortar(
+            resultado, argumentos.desde, argumentos.hasta,
+            argumentos.tonalidad, argumentos.posicion, argumentos.escala,
+        )
+        if not resultado.reconocidas:
+            print("\nEn ese pedazo del audio no hay notas.")
+            return None
+
     sirve, motivo, avisos = transcripcion.revisar(resultado, argumentos.tonalidad)
 
     if not sirve and not argumentos.igual:
@@ -1041,6 +1055,11 @@ def modo_practicar_frase(argumentos):
         except ValueError as error:
             print(f"No pude leer el audio: {error}")
             return 1
+        if argumentos.desde is not None and argumentos.hasta is not None:
+            resultado = transcripcion.recortar(
+                resultado, argumentos.desde, argumentos.hasta,
+                frase.tonalidad, frase.posicion, frase.escala,
+            )
         eventos = resultado.eventos
     else:
         eventos, _, _ = _escuchar_hasta_ctrl_c(
@@ -1052,6 +1071,67 @@ def modo_practicar_frase(argumentos):
 
     print()
     print(frases.informe(comparacion))
+    print()
+
+    return 0
+
+
+def modo_tramos(argumentos):
+    """
+    Muestra en que pedazos de una grabacion larga hay armonica.
+
+    Sirve para las clases: el profesor habla, toca una frase, vuelve a hablar.
+    Sin esto, importar la clase entera como frase de referencia da una
+    referencia con diez segundos de silencio en el medio.
+    """
+    try:
+        resultado = transcripcion.desde_archivo(
+            argumentos.wav, argumentos.tonalidad,
+            argumentos.posicion, argumentos.escala,
+        )
+    except FileNotFoundError:
+        print(f"No encontre el archivo {argumentos.wav}")
+        return 1
+    except ValueError as error:
+        print(f"No pude leer el audio: {error}")
+        return 1
+
+    tramos = frases.detectar_tramos(resultado.eventos)
+
+    print()
+    print("=" * 72)
+    print(f"  {argumentos.wav}")
+    print("=" * 72)
+    print()
+
+    if not tramos:
+        print("  No encontre ningun tramo con armonica.")
+        print()
+        sirve, motivo, _ = transcripcion.revisar(resultado, argumentos.tonalidad)
+        if not sirve:
+            print(f"  {motivo}")
+            print()
+        return 1
+
+    tocando = sum(tramo.duracion_seg for tramo in tramos)
+    print(f"  {len(tramos)} tramos con armonica, "
+          f"{tocando:.0f} s de {resultado.duracion_seg:.0f} "
+          f"({tocando / resultado.duracion_seg * 100:.0f}% del audio).")
+    print("  El resto es silencio, o alguien hablando, o la base sola.")
+    print()
+
+    for tramo in tramos:
+        print(f"  {tramo.numero:>2}. {tramo.como_texto()}")
+    print()
+
+    print("  Para guardar uno como frase de referencia:")
+    mejor = max(tramos, key=lambda tramo: tramo.cantidad)
+    print(f'    python main.py --grabar-frase "nombre" --wav {argumentos.wav} \\')
+    print(f"        --desde {mejor.desde_seg:.1f} --hasta {mejor.hasta_seg:.1f}")
+    print()
+    print("  Ojo: la tablatura de arriba sale del analisis del archivo entero.")
+    print("  Al recortar, el analisis se rehace sobre ese pedazo solo y puede")
+    print("  cambiar una nota o dos. La que vale es la del recorte.")
     print()
 
     return 0
@@ -1202,6 +1282,12 @@ def crear_parser():
                              "compara un archivo en vez del microfono)")
     parser.add_argument("--frases", action="store_true",
                         help="lista las frases guardadas")
+    parser.add_argument("--tramos", action="store_true",
+                        help="busca en un .wav los tramos donde hay armonica")
+    parser.add_argument("--desde", type=float, default=None, metavar="SEG",
+                        help="a partir de que segundo del audio recortar")
+    parser.add_argument("--hasta", type=float, default=None, metavar="SEG",
+                        help="hasta que segundo del audio recortar")
     parser.add_argument("--igual", action="store_true",
                         help="importa la frase aunque no pase la revision "
                              "de monofonia (mirá primero la tablatura)")
@@ -1274,6 +1360,12 @@ def main():
             print("Para medir la monofonia hace falta --wav <archivo>.")
             return 1
         return modo_monofonia(argumentos.wav)
+
+    if argumentos.tramos:
+        if not argumentos.wav:
+            print("Para buscar tramos hace falta --wav <archivo>.")
+            return 1
+        return modo_tramos(argumentos)
 
     if argumentos.frases:
         return modo_listar_frases()

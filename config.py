@@ -118,6 +118,26 @@ UMBRAL_VOLUMEN_RMS = 0.01
 #   - Más alto (0.15): solo notas claras y sostenidas, pero perdés frases rápidas.
 DURACION_MINIMA_SEG = 0.06
 
+# Cuánto silencio de armónica separa un TRAMO del siguiente, en segundos.
+#
+# Sirve para partir una grabación larga en los pedazos donde realmente hay
+# armónica. Los audios de clase de Leandro son así: habla, toca una frase,
+# vuelve a hablar. Sin esto, importar la clase entera como frase de referencia
+# daría una referencia con diez segundos de silencio en el medio, contra la
+# que es imposible practicar.
+#
+# Un segundo y medio es más que cualquier silencio DENTRO de una frase tocada,
+# y menos que cualquier explicación hablada. Subilo si te parte una frase en
+# dos; bajalo si te junta dos frases distintas en una.
+HUECO_ENTRE_TRAMOS_SEG = 1.5
+
+# Cuántas notas tiene que tener un tramo para que valga la pena ofrecerlo.
+#
+# Con menos de esto casi siempre es una nota suelta de prueba, o una sílaba
+# de la voz que el detector confundió. No se descartan por ser errores: se
+# descartan porque no son una frase.
+NOTAS_MINIMAS_POR_TRAMO = 3
+
 # Corrección del instante de inicio de cada nota, en segundos.
 #
 # POR QUÉ HACE FALTA. El detector trabaja por ventanas de 46 ms. Cuando una nota

@@ -345,3 +345,48 @@ select:disabled { opacity: 0.4; }
 
 .fila-importar { margin-top: 12px; }
 .fila-importar .ayuda { margin: 0; }
+
+/* --- Los tramos de una grabacion larga --- */
+
+#tramos:not(:empty) {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+#tramos h3 { margin: 0 0 4px; font-size: 15px; }
+#tramos > p { margin: 0 0 12px; font-size: 13px; color: var(--tenue); }
+
+.tramo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid var(--borde);
+}
+.tramo .cuando {
+  font-variant-numeric: tabular-nums;
+  color: var(--tenue);
+  font-size: 13px;
+  min-width: 122px;
+}
+.tramo .notas {
+  flex: 1;
+  min-width: 200px;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  word-spacing: 4px;
+}
+.tramo button {
+  background: var(--verde);
+  color: #0d1117;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 15px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tramo button:disabled { opacity: 0.4; cursor: default; }

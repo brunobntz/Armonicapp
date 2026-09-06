@@ -135,26 +135,118 @@ function configurarBotones() {
       campo.value = nombre;
 
       document.getElementById("seccion-comparacion").hidden = true;
-      await importar(nombre, archivo, false);
+      await elegirQueImportar(nombre, archivo);
     });
+}
+
+
+/* Un audio puede ser una frase o puede ser una clase entera.
+ *
+ * Antes de guardar nada, se busca donde hay armonica. Si hay un solo tramo,
+ * el archivo ES la frase y se guarda sin preguntar. Si hay varios, alguien
+ * estuvo hablando en el medio y hay que elegir cual guardar: guardar la clase
+ * entera daria una referencia con diez segundos de silencio adentro, contra
+ * la que es imposible practicar. */
+async function elegirQueImportar(nombre, archivo) {
+  limpiarDudoso();
+  limpiarTramos();
+  avisarFrase("Buscando d\u00f3nde hay arm\u00f3nica en " + archivo.name + "...");
+
+  const respuesta = await subir("/api/frases/tramos", nombre, archivo, {});
+
+  if (!respuesta.ok) {
+    avisarFrase(respuesta.motivo || "no pude leer ese audio");
+    return;
+  }
+
+  const tramos = respuesta.tramos || [];
+
+  if (!tramos.length) {
+    avisarFrase(respuesta.sirve
+      ? "No encontr\u00e9 ning\u00fan tramo con arm\u00f3nica en ese audio."
+      : respuesta.motivo);
+    return;
+  }
+
+  if (tramos.length === 1) {
+    return importar(nombre, archivo, false, tramos[0]);
+  }
+
+  avisarFrase("");
+  mostrarTramos(respuesta, nombre, archivo);
+}
+
+
+function mostrarTramos(respuesta, nombre, archivo) {
+  const contenedor = document.getElementById("tramos");
+  const tocando = respuesta.tramos
+    .reduce((suma, tramo) => suma + tramo.duracion_seg, 0);
+
+  contenedor.innerHTML =
+    "<h3>" + respuesta.tramos.length + " tramos con arm\u00f3nica</h3>" +
+    "<p>De los " + respuesta.duracion_seg.toFixed(0) + " segundos del audio, " +
+    tocando.toFixed(0) + " tienen arm\u00f3nica. El resto es silencio, alguien " +
+    "hablando, o la base sola. Eleg\u00ed qu\u00e9 tramo guardar como frase: " +
+    "la grabaci\u00f3n entera no sirve de referencia porque los silencios " +
+    "tambi\u00e9n contar\u00edan.</p>" +
+    respuesta.tramos.map((tramo) =>
+      '<div class="tramo">' +
+        '<span class="cuando">' + reloj(tramo.desde_seg) + " a " +
+          reloj(tramo.hasta_seg) + "</span>" +
+        '<span class="notas">' + tramo.tab.join(" ") +
+          (tramo.hay_mas ? " \u2026" : "") + "</span>" +
+        '<span class="cuando">' + tramo.notas + " notas</span>" +
+        '<button data-tramo="' + tramo.numero + '">Guardar este</button>' +
+      "</div>"
+    ).join("");
+
+  contenedor.querySelectorAll("[data-tramo]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const tramo = respuesta.tramos.find(
+        (candidato) => String(candidato.numero) === boton.dataset.tramo);
+      contenedor.querySelectorAll("button").forEach((otro) => {
+        otro.disabled = true;
+      });
+      importar(nombre, archivo, false, tramo);
+    });
+  });
+}
+
+
+function reloj(segundos) {
+  const minutos = Math.floor(segundos / 60);
+  const resto = (segundos % 60).toFixed(1).padStart(4, "0");
+  return minutos + ":" + resto;
+}
+
+
+function limpiarTramos() {
+  document.getElementById("tramos").innerHTML = "";
 }
 
 
 /* Manda el audio y muestra el resultado. `igual` en true saltea el control de
  * monofonia: es lo que pasa cuando ya viste la tablatura y dijiste que sirve. */
-async function importar(nombre, archivo, igual) {
+async function importar(nombre, archivo, igual, tramo) {
   const campo = document.getElementById("nombre-frase");
   limpiarDudoso();
   avisarFrase("Analizando " + archivo.name + "...");
 
-  const respuesta = await subir("/api/frases/importar", nombre, archivo,
-                                { igual: igual ? "1" : "0" });
+  const extra = { igual: igual ? "1" : "0" };
+  if (tramo) {
+    extra.desde = tramo.desde_seg;
+    extra.hasta = tramo.hasta_seg;
+  }
+
+  const respuesta = await subir("/api/frases/importar", nombre, archivo, extra);
 
   if (!respuesta.ok) {
     avisarFrase(respuesta.motivo || "no pude importar ese audio");
-    if (respuesta.se_puede_igual) mostrarDudoso(respuesta, nombre, archivo);
+    if (respuesta.se_puede_igual) mostrarDudoso(respuesta, nombre, archivo, tramo);
     return;
   }
+
+  limpiarTramos();
 
   const frase = respuesta.frase;
   avisarFrase("Importada \u00ab" + frase.nombre + "\u00bb: " + frase.notas +
@@ -199,7 +291,7 @@ function llenarTonalidades() {
 /* Cuando el audio no pasa el control, no se guarda nada: se muestra lo que
  * HABRIA salido y decidis vos. El umbral es una heuristica; el que reconoce
  * la frase de Leandro en esa tablatura sos vos. */
-function mostrarDudoso(respuesta, nombre, archivo) {
+function mostrarDudoso(respuesta, nombre, archivo, tramo) {
   const caja = document.createElement("div");
   caja.className = "dudoso";
   caja.id = "caja-dudosa";
@@ -215,7 +307,7 @@ function mostrarDudoso(respuesta, nombre, archivo) {
   const guardar = document.createElement("button");
   guardar.className = "principal";
   guardar.textContent = "Guardar igual";
-  guardar.addEventListener("click", () => importar(nombre, archivo, true));
+  guardar.addEventListener("click", () => importar(nombre, archivo, true, tramo));
 
   const descartar = document.createElement("button");
   descartar.className = "secundario";

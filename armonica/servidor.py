@@ -403,6 +403,45 @@ def historial(carpeta=None):
 # El servidor HTTP
 # =============================================================================
 
+def _numero(texto):
+    """Un decimal que vino en la URL, o None si no vino o vino mal."""
+    try:
+        return float(texto)
+    except (TypeError, ValueError):
+        return None
+
+
+def tramo_como_diccionario(tramo, tabs):
+    """
+    Un tramo listo para dibujar en la pantalla.
+
+    Los `tabs` NO son los del tramo dentro del analisis completo: son los del
+    recorte, o sea exactamente los que se van a guardar si elegis este tramo.
+
+    POR QUE NO SON LOS MISMOS
+
+    El analisis avanza en ventanas de tamano fijo desde el comienzo del
+    archivo. Al recortar, esa grilla arranca en otro lado y las ventanas caen
+    corridas: una nota que estaba partida en dos se une, o al reves, y un bend
+    de paso puede cruzar el umbral de duracion minima en un caso y no en el
+    otro. Medido sobre los audios de Leandro, cambia una o dos notas de
+    veinte.
+
+    Ninguna de las dos lecturas es la equivocada. Pero si te mostramos una y
+    guardamos la otra, elegiste mirando algo que no era. Asi que mostramos la
+    que se va a guardar.
+    """
+    return {
+        "numero": tramo.numero,
+        "desde_seg": round(tramo.desde_seg, 2),
+        "hasta_seg": round(tramo.hasta_seg, 2),
+        "duracion_seg": round(tramo.duracion_seg, 1),
+        "notas": len(tabs),
+        "tab": tabs[:20],
+        "hay_mas": len(tabs) > 20,
+    }
+
+
 def comparacion_como_diccionario(comparacion, frase):
     """
     Una Comparacion lista para mandarle al navegador.
@@ -479,6 +518,8 @@ class Manejador(SimpleHTTPRequestHandler):
         # de audio, y leerlo como JSON lo consumiria sin poder recuperarlo.
         ruta, _, consulta = self.path.partition("?")
 
+        if ruta == "/api/frases/tramos":
+            return self._responder_json(self._tramos_del_audio(consulta))
         if ruta == "/api/frases/importar":
             return self._responder_json(self._importar_frase(consulta))
         if ruta == "/api/frases/intento":
@@ -529,6 +570,10 @@ class Manejador(SimpleHTTPRequestHandler):
         opciones = {
             "tonalidad": (parametros.get("tonalidad", [""])[0] or "").strip(),
             "igual": parametros.get("igual", ["0"])[0] == "1",
+            # El pedazo a guardar, en segundos desde el principio del audio.
+            # Sin esto se guarda el archivo entero.
+            "desde": _numero(parametros.get("desde", [""])[0]),
+            "hasta": _numero(parametros.get("hasta", [""])[0]),
         }
 
         if not nombre:
@@ -647,6 +692,66 @@ class Manejador(SimpleHTTPRequestHandler):
                 frases.comparar(frase, estado.eventos), frase),
         }
 
+    def _tramos_del_audio(self, consulta):
+        """
+        Analiza un audio y devuelve los tramos donde hay armonica. NO guarda.
+
+        POR QUE UNA RUTA APARTE, Y POR QUE EL NAVEGADOR SUBE EL ARCHIVO DOS
+        VECES
+
+        Podriamos guardarnos el audio analizado en memoria entre el "mostrame
+        los tramos" y el "guarda el 2". Seria mas rapido, y traeria un problema
+        nuevo por cada cosa que puede pasar en el medio: dos pestanas abiertas,
+        el navegador cerrado a mitad de camino, la memoria que crece sola.
+
+        Subirlo de nuevo cuesta unos segundos —seis para un audio de dos
+        minutos— y no cuesta ningun estado compartido. A este tamano, esa es
+        la cuenta que conviene.
+        """
+        estado = type(self).estado
+        nombre, ruta_temporal, opciones, error = self._leer_audio_subido(consulta)
+        if error:
+            return {"ok": False, "motivo": error}
+
+        tonalidad = opciones["tonalidad"] or estado.tonalidad
+        if tonalidad not in tablas.TONALIDADES:
+            os.remove(ruta_temporal)
+            return {"ok": False, "motivo": f"no conozco la armonica {tonalidad!r}"}
+
+        try:
+            try:
+                resultado = transcripcion.desde_archivo(
+                    ruta_temporal, tonalidad, estado.posicion, estado.escala)
+            except ValueError:
+                return {"ok": False, "motivo": NO_ES_UN_WAV}
+        finally:
+            os.remove(ruta_temporal)
+
+        sirve, motivo, avisos = transcripcion.revisar(resultado, tonalidad)
+
+        # Cada tramo se vuelve a analizar por separado, con el mismo recorte
+        # que se usaria al guardarlo. Cuesta unos segundos mas y a cambio lo
+        # que ves en la lista es literalmente lo que vas a guardar.
+        salida = []
+        for tramo in frases.detectar_tramos(resultado.eventos):
+            recortado = transcripcion.recortar(
+                resultado, tramo.desde_seg, tramo.hasta_seg,
+                tonalidad, estado.posicion, estado.escala)
+            tabs = [evento.como_tab() for evento in recortado.reconocidas]
+            if tabs:
+                salida.append(tramo_como_diccionario(tramo, tabs))
+
+        return {
+            "ok": True,
+            "sirve": sirve,
+            "motivo": motivo,
+            "avisos": avisos,
+            "tonalidad": tonalidad,
+            "duracion_seg": round(resultado.duracion_seg, 1),
+            "notas": len(resultado.reconocidas),
+            "tramos": salida,
+        }
+
     def _importar_frase(self, consulta):
         """
         Guarda como frase de referencia un .wav que subiste.
@@ -674,6 +779,16 @@ class Manejador(SimpleHTTPRequestHandler):
                     ruta_temporal, tonalidad, estado.posicion, estado.escala)
             except ValueError:
                 return {"ok": False, "motivo": NO_ES_UN_WAV}
+
+            # El recorte va ANTES de la revision: lo que importa es si sirve
+            # el pedazo que vas a guardar, y no el archivo entero.
+            if opciones["desde"] is not None and opciones["hasta"] is not None:
+                resultado = transcripcion.recortar(
+                    resultado, opciones["desde"], opciones["hasta"],
+                    tonalidad, estado.posicion, estado.escala)
+                if not resultado.reconocidas:
+                    return {"ok": False,
+                            "motivo": "en ese pedazo del audio no hay notas"}
 
             sirve, motivo, avisos = transcripcion.revisar(resultado, tonalidad)
 

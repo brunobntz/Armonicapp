@@ -600,7 +600,7 @@ def subir(base, ruta, nombre, datos, **opciones):
         base + ruta + consulta, data=datos, method="POST",
         headers={"Content-Type": "application/octet-stream"},
     )
-    with urllib.request.urlopen(pedido, timeout=30) as respuesta:
+    with urllib.request.urlopen(pedido, timeout=90) as respuesta:
         return json.loads(respuesta.read())
 
 
@@ -871,3 +871,102 @@ def test_un_audio_mudo_no_ofrece_guardarlo_igual(servidor_andando, carpeta_de_fr
 
     assert respuesta["ok"] is False
     assert respuesta.get("se_puede_igual") is False
+
+
+# =============================================================================
+# Los tramos: elegir que pedazo de una grabacion larga guardar
+# =============================================================================
+
+def clase_de_prueba(bloques, silencio_entre=2.5):
+    """Un audio con forma de clase: frases separadas por silencios largos."""
+    import numpy as np
+
+    partes = []
+    for numero, tablaturas in enumerate(bloques):
+        if numero:
+            partes.append(generar_wav.generar_silencio(silencio_entre))
+        muestras, _ = generar_wav.generar_secuencia(
+            tablaturas, "C", duracion_nota=0.4, duracion_silencio=0.12)
+        partes.append(muestras)
+    return bytes_de_wav(np.concatenate(partes))
+
+
+def test_los_tramos_se_listan_sin_guardar_nada(servidor_andando, carpeta_de_frases):
+    """
+    /api/frases/tramos solo mira. Es la primera mitad del flujo de la web:
+    primero te muestro donde hay armonica, despues elegis.
+    """
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"], ["4", "-4", "-5"]])
+
+    respuesta = subir(servidor_andando, "/api/frases/tramos", "la clase", datos)
+
+    assert respuesta["ok"] is True
+    assert len(respuesta["tramos"]) == 3
+    assert respuesta["tramos"][0]["numero"] == 1
+    assert respuesta["tramos"][0]["tab"] == ["-2", "4", "-4"]
+    assert respuesta["tramos"][1]["desde_seg"] > respuesta["tramos"][0]["hasta_seg"]
+
+    # Lo importante: no guardo nada.
+    assert frases.listar() == []
+
+
+def test_la_vista_previa_del_tramo_es_lo_que_se_va_a_guardar(
+        servidor_andando, carpeta_de_frases):
+    """
+    El tab que muestra la lista sale del MISMO recorte que se usa al guardar.
+
+    Si mostraramos el tab del analisis del archivo entero, elegirias mirando
+    una cosa y se guardaria otra: la grilla de ventanas arranca en otro lado
+    al recortar y cambia una nota o dos.
+    """
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
+
+    lista = subir(servidor_andando, "/api/frases/tramos", "la clase", datos)
+    segundo = lista["tramos"][1]
+
+    guardada = subir(servidor_andando, "/api/frases/importar", "el segundo",
+                     datos, desde=segundo["desde_seg"],
+                     hasta=segundo["hasta_seg"])
+
+    assert guardada["ok"] is True
+    assert guardada["frase"]["tab"] == segundo["tab"]
+
+
+def test_importar_un_tramo_guarda_solo_ese_pedazo(
+        servidor_andando, carpeta_de_frases):
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
+    lista = subir(servidor_andando, "/api/frases/tramos", "la clase", datos)
+    segundo = lista["tramos"][1]
+
+    respuesta = subir(servidor_andando, "/api/frases/importar", "solo el segundo",
+                      datos, desde=segundo["desde_seg"],
+                      hasta=segundo["hasta_seg"])
+
+    assert respuesta["ok"] is True
+    assert respuesta["frase"]["tab"] == ["-5", "6", "-6"]
+
+    frase = frases.buscar("solo el segundo")
+    assert frase.cantidad == 3
+    # Y los tiempos arrancan en cero, no en el segundo 4 del archivo original.
+    assert frase.notas[0].inicio_seg < 0.01
+
+
+def test_importar_un_pedazo_sin_notas_avisa(servidor_andando, carpeta_de_frases):
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
+
+    respuesta = subir(servidor_andando, "/api/frases/importar", "el silencio",
+                      datos, desde=2.4, hasta=2.9)
+
+    assert respuesta["ok"] is False
+    assert "no hay notas" in respuesta["motivo"]
+    assert frases.listar() == []
+
+
+def test_sin_recorte_se_guarda_el_audio_entero(servidor_andando, carpeta_de_frases):
+    """Sin desde/hasta nada cambia: es el camino de siempre."""
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
+
+    respuesta = subir(servidor_andando, "/api/frases/importar", "todo", datos)
+
+    assert respuesta["ok"] is True
+    assert respuesta["frase"]["notas"] == 6

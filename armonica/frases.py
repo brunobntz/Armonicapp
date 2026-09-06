@@ -139,6 +139,98 @@ def desde_eventos(eventos, nombre, tonalidad="C", posicion=None, escala=None,
 
 
 # =============================================================================
+# Los tramos: encontrar las frases dentro de una grabación larga
+# =============================================================================
+
+@dataclass
+class Tramo:
+    """
+    Un pedazo de grabación donde hay armónica sonando, sin cortes largos.
+
+    POR QUE EXISTE
+
+    Los audios que manda un profesor no son frases: son clases. Habla, toca
+    una frase, vuelve a hablar. Medido sobre dos audios reales de Leandro, la
+    armónica ocupa el 64% y el 41% del archivo, repartida en 8 y en 16 tramos.
+
+    Guardar la clase entera como frase de referencia sería inútil: quedaría
+    una referencia de setenta segundos con silencios de ocho segundos en el
+    medio, y nunca podrías acertarle porque esos silencios eran el profesor
+    hablando. Lo que sirve es elegir UN tramo.
+    """
+
+    numero: int
+    eventos: list = field(default_factory=list)
+
+    @property
+    def desde_seg(self):
+        return self.eventos[0].inicio_seg
+
+    @property
+    def hasta_seg(self):
+        return self.eventos[-1].fin_seg
+
+    @property
+    def duracion_seg(self):
+        return self.hasta_seg - self.desde_seg
+
+    @property
+    def cantidad(self):
+        return len(self.eventos)
+
+    def tablatura(self, notacion=None):
+        return [evento.como_tab(notacion) for evento in self.eventos]
+
+    def como_texto(self):
+        """Una línea: cuándo empieza, cuánto dura y qué se toca."""
+        return (f"{_reloj(self.desde_seg)} a {_reloj(self.hasta_seg)}  "
+                f"({self.duracion_seg:.1f} s, {self.cantidad} notas)  "
+                + " ".join(self.tablatura()))
+
+
+def _reloj(segundos):
+    """Los segundos como m:ss.s, que es como los muestra un reproductor."""
+    return f"{int(segundos // 60)}:{segundos % 60:04.1f}"
+
+
+def detectar_tramos(eventos, hueco_seg=None, minimo_notas=None):
+    """
+    Parte una transcripción en los tramos donde hay armónica.
+
+    Es exactamente la misma idea que segmentacion.segmentar, un piso más
+    arriba: aquella junta ventanas seguidas en notas, y esta junta notas
+    seguidas en frases. En los dos casos lo que separa es un hueco.
+
+    Los tramos de menos de `minimo_notas` se descartan. No por ser errores
+    —una nota suelta puede ser perfectamente real— sino porque no son una
+    frase y ofrecerlos solo hace ruido en la lista.
+    """
+    if hueco_seg is None:
+        hueco_seg = config.HUECO_ENTRE_TRAMOS_SEG
+    if minimo_notas is None:
+        minimo_notas = config.NOTAS_MINIMAS_POR_TRAMO
+
+    reconocidas = [e for e in eventos if e.nota is not None]
+    if not reconocidas:
+        return []
+
+    grupos = [[reconocidas[0]]]
+    for anterior, evento in zip(reconocidas, reconocidas[1:]):
+        if evento.inicio_seg - anterior.fin_seg > hueco_seg:
+            grupos.append([evento])
+        else:
+            grupos[-1].append(evento)
+
+    # La numeración se hace DESPUÉS de descartar los tramos cortos, para que
+    # los números que ves en pantalla sean 1, 2, 3 y no 1, 4, 7.
+    return [
+        Tramo(numero=numero, eventos=grupo)
+        for numero, grupo in enumerate(
+            (g for g in grupos if len(g) >= minimo_notas), start=1)
+    ]
+
+
+# =============================================================================
 # La comparación
 # =============================================================================
 
