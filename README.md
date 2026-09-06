@@ -64,8 +64,8 @@ valor por defecto, así que después de la primera vez son cuatro Enter.
 | Consultar una escala sin tocar | `python main.py --teoria --posicion 12 --escala blues_mayor` |
 | Ver un acorde y sus notas guía | `python main.py --acorde F7` |
 | Transcribir una grabación | `python main.py --wav grabacion.wav --posicion 12 --escala blues_mayor --detalle` |
-| Guardar una frase de referencia | `python main.py --grabar-frase "lick de 3a" --posicion 3` |
-| Practicar contra esa frase | `python main.py --practicar "lick de 3a"` |
+| Guardar una frase de referencia | `python main.py --grabar-frase "lick de 3a" --posicion 3` (o la solapa **Frases** de la web) |
+| Practicar contra esa frase | `python main.py --practicar "lick de 3a"` (o la solapa **Frases** de la web) |
 | Saber con qué armónica se grabó algo | `python main.py --wav ajeno.wav --que-tono` |
 | Medir el ruido de fondo | `python main.py --calibrar` |
 
@@ -215,11 +215,19 @@ la mediana ni se entera.
 python main.py --web --posicion 12 --escala blues_mayor
 ```
 
-Dos solapas. **En vivo** tiene el medidor de afinación con una aguja que se
+Tres solapas. **En vivo** tiene el medidor de afinación con una aguja que se
 mueve suave (en la terminal parpadea quince veces por segundo y no se puede
 leer mientras soplás), el diagrama de la armónica con la escala en verde, y la
-tablatura que vas tocando. **Historial** grafica cómo viene cada bend sesión
-por sesión, leyendo los JSON que ya se guardaban.
+tablatura que vas tocando. **Frases** es el modo "repetí esta frase": grabás
+una frase de referencia con un nombre, y después le das Practicar y te dice
+nota por nota qué erraste, cuánto te desviaste del tiempo y cómo salió cada
+bend. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
+los JSON que ya se guardaban.
+
+Los tres modos escuchan exactamente igual: lo único que cambia es qué hace el
+servidor cuando terminás. Y los botones se dibujan a partir del estado que
+manda Python, no de lo que hizo el último clic, así dos pestañas abiertas
+nunca muestran cosas distintas.
 
 No agrega ninguna dependencia. Usa `http.server` de la biblioteca estándar, y
 para mandar el estado en vivo usa *server-sent events*: una respuesta HTTP
@@ -237,7 +245,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 535 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 569 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

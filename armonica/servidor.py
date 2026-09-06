@@ -74,6 +74,14 @@ class EstadoCompartido:
         self.posicion = posicion
         self.escala = escala
 
+        # En que modo esta escuchando. Cambia SOLO lo que pasa al terminar:
+        #   "sesion"     -> guarda la sesion en sesiones/
+        #   "frase"      -> guarda lo tocado como frase de referencia
+        #   "practicar"  -> compara contra una frase guardada
+        # Mientras escucha, los tres hacen exactamente lo mismo.
+        self.modo = "sesion"
+        self.nombre_frase = ""
+
         self.escuchando = False
         self.nota_actual = None
         self.cents = 0.0
@@ -98,6 +106,8 @@ class EstadoCompartido:
 
     def reiniciar(self):
         with self._candado:
+            self.modo = "sesion"
+            self.nombre_frase = ""
             self.nota_actual = None
             self.cents = 0.0
             self.volumen = 0.0
@@ -117,6 +127,8 @@ class EstadoCompartido:
 
             datos = {
                 "escuchando": self.escuchando,
+                "modo": self.modo,
+                "nombre_frase": self.nombre_frase,
                 "tonalidad": self.tonalidad,
                 "posicion": self.posicion,
                 "escala": self.escala,
@@ -401,9 +413,7 @@ class Manejador(SimpleHTTPRequestHandler):
         if self.path == "/api/historial":
             return self._responder_json(historial())
         if self.path == "/api/frases":
-            return self._responder_json({
-                "frases": [nombre for nombre, _ in frases.listar()]
-            })
+            return self._responder_json(self._listar_frases())
         if self.path == "/api/resumen":
             return self._responder_json(self._resumen_actual())
         return super().do_GET()
@@ -411,20 +421,46 @@ class Manejador(SimpleHTTPRequestHandler):
     # --- POST ---
 
     def do_POST(self):
+        cuerpo = self._leer_cuerpo()
+
         if self.path == "/api/comenzar":
-            return self._responder_json(self._comenzar())
+            return self._responder_json(self._comenzar(cuerpo))
         if self.path == "/api/terminar":
             return self._responder_json(self._terminar())
+        if self.path == "/api/frases/borrar":
+            return self._responder_json(self._borrar_frase(cuerpo))
         self.send_error(404)
+
+    def _leer_cuerpo(self):
+        """Lee el JSON que manda el navegador, si es que manda alguno."""
+        largo = int(self.headers.get("Content-Length") or 0)
+        if largo <= 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(largo).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return {}
 
     # --- Las acciones ---
 
-    def _comenzar(self):
+    def _comenzar(self, peticion=None):
         clase = type(self)
         if clase.estado.escuchando:
             return {"ok": False, "motivo": "ya esta escuchando"}
 
+        peticion = peticion or {}
+        modo = peticion.get("modo", "sesion")
+        nombre = (peticion.get("nombre") or "").strip()
+
+        if modo in ("frase", "practicar") and not nombre:
+            return {"ok": False, "motivo": "falta el nombre de la frase"}
+
+        if modo == "practicar" and frases.buscar(nombre) is None:
+            return {"ok": False, "motivo": f"no encontre la frase {nombre!r}"}
+
         clase.estado.reiniciar()
+        clase.estado.modo = modo
+        clase.estado.nombre_frase = nombre
         clase.estado.escuchando = True
         clase.detener = threading.Event()
         clase.hilo_audio = threading.Thread(
@@ -441,13 +477,107 @@ class Manejador(SimpleHTTPRequestHandler):
             clase.hilo_audio.join(timeout=3.0)
 
         clase.estado.escuchando = False
-        rutas = guardar(clase.estado)
+        estado = clase.estado
 
+        # Los tres modos escuchan igual; lo que cambia es que se hace despues.
+        if estado.modo == "frase":
+            return self._terminar_grabando_frase(estado)
+        if estado.modo == "practicar":
+            return self._terminar_practicando(estado)
+
+        rutas = guardar(estado)
         return {
             "ok": True,
+            "modo": "sesion",
             "guardado": {q: os.path.basename(r) for q, r in rutas.items()},
             "resumen": self._resumen_actual(),
         }
+
+    def _terminar_grabando_frase(self, estado):
+        """Guarda lo tocado como frase de referencia."""
+        try:
+            frase = frases.desde_eventos(
+                estado.eventos, estado.nombre_frase, estado.tonalidad,
+                estado.posicion, estado.escala,
+            )
+        except ValueError as error:
+            return {"ok": False, "modo": "frase", "motivo": str(error)}
+
+        frases.guardar(frase)
+
+        return {
+            "ok": True,
+            "modo": "frase",
+            "frase": {
+                "nombre": frase.nombre,
+                "notas": frase.cantidad,
+                "duracion_seg": round(frase.duracion_seg, 1),
+                "tab": frase.tablatura(),
+            },
+        }
+
+    def _terminar_practicando(self, estado):
+        """Compara lo tocado contra la frase de referencia."""
+        frase = frases.buscar(estado.nombre_frase)
+        if frase is None:
+            return {"ok": False, "modo": "practicar",
+                    "motivo": "la frase ya no esta"}
+
+        comparacion = frases.comparar(frase, estado.eventos)
+
+        return {
+            "ok": True,
+            "modo": "practicar",
+            "comparacion": {
+                "nombre": frase.nombre,
+                "esperadas": comparacion.notas_esperadas(),
+                "aciertos": comparacion.aciertos(),
+                "porcentaje": round(comparacion.porcentaje_de_notas()),
+                "faltantes": [n.tab for n in comparacion.faltantes],
+                "sobrantes": comparacion.sobrantes,
+                "cambiadas": [
+                    {"esperada": a, "tocada": b}
+                    for a, b in comparacion.cambiadas
+                ],
+                "velocidad": round(comparacion.diferencia_de_velocidad()),
+                "dispersion_ms": round(comparacion.dispersion_ms()),
+                "relativa": (round(comparacion.dispersion_relativa(), 2)
+                             if comparacion.dispersion_relativa() is not None
+                             else None),
+                "calidad": comparacion.calidad(),
+                "notas": [
+                    {
+                        "tab": nota_ref.tab,
+                        "desvio_ms": round(desvio),
+                        "cents": round(evento.cents - nota_ref.cents),
+                    }
+                    for nota_ref, evento, desvio in comparacion.pares
+                ],
+            },
+        }
+
+    def _listar_frases(self):
+        salida = []
+        for nombre, ruta in frases.listar():
+            frase = frases.cargar(ruta)
+            salida.append({
+                "nombre": nombre,
+                "notas": frase.cantidad,
+                "duracion_seg": round(frase.duracion_seg, 1),
+                "tonalidad": frase.tonalidad,
+                "posicion": frase.posicion,
+                "fecha": (frase.fecha or "")[:10],
+                "tab": frase.tablatura()[:16],
+            })
+        return {"frases": salida}
+
+    def _borrar_frase(self, peticion):
+        nombre = (peticion or {}).get("nombre", "")
+        for guardada, ruta in frases.listar():
+            if guardada == nombre:
+                os.remove(ruta)
+                return {"ok": True}
+        return {"ok": False, "motivo": "no la encontre"}
 
     def _resumen_actual(self):
         estado = type(self).estado

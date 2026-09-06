@@ -67,10 +67,12 @@ function configurarSolapas() {
         otro.classList.toggle("activa", otro === boton));
 
       const cual = boton.dataset.panel;
-      document.getElementById("panel-vivo").hidden = cual !== "vivo";
-      document.getElementById("panel-historial").hidden = cual !== "historial";
+      ["vivo", "frases", "historial"].forEach((nombre) => {
+        document.getElementById("panel-" + nombre).hidden = nombre !== cual;
+      });
 
       if (cual === "historial") cargarHistorial();
+      if (cual === "frases") cargarFrases();
     });
   });
 }
@@ -87,8 +89,7 @@ function configurarBotones() {
   empezar.addEventListener("click", async () => {
     empezar.disabled = true;
     document.getElementById("seccion-resumen").hidden = true;
-    await pedir("/api/comenzar", { method: "POST" });
-    terminar.disabled = false;
+    await comenzar({ modo: "sesion" });
   });
 
   terminar.addEventListener("click", async () => {
@@ -96,9 +97,52 @@ function configurarBotones() {
     terminar.textContent = "Guardando...";
     const respuesta = await pedir("/api/terminar", { method: "POST" });
     terminar.textContent = "Terminar y guardar";
-    empezar.disabled = false;
     mostrarResumen(respuesta);
   });
+
+  // --- Los de la solapa Frases ---
+  document.getElementById("boton-grabar-frase")
+    .addEventListener("click", async () => {
+      const campo = document.getElementById("nombre-frase");
+      const nombre = campo.value.trim();
+      if (!nombre) {
+        avisarFrase("Pone un nombre antes de grabar.");
+        campo.focus();
+        return;
+      }
+      document.getElementById("seccion-comparacion").hidden = true;
+      await comenzar({ modo: "frase", nombre: nombre });
+    });
+
+  document.getElementById("boton-terminar-frase")
+    .addEventListener("click", async () => {
+      const boton = document.getElementById("boton-terminar-frase");
+      boton.disabled = true;
+      const respuesta = await pedir("/api/terminar", { method: "POST" });
+      boton.disabled = false;
+      terminarFrase(respuesta);
+    });
+}
+
+
+/* Empezar a escuchar. Los tres modos usan la misma ruta: lo unico que cambia
+ * es que hace el servidor cuando termina. */
+async function comenzar(cuerpo) {
+  const respuesta = await pedir("/api/comenzar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cuerpo),
+  });
+  if (!respuesta.ok) {
+    avisarFrase(respuesta.motivo || "no pude empezar");
+    document.getElementById("boton-empezar").disabled = false;
+  }
+  return respuesta;
+}
+
+
+function avisarFrase(texto) {
+  document.getElementById("estado-frase").textContent = texto;
 }
 
 
@@ -116,6 +160,7 @@ function dibujarEstado(estado) {
   dibujarMedidor(estado);
   resaltarAgujero(estado.nota);
   dibujarTab(estado.tab);
+  sincronizarBotones(estado);
 
   const minutos = Math.floor(estado.segundos / 60);
   const segundos = String(Math.floor(estado.segundos % 60)).padStart(2, "0");
@@ -428,4 +473,165 @@ function dibujarSesiones(sesiones) {
   });
 
   contenedor.innerHTML = html + "</tbody></table>";
+}
+
+
+/* ==========================================================================
+   Las frases
+
+   El servidor es el que sabe si esta escuchando y en que modo. Los botones
+   se dibujan a partir de eso y no de lo que hizo el ultimo clic: asi dos
+   pestanas abiertas, o un modo que arranco desde la terminal, no dejan la
+   pantalla mintiendo.
+   ========================================================================== */
+
+function sincronizarBotones(estado) {
+  const escuchando = estado.escuchando;
+  const modo = estado.modo || "sesion";
+  const enFrase = escuchando && (modo === "frase" || modo === "practicar");
+
+  document.getElementById("boton-empezar").disabled = escuchando;
+  document.getElementById("boton-terminar").disabled =
+    !(escuchando && modo === "sesion");
+
+  document.getElementById("boton-grabar-frase").disabled = escuchando;
+  document.getElementById("boton-terminar-frase").hidden = !enFrase;
+  document.getElementById("nombre-frase").disabled = escuchando;
+
+  document.querySelectorAll("#lista-frases button")
+    .forEach((boton) => { boton.disabled = escuchando; });
+
+  if (enFrase) {
+    avisarFrase(modo === "frase"
+      ? "Grabando \u00ab" + estado.nombre_frase + "\u00bb. Toca la frase y dale Terminar."
+      : "Practicando \u00ab" + estado.nombre_frase + "\u00bb. Tocala y dale Terminar.");
+  } else if (escuchando) {
+    avisarFrase("Hay una sesi\u00f3n en vivo andando. Terminala primero.");
+  }
+}
+
+
+async function cargarFrases() {
+  const datos = await pedir("/api/frases");
+  const contenedor = document.getElementById("lista-frases");
+
+  if (!datos.frases || !datos.frases.length) {
+    contenedor.innerHTML = '<div class="aviso">Todav\u00eda no guardaste ninguna ' +
+      "frase. Escrib\u00ed un nombre arriba, dale Grabar y toc\u00e1 la frase como " +
+      "querr\u00edas tocarla.</div>";
+    return;
+  }
+
+  contenedor.innerHTML = datos.frases.map((frase) =>
+    '<div class="frase">' +
+      '<div class="datos">' +
+        "<h3>" + escapar(frase.nombre) + "</h3>" +
+        '<div class="tab-corta">' + frase.tab.join(" ") +
+          (frase.notas > frase.tab.length ? " \u2026" : "") + "</div>" +
+        '<div class="ayuda">' + frase.notas + " notas \u00b7 " +
+          frase.duracion_seg.toFixed(1) + " s \u00b7 arm\u00f3nica en " + frase.tonalidad +
+          (frase.posicion ? " \u00b7 " + frase.posicion + "\u00aa posici\u00f3n" : "") +
+          (frase.fecha ? " \u00b7 " + frase.fecha : "") + "</div>" +
+      "</div>" +
+      '<button data-practicar="' + escapar(frase.nombre) + '">Practicar</button>' +
+      '<button class="borrar" data-borrar="' + escapar(frase.nombre) + '">Borrar</button>' +
+    "</div>"
+  ).join("");
+
+  contenedor.querySelectorAll("[data-practicar]").forEach((boton) => {
+    boton.addEventListener("click", async () => {
+      document.getElementById("seccion-comparacion").hidden = true;
+      await comenzar({ modo: "practicar", nombre: boton.dataset.practicar });
+    });
+  });
+
+  contenedor.querySelectorAll("[data-borrar]").forEach((boton) => {
+    boton.addEventListener("click", async () => {
+      const nombre = boton.dataset.borrar;
+      if (!confirm("\u00bfBorrar la frase \u00ab" + nombre + "\u00bb?")) return;
+      await pedir("/api/frases/borrar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: nombre }),
+      });
+      cargarFrases();
+    });
+  });
+}
+
+
+/* Que mostrar al terminar, segun si estabas grabando o practicando. */
+function terminarFrase(respuesta) {
+  if (!respuesta.ok) {
+    avisarFrase(respuesta.motivo || "algo sali\u00f3 mal");
+    return;
+  }
+
+  if (respuesta.modo === "frase") {
+    const frase = respuesta.frase;
+    avisarFrase("Guardada \u00ab" + frase.nombre + "\u00bb: " + frase.notas +
+                " notas en " + frase.duracion_seg.toFixed(1) + " s.");
+    document.getElementById("nombre-frase").value = "";
+    cargarFrases();
+    return;
+  }
+
+  avisarFrase("");
+  mostrarComparacion(respuesta.comparacion);
+  cargarFrases();
+}
+
+
+function mostrarComparacion(c) {
+  const seccion = document.getElementById("seccion-comparacion");
+  const contenedor = document.getElementById("comparacion");
+
+  let html = "<p class='ayuda'>\u00ab" + escapar(c.nombre) + "\u00bb \u00b7 " +
+    c.aciertos + " de " + c.esperadas + " notas (" + c.porcentaje + "%)</p>" +
+    '<div class="barra-aciertos"><div style="width:' + c.porcentaje + '%"></div></div>';
+
+  // La velocidad va aparte de los desvios: tocar mas lento no es un error,
+  // es una decision. Lo que se mide es si el ritmo INTERNO se mantuvo.
+  const masLento = c.velocidad > 0;
+  html += "<p>Tocaste un " + Math.abs(c.velocidad) + "% m\u00e1s " +
+          (masLento ? "lento" : "r\u00e1pido") + " que la referencia";
+  html += (c.relativa === null)
+    ? ". La frase tiene una sola nota: no hay ritmo que medir.</p>"
+    : ". Sacada la velocidad, tu ritmo qued\u00f3 <strong>" + c.calidad +
+      "</strong> (dispersi\u00f3n " + c.dispersion_ms + " ms, " +
+      c.relativa.toFixed(2) + " de una nota).</p>";
+
+  if (c.notas.length) {
+    html += "<h2>Nota por nota</h2><div class='notas-comparadas'>";
+    c.notas.forEach((nota) => {
+      const aTiempo = Math.abs(nota.desvio_ms) <= 40;
+      const afinada = Math.abs(nota.cents) <= TOLERANCIA;
+      html += '<span class="' + (aTiempo && afinada ? "bien" : "mal") + '">' +
+        nota.tab + " <em>" + (nota.desvio_ms > 0 ? "+" : "") + nota.desvio_ms +
+        " ms \u00b7 " + (nota.cents > 0 ? "+" : "") + nota.cents + " c</em></span>";
+    });
+    html += "</div>";
+  }
+
+  if (c.faltantes.length) {
+    html += "<p class='ayuda'>Te faltaron: " + c.faltantes.join(" ") + "</p>";
+  }
+  if (c.sobrantes.length) {
+    html += "<p class='ayuda'>De m\u00e1s: " + c.sobrantes.join(" ") + "</p>";
+  }
+  if (c.cambiadas.length) {
+    html += "<p class='ayuda'>Cambiadas: " + c.cambiadas
+      .map((par) => (par.esperada || "\u2014") + " \u2192 " + (par.tocada || "\u2014"))
+      .join(", ") + "</p>";
+  }
+
+  contenedor.innerHTML = html;
+  seccion.hidden = false;
+}
+
+
+/* Los nombres de frase los escribis vos y van a parar adentro del HTML. */
+function escapar(texto) {
+  return String(texto).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

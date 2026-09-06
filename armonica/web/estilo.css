@@ -216,3 +216,74 @@ td.numero { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .grafico-bend .resumen-linea { color: var(--tenue); font-size: 13px; margin-bottom: 8px; }
 .grafico-bend svg { width: 100%; height: auto; }
+
+
+/* --- Las frases --- */
+
+input[type="text"] {
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  color: var(--texto);
+  padding: 10px 14px;
+  font-size: 15px;
+  min-width: 230px;
+}
+input[type="text"]:focus { outline: none; border-color: var(--azul); }
+
+#estado-frase { color: var(--tenue); font-size: 14px; }
+
+.frase {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 13px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.frase .datos { flex: 1; min-width: 220px; }
+.frase h3 { margin: 0 0 3px; font-size: 15px; }
+.frase .tab-corta {
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  color: var(--tenue);
+  word-spacing: 4px;
+}
+.frase button {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 15px;
+  font-size: 14px;
+  cursor: pointer;
+  background: var(--azul);
+  color: #0d1117;
+  font-weight: 600;
+}
+.frase button.borrar { background: var(--borde); color: var(--tenue); }
+
+/* La barra de aciertos de la comparación */
+.barra-aciertos {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--borde);
+  overflow: hidden;
+  margin: 10px 0 14px;
+}
+.barra-aciertos div { height: 100%; background: var(--verde); }
+
+.notas-comparadas { display: flex; flex-wrap: wrap; gap: 5px; }
+.notas-comparadas span {
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  color: var(--tenue);
+}
+.notas-comparadas span.bien { border-color: rgba(78,201,122,0.5); color: var(--verde); }
+.notas-comparadas span.mal { border-color: rgba(232,101,74,0.5); color: var(--rojo); }
+.notas-comparadas span em { font-style: normal; opacity: 0.6; font-size: 11px; }

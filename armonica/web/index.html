@@ -12,6 +12,7 @@
   <h1 id="encabezado">Armónica</h1>
   <nav>
     <button class="solapa activa" data-panel="vivo">En vivo</button>
+    <button class="solapa" data-panel="frases">Frases</button>
     <button class="solapa" data-panel="historial">Historial</button>
   </nav>
 </header>
@@ -80,6 +81,40 @@
   <section id="seccion-resumen" hidden>
     <h2>Resumen de la sesión</h2>
     <div id="resumen"></div>
+  </section>
+
+</main>
+
+<!-- ===================== FRASES ===================== -->
+<main id="panel-frases" class="panel" hidden>
+
+  <section>
+    <h2>Grabar una frase de referencia</h2>
+    <p class="ayuda">
+      Tocá una frase como querrías tocarla y queda guardada. Después practicás
+      contra ella y la app te dice qué notas erraste y dónde te desviaste.
+      La referencia es una <strong>grabación</strong> y no una tablatura escrita,
+      porque la tablatura no lleva ritmo.
+    </p>
+    <div class="controles">
+      <input id="nombre-frase" type="text" placeholder="nombre de la frase"
+             maxlength="60">
+      <button id="boton-grabar-frase" class="principal">Grabar</button>
+      <button id="boton-terminar-frase" class="secundario" hidden>
+        Terminar
+      </button>
+      <span id="estado-frase"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tus frases</h2>
+    <div id="lista-frases"></div>
+  </section>
+
+  <section id="seccion-comparacion" hidden>
+    <h2>Cómo te salió</h2>
+    <div id="comparacion"></div>
   </section>
 
 </main>

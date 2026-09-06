@@ -16,7 +16,7 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from armonica import exportacion, mapeo, segmentacion, servidor
+from armonica import exportacion, frases, mapeo, segmentacion, servidor
 
 
 # =============================================================================
@@ -55,6 +55,17 @@ def traer(base, ruta):
 def traer_json(base, ruta):
     _, cuerpo = traer(base, ruta)
     return json.loads(cuerpo)
+
+
+def mandar(base, ruta, cuerpo=None):
+    """Un POST con cuerpo JSON, igual que el que manda el navegador."""
+    datos = json.dumps(cuerpo or {}).encode("utf-8")
+    pedido = urllib.request.Request(
+        base + ruta, data=datos, method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(pedido, timeout=5) as respuesta:
+        return json.loads(respuesta.read())
 
 
 # =============================================================================
@@ -369,3 +380,181 @@ def test_el_resumen_con_notas_trae_los_hallazgos(servidor_andando):
     assert datos["notas"] == 7
     assert datos["hallazgos"]
     assert "-3''" in datos["hallazgos"][0]["titulo"]
+
+
+# =============================================================================
+# Las frases
+#
+# El modo "repeti esta frase" desde la web. Los tres modos (sesion, frase,
+# practicar) escuchan exactamente igual: lo unico que cambia es que hace el
+# servidor al terminar. Por eso los tests arman el estado a mano y llaman a
+# terminar, sin abrir nunca el microfono.
+# =============================================================================
+
+@pytest.fixture
+def carpeta_de_frases(tmp_path, monkeypatch):
+    """Las frases van a una carpeta temporal y no a la tuya de verdad."""
+    monkeypatch.setattr(frases, "CARPETA_POR_DEFECTO", str(tmp_path))
+    return str(tmp_path)
+
+
+def eventos_de(tabs, separacion=0.5, tonalidad="C", cents=0.0):
+    """Una tanda de eventos parejos, uno cada `separacion` segundos."""
+    return [
+        segmentacion.Evento(
+            nota=mapeo.tab_a_nota(tab, tonalidad), inicio_seg=i * separacion,
+            duracion_seg=separacion * 0.8, frecuencia_hz=440.0, cents=cents,
+            confianza=0.99, ventanas=30,
+        )
+        for i, tab in enumerate(tabs)
+    ]
+
+
+def preparar(modo, nombre, eventos):
+    """Deja el estado como si acabaras de tocar, sin haber tocado."""
+    estado = servidor.Manejador.estado
+    estado.modo = modo
+    estado.nombre_frase = nombre
+    estado.eventos = eventos
+    estado.escuchando = True
+    return estado
+
+
+def test_grabar_una_frase_pide_el_nombre(servidor_andando):
+    """Sin nombre no hay archivo donde guardarla. Se rechaza antes de escuchar."""
+    respuesta = mandar(servidor_andando, "/api/comenzar", {"modo": "frase"})
+    assert respuesta["ok"] is False
+    assert "nombre" in respuesta["motivo"]
+    assert servidor.Manejador.estado.escuchando is False
+
+
+def test_practicar_una_frase_que_no_existe_se_rechaza(
+        servidor_andando, carpeta_de_frases):
+    """
+    Mejor avisar ahora que dejarte tocar treinta segundos para nada.
+
+    Este es el motivo por el que la validacion esta en _comenzar y no en
+    _terminar: si falla al final, ya perdiste lo que tocaste.
+    """
+    respuesta = mandar(servidor_andando, "/api/comenzar",
+                       {"modo": "practicar", "nombre": "la que no existe"})
+    assert respuesta["ok"] is False
+    assert "no encontre" in respuesta["motivo"]
+    assert servidor.Manejador.estado.escuchando is False
+
+
+def test_terminar_grabando_guarda_la_frase(servidor_andando, carpeta_de_frases):
+    preparar("frase", "lick de segunda", eventos_de(["-2", "-3''", "4", "-4"]))
+
+    respuesta = mandar(servidor_andando, "/api/terminar")
+
+    assert respuesta["ok"] is True
+    assert respuesta["modo"] == "frase"
+    assert respuesta["frase"]["notas"] == 4
+    assert respuesta["frase"]["tab"][0] == "-2"
+
+    guardada = frases.buscar("lick de segunda")
+    assert guardada is not None
+    assert guardada.cantidad == 4
+
+
+def test_una_frase_sin_notas_no_se_guarda(servidor_andando, carpeta_de_frases):
+    """Si el microfono no engancho nada, no se guarda una frase vacia."""
+    preparar("frase", "la que no sono", [])
+
+    respuesta = mandar(servidor_andando, "/api/terminar")
+
+    assert respuesta["ok"] is False
+    assert frases.listar() == []
+
+
+def test_terminar_practicando_compara_contra_la_frase(
+        servidor_andando, carpeta_de_frases):
+    """
+    La misma frase tocada un 20% mas lento tiene que dar 100% de aciertos.
+
+    Tocar mas lento es una decision, no un error: el porcentaje mide las
+    NOTAS, y la velocidad se informa aparte.
+    """
+    referencia = frases.desde_eventos(
+        eventos_de(["-2", "-3''", "4", "-4"]), "escala corta", "C", 2, None)
+    frases.guardar(referencia)
+
+    preparar("practicar", "escala corta",
+             eventos_de(["-2", "-3''", "4", "-4"], separacion=0.6))
+
+    respuesta = mandar(servidor_andando, "/api/terminar")
+
+    assert respuesta["ok"] is True
+    assert respuesta["modo"] == "practicar"
+    comparacion = respuesta["comparacion"]
+    assert comparacion["esperadas"] == 4
+    assert comparacion["porcentaje"] == 100
+    assert comparacion["velocidad"] == 20     # 20% mas lento
+    assert comparacion["faltantes"] == []
+    assert len(comparacion["notas"]) == 4
+
+
+def test_practicando_marca_la_nota_que_erraste(
+        servidor_andando, carpeta_de_frases):
+    referencia = frases.desde_eventos(eventos_de(["-2", "4", "-4"]), "tres notas")
+    frases.guardar(referencia)
+
+    preparar("practicar", "tres notas", eventos_de(["-2", "5", "-4"]))
+
+    comparacion = mandar(servidor_andando, "/api/terminar")["comparacion"]
+
+    assert comparacion["cambiadas"] == [{"esperada": "4", "tocada": "5"}]
+    assert comparacion["porcentaje"] < 100
+
+
+def test_la_lista_de_frases_trae_los_datos_para_la_pantalla(
+        servidor_andando, carpeta_de_frases):
+    frases.guardar(frases.desde_eventos(
+        eventos_de(["-2", "-3''", "4"]), "lick uno", "C", 2, "blues"))
+
+    datos = traer_json(servidor_andando, "/api/frases")
+
+    assert len(datos["frases"]) == 1
+    frase = datos["frases"][0]
+    assert frase["nombre"] == "lick uno"
+    assert frase["notas"] == 3
+    assert frase["tonalidad"] == "C"
+    assert frase["posicion"] == 2
+    assert frase["tab"] == ["-2", "-3''", "4"]
+
+
+def test_borrar_una_frase_la_saca_de_la_lista(servidor_andando, carpeta_de_frases):
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4"]), "descartable"))
+    assert len(frases.listar()) == 1
+
+    respuesta = mandar(servidor_andando, "/api/frases/borrar",
+                       {"nombre": "descartable"})
+
+    assert respuesta["ok"] is True
+    assert frases.listar() == []
+
+
+def test_borrar_una_frase_que_no_esta_no_rompe(servidor_andando, carpeta_de_frases):
+    respuesta = mandar(servidor_andando, "/api/frases/borrar", {"nombre": "fantasma"})
+    assert respuesta["ok"] is False
+
+
+def test_el_estado_en_vivo_dice_en_que_modo_esta():
+    """
+    La pantalla dibuja los botones a partir del estado del servidor.
+
+    Sin esto, dos pestanas abiertas mostrarian cosas distintas: una creeria
+    que esta grabando una frase y la otra que hay una sesion andando.
+    """
+    estado = servidor.EstadoCompartido("C", 12, "blues_mayor")
+    assert estado.como_diccionario()["modo"] == "sesion"
+
+    estado.modo = "practicar"
+    estado.nombre_frase = "lick uno"
+    datos = estado.como_diccionario()
+    assert datos["modo"] == "practicar"
+    assert datos["nombre_frase"] == "lick uno"
+
+    estado.reiniciar()
+    assert estado.como_diccionario()["modo"] == "sesion"
