@@ -21,6 +21,9 @@ adentro porque las cuentas del detector de tono se hacen con decimales, y
 convertir una sola vez al principio es más simple que convertir en cada cálculo.
 """
 
+import os
+import shutil
+import subprocess
 import wave
 
 import numpy as np
@@ -82,6 +85,65 @@ def leer_wav(ruta):
 
     muestras = enteros.astype(np.float32) / ESCALA_16_BITS
     return muestras, frecuencia_muestreo
+
+
+# Los formatos que ffmpeg sabe convertir y nosotros no sabemos leer. WhatsApp
+# manda .opus, el iPhone manda .m4a, y ninguno de los dos es un .wav.
+EXTENSIONES_A_CONVERTIR = (".m4a", ".mp3", ".opus", ".ogg", ".aac", ".flac",
+                           ".wma", ".mp4", ".m4v", ".webm", ".aiff", ".aif")
+
+
+def hay_ffmpeg():
+    """Si ffmpeg esta instalado y se puede llamar."""
+    return shutil.which("ffmpeg") is not None
+
+
+def convertir_a_wav(origen, destino, frecuencia_muestreo=None):
+    """
+    Convierte cualquier audio a .wav mono de 16 bits, usando ffmpeg.
+
+    POR QUE FFMPEG Y NO UNA BIBLIOTECA DE PYTHON
+
+    Leer un .wav son treinta lineas con el modulo `wave` de la biblioteca
+    estandar. Leer un .m4a es un decodificador de AAC entero: nadie escribe
+    eso a mano, y las bibliotecas que lo hacen (pydub, librosa, soundfile)
+    terminan llamando a ffmpeg igual. Asi que lo llamamos directo y no
+    agregamos ninguna dependencia de Python al proyecto.
+
+    ffmpeg no viene con Windows. Si no esta, se avisa como instalarlo en vez
+    de fallar con un error de sistema.
+    """
+    if frecuencia_muestreo is None:
+        frecuencia_muestreo = config.FRECUENCIA_MUESTREO
+
+    if not hay_ffmpeg():
+        raise ValueError(
+            f"El archivo {os.path.basename(str(origen))} no es un .wav y para "
+            "convertirlo hace falta ffmpeg, que no esta instalado. "
+            "Instalalo una sola vez con:  winget install ffmpeg  "
+            "(y despues cerra y abri la terminal)."
+        )
+
+    resultado = subprocess.run(
+        [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", str(origen),
+            "-ac", "1",                       # mono: la armonica es una sola fuente
+            "-ar", str(frecuencia_muestreo),  # la frecuencia que usa la app
+            "-sample_fmt", "s16",             # 16 bits, que es lo unico que leemos
+            str(destino),
+        ],
+        capture_output=True, text=True,
+    )
+
+    if resultado.returncode != 0:
+        detalle = (resultado.stderr or "").strip().splitlines()
+        raise ValueError(
+            f"ffmpeg no pudo convertir {os.path.basename(str(origen))}"
+            + (f": {detalle[-1]}" if detalle else ".")
+        )
+
+    return str(destino)
 
 
 def escribir_wav(ruta, muestras, frecuencia_muestreo=None):

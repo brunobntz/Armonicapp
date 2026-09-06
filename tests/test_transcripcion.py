@@ -7,6 +7,8 @@ sabemos exactamente qué notas tiene que salir y podemos medir el error.
 Cómo correrlos:   python -m pytest tests/test_transcripcion.py -v
 """
 
+import os
+
 import numpy as np
 import pytest
 
@@ -202,3 +204,123 @@ def test_un_audio_fuera_de_rango_avisa_pero_deja_seguir(tmp_path):
     assert motivo == ""
     assert avisos
     assert "--que-tono" in avisos[0]
+
+
+# =============================================================================
+# Los audios que no son .wav
+#
+# WhatsApp manda .opus, el iPhone manda .m4a. Ninguno de los dos se puede leer
+# con la biblioteca estandar: hace falta ffmpeg, que no viene con Windows.
+# =============================================================================
+
+def test_un_wav_no_pasa_por_ffmpeg(tmp_path, monkeypatch):
+    """
+    El camino normal no llama a ffmpeg ni una vez.
+
+    Importa: si un .wav pasara por la conversion, la app dejaria de funcionar
+    en una maquina sin ffmpeg, que es la mayoria de las maquinas con Windows.
+    """
+    llamadas = []
+    monkeypatch.setattr(audio, "convertir_a_wav",
+                        lambda *a, **k: llamadas.append(a))
+
+    ruta = escribir(tmp_path, ["4", "-4"])
+    muestras, frecuencia = transcripcion.leer_cualquier_audio(ruta)
+
+    assert llamadas == []
+    assert len(muestras) > 0
+    assert frecuencia == config.FRECUENCIA_MUESTREO
+
+
+def test_un_m4a_se_convierte_antes_de_leerlo(tmp_path, monkeypatch):
+    """
+    Se verifica que se llame a la conversion, no que ffmpeg funcione.
+
+    Probar ffmpeg de verdad significaria exigirlo instalado para correr los
+    tests, y estos tests tienen que andar en cualquier máquina. Lo que este
+    proyecto controla es la decisión de convertir; que ffmpeg decodifique AAC
+    es problema de ffmpeg.
+    """
+    real = escribir(tmp_path, ["4", "-4", "-5"])
+    disfrazado = tmp_path / "de_whatsapp.m4a"
+    disfrazado.write_bytes(b"finjo ser un m4a")
+
+    def convertir_falso(origen, destino, frecuencia_muestreo=None):
+        with open(real, "rb") as entrada, open(destino, "wb") as salida:
+            salida.write(entrada.read())
+        return str(destino)
+
+    monkeypatch.setattr(audio, "convertir_a_wav", convertir_falso)
+
+    muestras, _ = transcripcion.leer_cualquier_audio(str(disfrazado))
+
+    assert len(muestras) > 0
+
+
+def test_sin_ffmpeg_el_error_dice_como_instalarlo(tmp_path, monkeypatch):
+    """
+    ffmpeg no viene con Windows, así que este es el caso más probable de todos.
+
+    Un "FileNotFoundError: ffmpeg" no le sirve a nadie; el comando para
+    instalarlo, sí.
+    """
+    monkeypatch.setattr(audio, "hay_ffmpeg", lambda: False)
+    origen = tmp_path / "audio_de_lean.m4a"
+    origen.write_bytes(b"lo que sea")
+
+    with pytest.raises(ValueError) as fallo:
+        audio.convertir_a_wav(str(origen), str(tmp_path / "salida.wav"))
+
+    assert "winget install ffmpeg" in str(fallo.value)
+    assert "audio_de_lean.m4a" in str(fallo.value)
+
+
+def test_la_conversion_no_deja_temporales(tmp_path, monkeypatch):
+    """El .wav convertido es de paso: si no se borrara, se acumularian."""
+    temporales = tmp_path / "temporales"
+    temporales.mkdir()
+    monkeypatch.setattr(transcripcion.tempfile, "tempdir", str(temporales))
+
+    disfrazado = tmp_path / "roto.mp3"
+    disfrazado.write_bytes(b"no se puede convertir")
+    monkeypatch.setattr(audio, "hay_ffmpeg", lambda: False)
+
+    with pytest.raises(ValueError):
+        transcripcion.leer_cualquier_audio(str(disfrazado))
+
+    assert os.listdir(str(temporales)) == []
+
+
+def test_una_base_bajita_pasa_el_control_y_igual_pierde_notas(tmp_path):
+    """
+    EL LIMITE MAS IMPORTANTE DE TODOS, Y EL MENOS INTUITIVO.
+
+    "Si la armonica es el sonido preponderante, ¿por que no la puedo tomar?"
+    Porque el control de monofonia no es lo que se rompe primero: se rompe la
+    transcripcion, y antes.
+
+    Con la base al 20% del volumen de la melodia, el puntaje de monofonia da
+    0.83 y pasa el control con comodidad. Pero de las cinco notas tocadas solo
+    se reconocen las tres ultimas: las dos primeras se pierden y NADIE AVISA,
+    porque segmentar descarta las ventanas que no mapean en vez de marcarlas.
+
+    O sea que el rango peligroso no es el que la app rechaza —ahi no queda
+    ninguna nota que rescatar— sino el que ACEPTA con una base bajita. Por eso
+    la recomendacion es grabar la armonica sola y no "que se escuche fuerte".
+    """
+    melodia, _ = generar_wav.generar_secuencia(
+        ["-2", "4", "-4", "-5", "6"], "C", duracion_nota=0.45)
+    base = sum(
+        generar_wav.generar_nota(frecuencia, len(melodia) / 44100.0, volumen=0.2 / 3)
+        for frecuencia in (98.0, 146.83, 196.0)
+    )
+
+    ruta = tmp_path / "con_base.wav"
+    audio.escribir_wav(ruta, melodia + base[:len(melodia)])
+    resultado = transcripcion.desde_archivo(str(ruta), "C")
+
+    sirve, _, _ = transcripcion.revisar(resultado, "C")
+
+    assert sirve is True                                   # el control la deja pasar
+    assert [e.como_tab() for e in resultado.reconocidas] == ["-4", "-5", "6"]
+    assert len(resultado.reconocidas) < 5                  # y perdio notas igual

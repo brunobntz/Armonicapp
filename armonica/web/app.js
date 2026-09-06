@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   TOLERANCIA = inicio.tolerancia_cents || 10;
 
   mostrarEncabezado();
+  llenarTonalidades();
   dibujarDiagrama(inicio.diagrama);
   ajustarZonaBuena();
 
@@ -134,32 +135,102 @@ function configurarBotones() {
       campo.value = nombre;
 
       document.getElementById("seccion-comparacion").hidden = true;
-      avisarFrase("Analizando " + archivo.name + "...");
-
-      const respuesta = await subir("/api/frases/importar", nombre, archivo);
-      if (!respuesta.ok) {
-        avisarFrase(respuesta.motivo || "no pude importar ese audio");
-        return;
-      }
-
-      const frase = respuesta.frase;
-      avisarFrase("Importada \u00ab" + frase.nombre + "\u00bb: " + frase.notas +
-                  " notas en " + frase.duracion_seg.toFixed(1) + " s.");
-      (respuesta.avisos || []).forEach(mostrarAviso);
-      campo.value = "";
-      cargarFrases();
+      await importar(nombre, archivo, false);
     });
 }
 
 
-/* Sube un archivo. El nombre va en la URL y los bytes crudos en el cuerpo:
- * es lo mismo que hace multipart pero sin nada que parsear del otro lado. */
-async function subir(ruta, nombre, archivo) {
-  const respuesta = await fetch(
-    ruta + "?nombre=" + encodeURIComponent(nombre),
-    { method: "POST", body: archivo }
-  );
+/* Manda el audio y muestra el resultado. `igual` en true saltea el control de
+ * monofonia: es lo que pasa cuando ya viste la tablatura y dijiste que sirve. */
+async function importar(nombre, archivo, igual) {
+  const campo = document.getElementById("nombre-frase");
+  limpiarDudoso();
+  avisarFrase("Analizando " + archivo.name + "...");
+
+  const respuesta = await subir("/api/frases/importar", nombre, archivo,
+                                { igual: igual ? "1" : "0" });
+
+  if (!respuesta.ok) {
+    avisarFrase(respuesta.motivo || "no pude importar ese audio");
+    if (respuesta.se_puede_igual) mostrarDudoso(respuesta, nombre, archivo);
+    return;
+  }
+
+  const frase = respuesta.frase;
+  avisarFrase("Importada \u00ab" + frase.nombre + "\u00bb: " + frase.notas +
+              " notas en " + frase.duracion_seg.toFixed(1) +
+              " s, arm\u00f3nica en " + frase.tonalidad + ".");
+  (respuesta.avisos || []).forEach(mostrarAviso);
+  campo.value = "";
+  cargarFrases();
+}
+
+
+/* Sube un archivo. El nombre y las opciones van en la URL y los bytes crudos
+ * en el cuerpo: es lo mismo que hace multipart pero sin nada que parsear del
+ * otro lado. */
+async function subir(ruta, nombre, archivo, extra) {
+  const partes = ["nombre=" + encodeURIComponent(nombre),
+                  "archivo=" + encodeURIComponent(archivo.name || "")];
+
+  const tonalidad = document.getElementById("tonalidad-frase").value;
+  if (tonalidad) partes.push("tonalidad=" + encodeURIComponent(tonalidad));
+
+  Object.entries(extra || {}).forEach(([clave, valor]) =>
+    partes.push(clave + "=" + encodeURIComponent(valor)));
+
+  const respuesta = await fetch(ruta + "?" + partes.join("&"),
+                                { method: "POST", body: archivo });
   return respuesta.json();
+}
+
+
+/* Las armonicas que la app conoce. Por defecto queda la que tenes puesta,
+ * porque la mayoria de las veces es la correcta. */
+function llenarTonalidades() {
+  const selector = document.getElementById("tonalidad-frase");
+  selector.innerHTML = (inicio.tonalidades || [inicio.tonalidad])
+    .map((clave) => '<option value="' + clave + '"' +
+         (clave === inicio.tonalidad ? " selected" : "") + ">" + clave + "</option>")
+    .join("");
+}
+
+
+/* Cuando el audio no pasa el control, no se guarda nada: se muestra lo que
+ * HABRIA salido y decidis vos. El umbral es una heuristica; el que reconoce
+ * la frase de Leandro en esa tablatura sos vos. */
+function mostrarDudoso(respuesta, nombre, archivo) {
+  const caja = document.createElement("div");
+  caja.className = "dudoso";
+  caja.id = "caja-dudosa";
+
+  const previa = (respuesta.vista_previa || []);
+  caja.innerHTML =
+    "<p>Esto es lo que habr\u00eda transcrito. Si reconoc\u00e9s la frase, " +
+    "guardala igual; si es un choclo de notas sueltas, no sirve como " +
+    "referencia y vas a estar practicando contra ruido.</p>" +
+    '<div class="tab-corta">' + (previa.join(" ") || "(nada)") +
+    (previa.length >= 24 ? " \u2026" : "") + "</div>";
+
+  const guardar = document.createElement("button");
+  guardar.className = "principal";
+  guardar.textContent = "Guardar igual";
+  guardar.addEventListener("click", () => importar(nombre, archivo, true));
+
+  const descartar = document.createElement("button");
+  descartar.className = "secundario";
+  descartar.textContent = "Descartar";
+  descartar.addEventListener("click", limpiarDudoso);
+
+  caja.appendChild(guardar);
+  caja.appendChild(descartar);
+  document.getElementById("lista-frases").before(caja);
+}
+
+
+function limpiarDudoso() {
+  const caja = document.getElementById("caja-dudosa");
+  if (caja) caja.remove();
 }
 
 
@@ -551,6 +622,7 @@ function sincronizarBotones(estado) {
   document.getElementById("boton-grabar-frase").disabled = escuchando;
   document.getElementById("boton-terminar-frase").hidden = !enFrase;
   document.getElementById("nombre-frase").disabled = escuchando;
+  document.getElementById("tonalidad-frase").disabled = escuchando;
 
   document.querySelectorAll("#lista-frases button")
     .forEach((boton) => { boton.disabled = escuchando; });
@@ -621,7 +693,7 @@ async function cargarFrases() {
       document.getElementById("seccion-comparacion").hidden = true;
       avisarFrase("Comparando " + archivo.name + " contra \u00ab" + nombre + "\u00bb...");
 
-      const respuesta = await subir("/api/frases/intento", nombre, archivo);
+      const respuesta = await subir("/api/frases/intento", nombre, archivo, {});
       if (!respuesta.ok) {
         avisarFrase(respuesta.motivo || "no pude comparar ese audio");
         return;

@@ -65,7 +65,7 @@ valor por defecto, así que después de la primera vez son cuatro Enter.
 | Ver un acorde y sus notas guía | `python main.py --acorde F7` |
 | Transcribir una grabación | `python main.py --wav grabacion.wav --posicion 12 --escala blues_mayor --detalle` |
 | Guardar una frase de referencia | `python main.py --grabar-frase "lick de 3a" --posicion 3` (o la solapa **Frases** de la web) |
-| Importar una frase de un audio | `python main.py --grabar-frase "lick de Lean" --wav lean_01.wav --posicion 3` |
+| Importar una frase de un audio | `python main.py --grabar-frase "lick de Lean" --wav lean_01.wav --tonalidad A` |
 | Practicar contra esa frase | `python main.py --practicar "lick de 3a"` (o la solapa **Frases** de la web) |
 | Practicar con un audio ya grabado | `python main.py --practicar "lick de 3a" --wav mi_intento.wav` |
 | Saber con qué armónica se grabó algo | `python main.py --wav ajeno.wav --que-tono` |
@@ -96,8 +96,19 @@ sonando devuelve basura. La app tiene una medida para eso:
 python main.py --wav grabacion.wav --monofonia
 ```
 
-**Formato WAV.** La app no lee m4a ni mp3. En Windows 11, la Grabadora de
+**Formato WAV.** La app lee `.wav` de 16 bits. En Windows 11, la Grabadora de
 sonido tiene la opción de formato en su configuración.
+
+Los audios que te mandan por WhatsApp o desde un iPhone vienen en otro formato
+(`.opus`, `.m4a`) y hay que convertirlos. La app lo hace sola si tenés
+**ffmpeg** instalado, que se instala una sola vez:
+
+```powershell
+winget install ffmpeg
+```
+
+Después cerrá y abrí la terminal. Sin ffmpeg no pasa nada malo: la app te dice
+que falta y te da ese comando.
 
 **Nivel de entrada.** Si el pico queda muy bajo, la app lo normaliza sola,
 pero más señal es siempre menos ruido. Y dejá dos segundos de silencio al
@@ -135,9 +146,20 @@ Lo que ese control **no** puede hacer es decirte de qué armónica es una
 grabación. Suena a que debería: no puede. Una armónica en Do, con bends,
 alcanza casi todas las notas del registro medio, así que una frase tocada en
 La leída como si fuera en Do cae entera dentro de lo posible —la tablatura
-sale distinta, pero no hay ninguna nota imposible que lo delate. Para eso está
-`--que-tono`, que compara las cuatro armónicas entre sí en vez de mirar una
-sola. Hay un test que documenta ese límite a propósito.
+sale distinta, pero no hay ninguna nota imposible que lo delate. Por eso al
+importar **le decís vos con qué armónica se grabó**, que es un dato que tenés
+y la app no. Si dudás, `--que-tono` compara las cuatro entre sí.
+
+Y hay algo menos intuitivo, que está medido en
+`tests/test_transcripcion.py`: **el control de monofonía no es lo primero que
+se rompe cuando hay una base atrás.** Con la base al 20% del volumen de la
+armónica, el puntaje da 0.83 y pasa cómodo; pero de cinco notas tocadas se
+reconocen tres, y las otras dos se pierden sin que nadie avise. Cuando el
+control sí rechaza, ya no quedaba ninguna nota que rescatar.
+
+O sea: el rango peligroso no es el que la app rechaza, es el que **acepta**
+con una base bajita. Por eso la recomendación es grabar la armónica sola, y no
+"que se escuche fuerte".
 
 ---
 
@@ -260,7 +282,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 589 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 602 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

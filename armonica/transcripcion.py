@@ -38,6 +38,8 @@ armónica más grave. Para lo otro está `--que-tono`, que compara las cuatro
 armónicas entre sí en vez de mirar una sola.
 """
 
+import os
+import tempfile
 from dataclasses import dataclass, field
 
 import config
@@ -119,18 +121,49 @@ def desde_archivo(ruta, tonalidad, posicion=None, escala=None):
     """
     Lo mismo, pero leyendo un .wav del disco.
 
+    Si el archivo no es un .wav —un .m4a de WhatsApp, un .mp3— lo convierte
+    primero con ffmpeg. Ver `leer_cualquier_audio`.
+
     Normaliza antes de analizar: sin eso, una grabación con poco volumen se
     descarta entera como si fuera silencio. Le pasó a la primera grabación de
     este proyecto, que tenía pico 0.03 y devolvió una sola nota en 18
     segundos. Ver config.NORMALIZAR_ARCHIVOS.
     """
-    muestras, frecuencia_muestreo = audio.leer_wav(ruta)
+    muestras, frecuencia_muestreo = leer_cualquier_audio(ruta)
 
     if config.NORMALIZAR_ARCHIVOS:
         muestras = audio.normalizar(muestras)
 
     return desde_muestras(muestras, frecuencia_muestreo, tonalidad,
                           posicion, escala)
+
+
+def leer_cualquier_audio(ruta):
+    """
+    Lee un audio, convirtiendolo antes si no es un .wav.
+
+    POR QUE ESTA ACA Y NO EN audio.py
+
+    audio.py lee y escribe .wav, y nada mas: es el modulo mas simple del
+    proyecto y conviene que siga siendolo. La CONVENIENCIA de aceptar un .m4a
+    de WhatsApp es de este modulo, que es el que atiende los archivos que
+    vienen de afuera.
+
+    La conversion pasa por un archivo temporal que se borra siempre, aunque la
+    lectura falle.
+    """
+    extension = os.path.splitext(str(ruta))[1].lower()
+
+    if extension not in audio.EXTENSIONES_A_CONVERTIR:
+        return audio.leer_wav(ruta)
+
+    convertido = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    convertido.close()
+    try:
+        audio.convertir_a_wav(ruta, convertido.name)
+        return audio.leer_wav(convertido.name)
+    finally:
+        os.remove(convertido.name)
 
 
 def _contar_ventanas(mediciones, tabla_inversa):

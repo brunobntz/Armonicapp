@@ -313,3 +313,35 @@ input[type="text"]:focus { outline: none; border-color: var(--azul); }
 }
 .frase label.audio input[type="file"] { display: none; }
 .frase label.audio.apagado { opacity: 0.4; cursor: default; }
+
+select {
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  color: var(--texto);
+  padding: 10px 12px;
+  font-size: 15px;
+}
+select:focus { outline: none; border-color: var(--azul); }
+select:disabled { opacity: 0.4; }
+
+/* El cartel de "no pasa el control, pero mirá lo que saldria" */
+.dudoso {
+  background: rgba(232, 193, 74, 0.07);
+  border: 1px solid rgba(232, 193, 74, 0.35);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+.dudoso p { margin: 0 0 10px; font-size: 14px; color: var(--tenue); }
+.dudoso .tab-corta {
+  font-family: Consolas, monospace;
+  font-size: 15px;
+  color: var(--texto);
+  word-spacing: 5px;
+  margin-bottom: 12px;
+}
+.dudoso button { margin-right: 8px; }
+
+.fila-importar { margin-top: 12px; }
+.fila-importar .ayuda { margin: 0; }

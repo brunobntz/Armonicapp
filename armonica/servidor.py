@@ -506,40 +506,57 @@ class Manejador(SimpleHTTPRequestHandler):
 
     def _leer_audio_subido(self, consulta):
         """
-        Lee un .wav que subio el navegador. Devuelve (nombre, ruta, error).
+        Lee un audio que subio el navegador.
+
+        Devuelve (nombre, ruta, opciones, error). Las opciones son:
+            tonalidad  con que armonica se grabo ESTE archivo
+            igual      guardar aunque no pase la revision
 
         EL NOMBRE VA EN LA URL Y EL AUDIO EN EL CUERPO
 
         Lo normal para subir un archivo seria multipart/form-data, que mezcla
         campos de texto y archivos en un solo cuerpo. Pero parsear multipart a
         mano es justo donde viven los errores, y no hace falta: mandamos el
-        nombre en la URL y los bytes crudos en el cuerpo. Una linea de cada
-        lado y nada que parsear.
+        nombre y las opciones en la URL, y los bytes crudos en el cuerpo. Una
+        linea de cada lado y nada que parsear.
 
         El audio va a un archivo temporal porque audio.leer_wav trabaja con
         rutas y no con bytes. El que llama lo borra.
         """
         parametros = urllib.parse.parse_qs(consulta)
         nombre = (parametros.get("nombre", [""])[0] or "").strip()
+
+        opciones = {
+            "tonalidad": (parametros.get("tonalidad", [""])[0] or "").strip(),
+            "igual": parametros.get("igual", ["0"])[0] == "1",
+        }
+
         if not nombre:
-            return None, None, "falta el nombre de la frase"
+            return None, None, opciones, "falta el nombre de la frase"
 
         largo = int(self.headers.get("Content-Length") or 0)
         if largo <= 0:
-            return None, None, "no llego ningun audio"
+            return None, None, opciones, "no llego ningun audio"
         if largo > MAXIMO_SUBIDA_BYTES:
             megas = MAXIMO_SUBIDA_BYTES // (1024 * 1024)
-            return None, None, f"el archivo pasa los {megas} MB"
+            return None, None, opciones, f"el archivo pasa los {megas} MB"
 
         datos = self.rfile.read(largo)
 
-        temporal = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        # La extension del temporal la pone el que sube: si mandaste un .m4a,
+        # ffmpeg necesita saberlo para poder convertirlo.
+        extension = os.path.splitext(
+            (parametros.get("archivo", [""])[0] or "").strip())[1].lower()
+        if not extension or len(extension) > 6:
+            extension = ".wav"
+
+        temporal = tempfile.NamedTemporaryFile(suffix=extension, delete=False)
         try:
             temporal.write(datos)
         finally:
             temporal.close()
 
-        return nombre, temporal.name, ""
+        return nombre, temporal.name, opciones, ""
 
     # --- Las acciones ---
 
@@ -640,29 +657,48 @@ class Manejador(SimpleHTTPRequestHandler):
         las practicas que vengan despues.
         """
         estado = type(self).estado
-        nombre, ruta_temporal, error = self._leer_audio_subido(consulta)
+        nombre, ruta_temporal, opciones, error = self._leer_audio_subido(consulta)
         if error:
             return {"ok": False, "motivo": error}
+
+        # La armonica de ESTE archivo. Vos sabes con cual se grabo; la app no
+        # lo puede deducir. Si no la aclaras, se asume la que tenes puesta.
+        tonalidad = opciones["tonalidad"] or estado.tonalidad
+        if tonalidad not in tablas.TONALIDADES:
+            os.remove(ruta_temporal)
+            return {"ok": False, "motivo": f"no conozco la armonica {tonalidad!r}"}
 
         try:
             try:
                 resultado = transcripcion.desde_archivo(
-                    ruta_temporal, estado.tonalidad,
-                    estado.posicion, estado.escala)
+                    ruta_temporal, tonalidad, estado.posicion, estado.escala)
             except ValueError:
                 return {"ok": False, "motivo": NO_ES_UN_WAV}
 
-            sirve, motivo, avisos = transcripcion.revisar(
-                resultado, estado.tonalidad)
-            if not sirve:
-                return {"ok": False, "motivo": motivo}
+            sirve, motivo, avisos = transcripcion.revisar(resultado, tonalidad)
+
+            # Si no pasa la revision no se guarda nada todavia: se devuelve lo
+            # que HABRIA salido y se ofrece guardarlo igual. El umbral de
+            # monofonia es una heuristica, no una ley; el que sabe si esa
+            # tablatura es la frase que toco Leandro sos vos. Lo unico que la
+            # app se asegura es que lo decidas MIRANDO el resultado.
+            if not sirve and not opciones["igual"]:
+                return {
+                    "ok": False,
+                    "motivo": motivo,
+                    "se_puede_igual": bool(resultado.reconocidas),
+                    "vista_previa": [e.como_tab() for e in resultado.reconocidas][:24],
+                }
 
             try:
                 frase = frases.desde_eventos(
-                    resultado.eventos, nombre, estado.tonalidad,
+                    resultado.eventos, nombre, tonalidad,
                     estado.posicion, estado.escala)
             except ValueError as fallo:
                 return {"ok": False, "motivo": str(fallo)}
+
+            if not sirve:
+                avisos = list(avisos) + ["Guardada salteando el control: " + motivo]
         finally:
             os.remove(ruta_temporal)
 
@@ -682,6 +718,7 @@ class Manejador(SimpleHTTPRequestHandler):
                 "nombre": frase.nombre,
                 "notas": frase.cantidad,
                 "duracion_seg": round(frase.duracion_seg, 1),
+                "tonalidad": frase.tonalidad,
                 "tab": frase.tablatura(),
             },
         }
@@ -693,7 +730,7 @@ class Manejador(SimpleHTTPRequestHandler):
         Sirve para cuando ya grabaste el intento con la grabadora de Windows,
         o para comparar dos audios viejos sin volver a tocar.
         """
-        nombre, ruta_temporal, error = self._leer_audio_subido(consulta)
+        nombre, ruta_temporal, _, error = self._leer_audio_subido(consulta)
         if error:
             return {"ok": False, "motivo": error}
 
@@ -702,6 +739,9 @@ class Manejador(SimpleHTTPRequestHandler):
             if frase is None:
                 return {"ok": False, "motivo": f"no encontre la frase {nombre!r}"}
 
+            # El intento se lee con la armonica de la FRASE y no con la que la
+            # app tiene puesta: comparar dos tablaturas leidas con armonicas
+            # distintas no significaria nada.
             try:
                 resultado = transcripcion.desde_archivo(
                     ruta_temporal, frase.tonalidad, frase.posicion, frase.escala)
@@ -794,6 +834,7 @@ class Manejador(SimpleHTTPRequestHandler):
             "nombre_posicion": (tablas.NOMBRES_POSICIONES.get(estado.posicion, "")
                                 if estado.posicion else ""),
             "tono_resultante": tono_resultante,
+            "tonalidades": list(tablas.TONALIDADES_DISPONIBLES),
             "diagrama": diagrama_de_la_armonica(
                 estado.tonalidad, estado.posicion, estado.escala
             ),

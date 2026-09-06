@@ -590,15 +590,26 @@ def wav_de(tabs, tonalidad="C", duracion_nota=0.45):
     return bytes_de_wav(muestras)
 
 
-def subir(base, ruta, nombre, datos):
-    """Un POST con el nombre en la URL y el audio en el cuerpo."""
+def subir(base, ruta, nombre, datos, **opciones):
+    """Un POST con el nombre y las opciones en la URL, y el audio en el cuerpo."""
+    consulta = "?nombre=" + urllib.parse.quote(nombre)
+    for clave, valor in opciones.items():
+        consulta += "&" + clave + "=" + urllib.parse.quote(str(valor))
+
     pedido = urllib.request.Request(
-        base + ruta + "?nombre=" + urllib.parse.quote(nombre),
-        data=datos, method="POST",
+        base + ruta + consulta, data=datos, method="POST",
         headers={"Content-Type": "application/octet-stream"},
     )
     with urllib.request.urlopen(pedido, timeout=30) as respuesta:
         return json.loads(respuesta.read())
+
+
+def wav_polifonico():
+    """Cuatro notas sonando juntas: lo que un detector monofonico no resuelve."""
+    return bytes_de_wav(sum(
+        generar_wav.generar_nota(frecuencia, 3.0, volumen=0.25)
+        for frecuencia in (196.0, 246.94, 293.66, 392.0)
+    ))
 
 
 def test_importar_un_wav_lo_guarda_como_frase(servidor_andando, carpeta_de_frases):
@@ -648,13 +659,8 @@ def test_un_audio_con_banda_no_se_guarda_como_frase(
     para siempre y todas las practicas contra ella medirian contra notas
     inventadas. Mejor no guardar nada y decir por que.
     """
-    juntas = sum(
-        generar_wav.generar_nota(frecuencia, 3.0, volumen=0.25)
-        for frecuencia in (196.0, 246.94, 293.66, 392.0)
-    )
-
     respuesta = subir(servidor_andando, "/api/frases/importar",
-                      "la base entera", bytes_de_wav(juntas))
+                      "la base entera", wav_polifonico())
 
     assert respuesta["ok"] is False
     assert "monofon" in respuesta["motivo"]
@@ -726,3 +732,142 @@ def test_el_audio_subido_no_queda_tirado_en_el_disco(
     subir(servidor_andando, "/api/frases/importar", "con banda", b"no es un wav")
 
     assert os.listdir(str(temporales)) == []
+
+
+# =============================================================================
+# Con que armonica se grabo el archivo
+#
+# La app NO lo puede deducir (ver tests/test_transcripcion.py), pero Bruno si
+# lo sabe. Por eso se manda como dato y no se adivina.
+# =============================================================================
+
+def test_los_datos_iniciales_traen_las_armonicas_disponibles(servidor_andando):
+    """El selector de la web se llena con esto."""
+    datos = traer_json(servidor_andando, "/api/inicio")
+    assert "C" in datos["tonalidades"]
+    assert datos["tonalidad"] in datos["tonalidades"]
+
+
+def test_importar_usa_la_armonica_que_le_decis(servidor_andando, carpeta_de_frases):
+    """
+    El mismo audio, importado como armonica en Do y como armonica en La.
+
+    Son dos tablaturas distintas para el mismo sonido, y las dos son correctas
+    segun con que armonica se haya tocado. Este dato lo pone el que sube el
+    archivo porque es el unico que lo sabe.
+    """
+    audio_grabado = wav_de(["4", "-4", "-5"])
+
+    como_do = subir(servidor_andando, "/api/frases/importar", "en do",
+                    audio_grabado, tonalidad="C")
+    como_la = subir(servidor_andando, "/api/frases/importar", "en la",
+                    audio_grabado, tonalidad="A")
+
+    assert como_do["frase"]["tonalidad"] == "C"
+    assert como_la["frase"]["tonalidad"] == "A"
+    assert como_do["frase"]["tab"] != como_la["frase"]["tab"]
+
+    # Y la frase guardada se acuerda, asi que el intento se lee igual que ella.
+    assert frases.buscar("en la").tonalidad == "A"
+
+
+def test_sin_decir_nada_se_usa_la_armonica_de_la_sesion(
+        servidor_andando, carpeta_de_frases):
+    respuesta = subir(servidor_andando, "/api/frases/importar", "por defecto",
+                      wav_de(["4", "-4"]))
+    assert respuesta["frase"]["tonalidad"] == "C"
+
+
+def test_una_armonica_que_no_existe_se_rechaza(servidor_andando, carpeta_de_frases):
+    respuesta = subir(servidor_andando, "/api/frases/importar", "rara",
+                      wav_de(["4", "-4"]), tonalidad="H")
+    assert respuesta["ok"] is False
+    assert "H" in respuesta["motivo"]
+    assert frases.listar() == []
+
+
+# =============================================================================
+# La salida de emergencia
+# =============================================================================
+
+@pytest.fixture
+def umbral_imposible(monkeypatch):
+    """
+    Hace que hasta una grabacion perfecta no pase el control.
+
+    POR QUE SE FUERZA EL UMBRAL EN VEZ DE FABRICAR UN AUDIO DUDOSO
+
+    Porque el audio dudoso casi no existe. Midiendo una melodia con una base
+    encima, el puntaje de monofonia va de 0.83 (transcribe bien) a 0.00 sin
+    escalones: cuando el control falla, ya no quedaba ninguna nota que
+    rescatar. La zona intermedia que esta salida de emergencia atiende —una
+    grabacion real con ruido de sala, reverb o vibrato— no se puede fabricar
+    con senos.
+
+    Asi que se prueba la LOGICA, que es lo que este proyecto controla: que al
+    rechazar devuelva la tablatura, y que con `igual` la guarde avisando.
+    """
+    monkeypatch.setattr(servidor.transcripcion, "MONOFONIA_MINIMA", 0.99)
+
+
+def test_cuando_rechaza_muestra_lo_que_habria_transcrito(
+        servidor_andando, carpeta_de_frases, umbral_imposible):
+    """
+    El umbral de monofonia es una heuristica, no una ley.
+
+    Rechazar sin mostrar nada obliga a creerle a la app. Mostrando la
+    tablatura, el que decide es el unico que puede: el que sabe cual era la
+    frase. Lo unico que se garantiza es que la decision se tome MIRANDO.
+    """
+    respuesta = subir(servidor_andando, "/api/frases/importar",
+                      "dudosa", wav_de(["-2", "4", "-4"]))
+
+    assert respuesta["ok"] is False
+    assert respuesta["se_puede_igual"] is True
+    assert respuesta["vista_previa"] == ["-2", "4", "-4"]
+    assert frases.listar() == []
+
+
+def test_con_igual_la_guarda_pero_deja_dicho_que_la_salteo(
+        servidor_andando, carpeta_de_frases, umbral_imposible):
+    respuesta = subir(servidor_andando, "/api/frases/importar",
+                      "la guardo igual", wav_de(["-2", "4", "-4"]), igual="1")
+
+    assert respuesta["ok"] is True
+    assert any("salteando" in aviso for aviso in respuesta["avisos"])
+    assert frases.buscar("la guardo igual") is not None
+
+
+def test_una_base_encima_no_ofrece_guardarla_igual(
+        servidor_andando, carpeta_de_frases):
+    """
+    El caso real: un audio con la base sonando atras.
+
+    No hay nada que ofrecer, y no es por prudencia: para cuando el control
+    falla, el detector ya no reconocio ni una nota. Este test documenta que la
+    salida de emergencia NO sirve para rescatar una grabacion con banda.
+    """
+    respuesta = subir(servidor_andando, "/api/frases/importar",
+                      "con la base", wav_polifonico())
+
+    assert respuesta["ok"] is False
+    assert "monofon" in respuesta["motivo"]
+    assert respuesta["se_puede_igual"] is False
+    assert respuesta["vista_previa"] == []
+
+
+def test_un_audio_mudo_no_ofrece_guardarlo_igual(servidor_andando, carpeta_de_frases):
+    """
+    No hay nada que decidir: no hay ni una nota.
+
+    La salida de emergencia solo tiene sentido cuando hay una tablatura que
+    mirar. Ofrecer "guardala igual" sobre cero notas seria ofrecer guardar
+    una frase vacia.
+    """
+    import numpy
+
+    mudo = bytes_de_wav(numpy.zeros(44100, dtype=numpy.float32))
+    respuesta = subir(servidor_andando, "/api/frases/importar", "silencio", mudo)
+
+    assert respuesta["ok"] is False
+    assert respuesta.get("se_puede_igual") is False

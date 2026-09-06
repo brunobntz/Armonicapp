@@ -100,19 +100,34 @@
       <input id="nombre-frase" type="text" placeholder="nombre de la frase"
              maxlength="60">
       <button id="boton-grabar-frase" class="principal">Grabar</button>
-      <label class="como-boton" id="etiqueta-importar">
-        Importar un .wav
-        <input id="archivo-frase" type="file" accept=".wav,audio/wav">
-      </label>
       <button id="boton-terminar-frase" class="secundario" hidden>
         Terminar
       </button>
       <span id="estado-frase"></span>
     </div>
+
+    <!-- El selector de armónica va en esta línea y no arriba a propósito:
+         solo afecta a lo que importás. Lo que grabás con el micrófono usa la
+         armónica con la que arrancó la app, y no habría con qué discutirle. -->
+    <div class="controles fila-importar">
+      <label class="como-boton" id="etiqueta-importar">
+        Importar un audio
+        <input id="archivo-frase" type="file" accept="audio/*,.wav,.m4a,.mp3,.opus">
+      </label>
+      <label for="tonalidad-frase" class="ayuda">grabado con armónica en</label>
+      <select id="tonalidad-frase"></select>
+    </div>
     <p class="ayuda">
-      El .wav puede ser tuyo o de Leandro. Tiene que ser la armónica sola:
-      si atrás hay una base sonando, el detector de tono no puede separarlas
-      y la app te lo va a decir en vez de guardar una frase inventada.
+      El audio puede ser tuyo o de Leandro. <strong>Decile con qué armónica se
+      grabó</strong>: eso la app no lo puede deducir, y con la armónica
+      equivocada la tablatura sale mal sin dar ningún error.
+      Si no es un <code>.wav</code> lo convierte sola, siempre que tengas
+      ffmpeg instalado.
+    </p>
+    <p class="ayuda">
+      Conviene que sea la armónica sola. Si atrás hay una base sonando, el
+      detector no puede separarlas: te lo va a decir y te va a mostrar qué
+      habría transcrito, para que decidas vos si sirve.
     </p>
   </section>
 

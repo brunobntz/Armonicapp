@@ -908,11 +908,28 @@ def _frase_desde_archivo(argumentos, nombre):
 
     sirve, motivo, avisos = transcripcion.revisar(resultado, argumentos.tonalidad)
 
-    if not sirve:
+    if not sirve and not argumentos.igual:
         print()
         print(motivo)
         print()
+        # No se guarda nada, pero se muestra lo que HABRIA salido. El umbral
+        # es una heuristica, no una ley: el que reconoce si esa tablatura es
+        # la frase de Leandro sos vos. Lo unico que la app se asegura es que
+        # lo decidas MIRANDO el resultado.
+        reconocidas = resultado.reconocidas
+        if reconocidas:
+            print("Esto es lo que habria transcrito:")
+            print()
+            print("  " + " ".join(e.como_tab() for e in reconocidas[:24])
+                  + (" ..." if len(reconocidas) > 24 else ""))
+            print()
+            print("Si reconoces la frase, guardala igual agregando  --igual")
+            print()
         return None
+
+    if not sirve:
+        print()
+        print(f"  OJO: guardada salteando el control. {motivo}")
 
     for aviso in avisos:
         print()
@@ -1185,6 +1202,9 @@ def crear_parser():
                              "compara un archivo en vez del microfono)")
     parser.add_argument("--frases", action="store_true",
                         help="lista las frases guardadas")
+    parser.add_argument("--igual", action="store_true",
+                        help="importa la frase aunque no pase la revision "
+                             "de monofonia (mirá primero la tablatura)")
     parser.add_argument("--monofonia", action="store_true",
                         help="mide si un .wav se puede transcribir")
     parser.add_argument("--que-tono", action="store_true",
