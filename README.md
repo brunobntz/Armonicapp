@@ -282,9 +282,12 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 602 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 603 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
+
+Uno solo se saltea si no tenés ffmpeg instalado: es el que convierte un
+`.m4a` de verdad. Los demás no necesitan nada.
 
 Varios de ellos existen porque encontraron un error de verdad, y el comentario
 lo cuenta. Vale la pena leerlos: son la documentación de por qué el código es

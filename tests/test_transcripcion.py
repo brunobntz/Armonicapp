@@ -324,3 +324,34 @@ def test_una_base_bajita_pasa_el_control_y_igual_pierde_notas(tmp_path):
     assert sirve is True                                   # el control la deja pasar
     assert [e.como_tab() for e in resultado.reconocidas] == ["-4", "-5", "6"]
     assert len(resultado.reconocidas) < 5                  # y perdio notas igual
+
+
+@pytest.mark.skipif(not audio.hay_ffmpeg(), reason="hace falta ffmpeg instalado")
+def test_un_m4a_de_verdad_se_lee_entero(tmp_path):
+    """
+    La prueba de punta a punta, con AAC real y no con un archivo disfrazado.
+
+    Los otros tests de conversión reemplazan a ffmpeg por una función falsa,
+    para que la suite ande en cualquier máquina. Este corre el ffmpeg de
+    verdad y por eso se saltea cuando no está instalado: vale la pena tenerlo
+    igual, porque es el único que verifica que los flags que le pasamos
+    (mono, 44100, 16 bits) producen algo que la app pueda leer.
+
+    AAC es el codec que mandan WhatsApp y el iPhone, que es de donde van a
+    venir las frases de Leandro.
+    """
+    import subprocess
+
+    tabs = ["-2", "-3''", "4", "-4", "-5", "6"]
+    origen = escribir(tmp_path, tabs)
+    destino = tmp_path / "de_whatsapp.m4a"
+
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", origen,
+         "-c:a", "aac", "-b:a", "96k", str(destino)],
+        check=True,
+    )
+
+    resultado = transcripcion.desde_archivo(str(destino), "C")
+
+    assert [e.como_tab() for e in resultado.reconocidas] == tabs
