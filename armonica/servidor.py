@@ -41,14 +41,16 @@ frena a esperar al que consume.
 
 import json
 import os
+import tempfile
 import threading
+import urllib.parse
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
 from armonica import (audio, exportacion, frases, mapeo, posiciones,
                       prioridades, resumen as modulo_resumen, segmentacion,
-                      tablas, teoria, tono)
+                      tablas, teoria, tono, transcripcion)
 
 
 CARPETA_WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -56,6 +58,22 @@ CARPETA_WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 # Cada cuánto le mandamos el estado al navegador. Más de quince por segundo no
 # lo ve nadie y solo gasta CPU.
 REFRESCOS_POR_SEGUNDO = 15
+
+# El tope de un audio subido. Sesenta megas son unos diez minutos de .wav mono
+# de 16 bits: muchísimo más que cualquier frase. El límite existe para que un
+# archivo equivocado no se lea entero a memoria antes de darnos cuenta.
+MAXIMO_SUBIDA_BYTES = 60 * 1024 * 1024
+
+# Lo que se le dice al navegador cuando el archivo no se puede leer. El error
+# de audio.leer_wav nombra el archivo, que en la terminal es justo lo que
+# queres saber; acá ese archivo es un temporal con nombre inventado y decirlo
+# solo confunde. Mismo problema, dos mensajes distintos según quién pregunta.
+NO_ES_UN_WAV = (
+    "Ese archivo no es un .wav de 16 bits. Si lo grabaste con el teléfono o "
+    "con otra app, puede ser un m4a o un mp3: hay que convertirlo a .wav. "
+    "En Windows 11, la Grabadora de sonido tiene el formato en su "
+    "configuración."
+)
 
 
 class EstadoCompartido:
@@ -385,6 +403,42 @@ def historial(carpeta=None):
 # El servidor HTTP
 # =============================================================================
 
+def comparacion_como_diccionario(comparacion, frase):
+    """
+    Una Comparacion lista para mandarle al navegador.
+
+    Vive suelta y no adentro del Manejador porque la usan dos caminos
+    distintos: practicar en vivo por el microfono y comparar un .wav subido.
+    Es exactamente el mismo informe; lo unico que cambia es de donde salieron
+    los eventos.
+    """
+    relativa = comparacion.dispersion_relativa()
+
+    return {
+        "nombre": frase.nombre,
+        "esperadas": comparacion.notas_esperadas(),
+        "aciertos": comparacion.aciertos(),
+        "porcentaje": round(comparacion.porcentaje_de_notas()),
+        "faltantes": [n.tab for n in comparacion.faltantes],
+        "sobrantes": comparacion.sobrantes,
+        "cambiadas": [
+            {"esperada": a, "tocada": b} for a, b in comparacion.cambiadas
+        ],
+        "velocidad": round(comparacion.diferencia_de_velocidad()),
+        "dispersion_ms": round(comparacion.dispersion_ms()),
+        "relativa": round(relativa, 2) if relativa is not None else None,
+        "calidad": comparacion.calidad(),
+        "notas": [
+            {
+                "tab": nota_ref.tab,
+                "desvio_ms": round(desvio),
+                "cents": round(evento.cents - nota_ref.cents),
+            }
+            for nota_ref, evento, desvio in comparacion.pares
+        ],
+    }
+
+
 class Manejador(SimpleHTTPRequestHandler):
     """
     Atiende al navegador.
@@ -421,6 +475,15 @@ class Manejador(SimpleHTTPRequestHandler):
     # --- POST ---
 
     def do_POST(self):
+        # Las rutas que traen un .wav se atienden primero: su cuerpo son bytes
+        # de audio, y leerlo como JSON lo consumiria sin poder recuperarlo.
+        ruta, _, consulta = self.path.partition("?")
+
+        if ruta == "/api/frases/importar":
+            return self._responder_json(self._importar_frase(consulta))
+        if ruta == "/api/frases/intento":
+            return self._responder_json(self._intento_de_archivo(consulta))
+
         cuerpo = self._leer_cuerpo()
 
         if self.path == "/api/comenzar":
@@ -440,6 +503,43 @@ class Manejador(SimpleHTTPRequestHandler):
             return json.loads(self.rfile.read(largo).decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
             return {}
+
+    def _leer_audio_subido(self, consulta):
+        """
+        Lee un .wav que subio el navegador. Devuelve (nombre, ruta, error).
+
+        EL NOMBRE VA EN LA URL Y EL AUDIO EN EL CUERPO
+
+        Lo normal para subir un archivo seria multipart/form-data, que mezcla
+        campos de texto y archivos en un solo cuerpo. Pero parsear multipart a
+        mano es justo donde viven los errores, y no hace falta: mandamos el
+        nombre en la URL y los bytes crudos en el cuerpo. Una linea de cada
+        lado y nada que parsear.
+
+        El audio va a un archivo temporal porque audio.leer_wav trabaja con
+        rutas y no con bytes. El que llama lo borra.
+        """
+        parametros = urllib.parse.parse_qs(consulta)
+        nombre = (parametros.get("nombre", [""])[0] or "").strip()
+        if not nombre:
+            return None, None, "falta el nombre de la frase"
+
+        largo = int(self.headers.get("Content-Length") or 0)
+        if largo <= 0:
+            return None, None, "no llego ningun audio"
+        if largo > MAXIMO_SUBIDA_BYTES:
+            megas = MAXIMO_SUBIDA_BYTES // (1024 * 1024)
+            return None, None, f"el archivo pasa los {megas} MB"
+
+        datos = self.rfile.read(largo)
+
+        temporal = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        try:
+            temporal.write(datos)
+        finally:
+            temporal.close()
+
+        return nombre, temporal.name, ""
 
     # --- Las acciones ---
 
@@ -517,43 +617,108 @@ class Manejador(SimpleHTTPRequestHandler):
         }
 
     def _terminar_practicando(self, estado):
-        """Compara lo tocado contra la frase de referencia."""
+        """Compara lo que acabas de tocar contra la frase de referencia."""
         frase = frases.buscar(estado.nombre_frase)
         if frase is None:
             return {"ok": False, "modo": "practicar",
                     "motivo": "la frase ya no esta"}
 
-        comparacion = frases.comparar(frase, estado.eventos)
+        return {
+            "ok": True,
+            "modo": "practicar",
+            "comparacion": comparacion_como_diccionario(
+                frases.comparar(frase, estado.eventos), frase),
+        }
+
+    def _importar_frase(self, consulta):
+        """
+        Guarda como frase de referencia un .wav que subiste.
+
+        Es la puerta de entrada de las grabaciones de Leandro y de tus propios
+        audios ya grabados. Antes de guardar nada, revisa que el audio sirva:
+        una frase mal transcrita queda guardada para siempre y arruina todas
+        las practicas que vengan despues.
+        """
+        estado = type(self).estado
+        nombre, ruta_temporal, error = self._leer_audio_subido(consulta)
+        if error:
+            return {"ok": False, "motivo": error}
+
+        try:
+            try:
+                resultado = transcripcion.desde_archivo(
+                    ruta_temporal, estado.tonalidad,
+                    estado.posicion, estado.escala)
+            except ValueError:
+                return {"ok": False, "motivo": NO_ES_UN_WAV}
+
+            sirve, motivo, avisos = transcripcion.revisar(
+                resultado, estado.tonalidad)
+            if not sirve:
+                return {"ok": False, "motivo": motivo}
+
+            try:
+                frase = frases.desde_eventos(
+                    resultado.eventos, nombre, estado.tonalidad,
+                    estado.posicion, estado.escala)
+            except ValueError as fallo:
+                return {"ok": False, "motivo": str(fallo)}
+        finally:
+            os.remove(ruta_temporal)
+
+        ruta = frases.guardar(frase)
+
+        # El audio queda al lado del JSON. Una frase de Leandro se lee, pero
+        # sobre todo se ESCUCHA: sin el audio guardado, la referencia se
+        # convierte en una tablatura y perdes justo el ritmo, que es lo que
+        # habias venido a buscar.
+        audio.escribir_wav(os.path.splitext(ruta)[0] + "_audio.wav",
+                           resultado.muestras, resultado.frecuencia_muestreo)
+
+        return {
+            "ok": True,
+            "avisos": avisos,
+            "frase": {
+                "nombre": frase.nombre,
+                "notas": frase.cantidad,
+                "duracion_seg": round(frase.duracion_seg, 1),
+                "tab": frase.tablatura(),
+            },
+        }
+
+    def _intento_de_archivo(self, consulta):
+        """
+        Compara un .wav subido contra una frase guardada.
+
+        Sirve para cuando ya grabaste el intento con la grabadora de Windows,
+        o para comparar dos audios viejos sin volver a tocar.
+        """
+        nombre, ruta_temporal, error = self._leer_audio_subido(consulta)
+        if error:
+            return {"ok": False, "motivo": error}
+
+        try:
+            frase = frases.buscar(nombre)
+            if frase is None:
+                return {"ok": False, "motivo": f"no encontre la frase {nombre!r}"}
+
+            try:
+                resultado = transcripcion.desde_archivo(
+                    ruta_temporal, frase.tonalidad, frase.posicion, frase.escala)
+            except ValueError:
+                return {"ok": False, "motivo": NO_ES_UN_WAV}
+        finally:
+            os.remove(ruta_temporal)
+
+        if not resultado.reconocidas:
+            return {"ok": False,
+                    "motivo": "no se reconocio ninguna nota en ese audio"}
 
         return {
             "ok": True,
             "modo": "practicar",
-            "comparacion": {
-                "nombre": frase.nombre,
-                "esperadas": comparacion.notas_esperadas(),
-                "aciertos": comparacion.aciertos(),
-                "porcentaje": round(comparacion.porcentaje_de_notas()),
-                "faltantes": [n.tab for n in comparacion.faltantes],
-                "sobrantes": comparacion.sobrantes,
-                "cambiadas": [
-                    {"esperada": a, "tocada": b}
-                    for a, b in comparacion.cambiadas
-                ],
-                "velocidad": round(comparacion.diferencia_de_velocidad()),
-                "dispersion_ms": round(comparacion.dispersion_ms()),
-                "relativa": (round(comparacion.dispersion_relativa(), 2)
-                             if comparacion.dispersion_relativa() is not None
-                             else None),
-                "calidad": comparacion.calidad(),
-                "notas": [
-                    {
-                        "tab": nota_ref.tab,
-                        "desvio_ms": round(desvio),
-                        "cents": round(evento.cents - nota_ref.cents),
-                    }
-                    for nota_ref, evento, desvio in comparacion.pares
-                ],
-            },
+            "comparacion": comparacion_como_diccionario(
+                frases.comparar(frase, resultado.eventos), frase),
         }
 
     def _listar_frases(self):

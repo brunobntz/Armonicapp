@@ -10,13 +10,17 @@ Cómo correrlos:   python -m pytest tests/test_servidor.py -v
 
 import json
 import os
+import tempfile
 import threading
+import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 
 import pytest
 
-from armonica import exportacion, frases, mapeo, segmentacion, servidor
+from armonica import (audio, exportacion, frases, mapeo, segmentacion,
+                      servidor)
+from herramientas import generar_wav
 
 
 # =============================================================================
@@ -558,3 +562,167 @@ def test_el_estado_en_vivo_dice_en_que_modo_esta():
 
     estado.reiniciar()
     assert estado.como_diccionario()["modo"] == "sesion"
+
+
+# =============================================================================
+# Subir un .wav
+#
+# El camino de las grabaciones de Leandro y de los audios que Bruno ya tiene
+# grabados. El nombre va en la URL y los bytes crudos en el cuerpo.
+# =============================================================================
+
+def bytes_de_wav(muestras):
+    """Los bytes de un .wav con esas muestras, listos para subir."""
+    descriptor, ruta = tempfile.mkstemp(suffix=".wav")
+    os.close(descriptor)
+    try:
+        audio.escribir_wav(ruta, muestras)
+        with open(ruta, "rb") as archivo:
+            return archivo.read()
+    finally:
+        os.remove(ruta)
+
+
+def wav_de(tabs, tonalidad="C", duracion_nota=0.45):
+    """Un .wav con esas notas, en memoria."""
+    muestras, _ = generar_wav.generar_secuencia(
+        tabs, tonalidad, duracion_nota=duracion_nota)
+    return bytes_de_wav(muestras)
+
+
+def subir(base, ruta, nombre, datos):
+    """Un POST con el nombre en la URL y el audio en el cuerpo."""
+    pedido = urllib.request.Request(
+        base + ruta + "?nombre=" + urllib.parse.quote(nombre),
+        data=datos, method="POST",
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    with urllib.request.urlopen(pedido, timeout=30) as respuesta:
+        return json.loads(respuesta.read())
+
+
+def test_importar_un_wav_lo_guarda_como_frase(servidor_andando, carpeta_de_frases):
+    respuesta = subir(servidor_andando, "/api/frases/importar",
+                      "lick de lean", wav_de(["-2", "4", "-4", "-5"]))
+
+    assert respuesta["ok"] is True
+    assert respuesta["frase"]["notas"] == 4
+    assert respuesta["frase"]["tab"] == ["-2", "4", "-4", "-5"]
+    assert respuesta["avisos"] == []
+
+    guardada = frases.buscar("lick de lean")
+    assert guardada is not None
+    assert guardada.cantidad == 4
+
+
+def test_el_audio_importado_queda_al_lado_de_la_frase(
+        servidor_andando, carpeta_de_frases):
+    """
+    Una frase de Leandro se lee, pero sobre todo se ESCUCHA.
+
+    Sin el audio guardado, la referencia se degrada a una tablatura y perdes
+    justo el ritmo, que es lo unico que la tablatura no sabe transmitir.
+    """
+    subir(servidor_andando, "/api/frases/importar", "con audio",
+          wav_de(["4", "-4", "-5"]))
+
+    guardados = sorted(os.listdir(carpeta_de_frases))
+    assert "con_audio.json" in guardados
+    assert "con_audio_audio.wav" in guardados
+
+
+def test_importar_sin_nombre_se_rechaza(servidor_andando, carpeta_de_frases):
+    respuesta = subir(servidor_andando, "/api/frases/importar", "  ",
+                      wav_de(["4", "-4"]))
+    assert respuesta["ok"] is False
+    assert "nombre" in respuesta["motivo"]
+    assert frases.listar() == []
+
+
+def test_un_audio_con_banda_no_se_guarda_como_frase(
+        servidor_andando, carpeta_de_frases):
+    """
+    EL CONTROL QUE MAS IMPORTA DE TODA LA SOLAPA.
+
+    Si se guardara una frase transcrita de un audio polifonico, quedaria ahi
+    para siempre y todas las practicas contra ella medirian contra notas
+    inventadas. Mejor no guardar nada y decir por que.
+    """
+    juntas = sum(
+        generar_wav.generar_nota(frecuencia, 3.0, volumen=0.25)
+        for frecuencia in (196.0, 246.94, 293.66, 392.0)
+    )
+
+    respuesta = subir(servidor_andando, "/api/frases/importar",
+                      "la base entera", bytes_de_wav(juntas))
+
+    assert respuesta["ok"] is False
+    assert "monofon" in respuesta["motivo"]
+    assert frases.listar() == []
+
+
+def test_un_archivo_que_no_es_wav_da_un_error_claro(
+        servidor_andando, carpeta_de_frases):
+    """
+    Un m4a o un mp3 renombrado. Pasa seguido, y no tiene que romper nada.
+
+    El mensaje NO nombra el archivo, aunque el error original si lo haga: acá
+    ese archivo es un temporal con nombre inventado, y decirlo solo confunde.
+    En la terminal, en cambio, el nombre es justo lo que queres saber.
+    """
+    respuesta = subir(servidor_andando, "/api/frases/importar",
+                      "no es un wav", b"esto no es audio de ninguna manera")
+
+    assert respuesta["ok"] is False
+    assert "m4a" in respuesta["motivo"]
+    assert "Temp" not in respuesta["motivo"]
+    assert frases.listar() == []
+
+
+def test_comparar_un_wav_contra_una_frase_guardada(
+        servidor_andando, carpeta_de_frases):
+    """
+    El intento tambien puede venir de un archivo.
+
+    Sirve cuando ya grabaste con la grabadora de Windows, y para comparar dos
+    audios viejos sin volver a tocar.
+    """
+    subir(servidor_andando, "/api/frases/importar", "escala corta",
+          wav_de(["-2", "4", "-4", "-5"]))
+
+    respuesta = subir(servidor_andando, "/api/frases/intento", "escala corta",
+                      wav_de(["-2", "4", "-4", "-5"], duracion_nota=0.55))
+
+    assert respuesta["ok"] is True
+    comparacion = respuesta["comparacion"]
+    assert comparacion["esperadas"] == 4
+    assert comparacion["porcentaje"] == 100
+    # Mismo audio, 22% mas lento. Eso es una decision y no un error.
+    assert comparacion["velocidad"] > 15
+    assert comparacion["calidad"] == "muy parecida"
+
+
+def test_comparar_contra_una_frase_que_no_existe(servidor_andando, carpeta_de_frases):
+    respuesta = subir(servidor_andando, "/api/frases/intento", "fantasma",
+                      wav_de(["4", "-4"]))
+    assert respuesta["ok"] is False
+    assert "no encontre" in respuesta["motivo"]
+
+
+def test_el_audio_subido_no_queda_tirado_en_el_disco(
+        servidor_andando, carpeta_de_frases, tmp_path, monkeypatch):
+    """
+    El .wav va a un archivo temporal porque audio.leer_wav trabaja con rutas.
+
+    Si no se borrara, cada importacion dejaria un archivo para siempre. Se
+    apunta el temporal a una carpeta vacia y se cuenta lo que queda.
+    """
+    temporales = tmp_path / "temporales"
+    temporales.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(temporales))
+
+    subir(servidor_andando, "/api/frases/importar", "una", wav_de(["4", "-4"]))
+    subir(servidor_andando, "/api/frases/intento", "una", wav_de(["4", "-4"]))
+    subir(servidor_andando, "/api/frases/importar", "con banda", b"no es un wav")
+
+    assert os.listdir(str(temporales)) == []

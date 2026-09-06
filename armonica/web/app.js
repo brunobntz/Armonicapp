@@ -122,6 +122,60 @@ function configurarBotones() {
       boton.disabled = false;
       terminarFrase(respuesta);
     });
+
+  document.getElementById("archivo-frase")
+    .addEventListener("change", async (evento) => {
+      const archivo = evento.target.files[0];
+      evento.target.value = "";               // asi se puede volver a elegir
+      if (!archivo) return;
+
+      const campo = document.getElementById("nombre-frase");
+      const nombre = campo.value.trim() || sinExtension(archivo.name);
+      campo.value = nombre;
+
+      document.getElementById("seccion-comparacion").hidden = true;
+      avisarFrase("Analizando " + archivo.name + "...");
+
+      const respuesta = await subir("/api/frases/importar", nombre, archivo);
+      if (!respuesta.ok) {
+        avisarFrase(respuesta.motivo || "no pude importar ese audio");
+        return;
+      }
+
+      const frase = respuesta.frase;
+      avisarFrase("Importada \u00ab" + frase.nombre + "\u00bb: " + frase.notas +
+                  " notas en " + frase.duracion_seg.toFixed(1) + " s.");
+      (respuesta.avisos || []).forEach(mostrarAviso);
+      campo.value = "";
+      cargarFrases();
+    });
+}
+
+
+/* Sube un archivo. El nombre va en la URL y los bytes crudos en el cuerpo:
+ * es lo mismo que hace multipart pero sin nada que parsear del otro lado. */
+async function subir(ruta, nombre, archivo) {
+  const respuesta = await fetch(
+    ruta + "?nombre=" + encodeURIComponent(nombre),
+    { method: "POST", body: archivo }
+  );
+  return respuesta.json();
+}
+
+
+function sinExtension(nombre) {
+  return nombre.replace(/\.[^.]+$/, "");
+}
+
+
+/* Un aviso no es un error: la frase se guardo igual. Se muestra aparte para
+ * que no se confunda con los mensajes de "no pude". */
+function mostrarAviso(texto) {
+  const caja = document.createElement("div");
+  caja.className = "aviso";
+  caja.textContent = texto;
+  document.getElementById("lista-frases").before(caja);
+  setTimeout(() => caja.remove(), 20000);
 }
 
 
@@ -501,6 +555,15 @@ function sincronizarBotones(estado) {
   document.querySelectorAll("#lista-frases button")
     .forEach((boton) => { boton.disabled = escuchando; });
 
+  // Un <label> no se puede deshabilitar: se apaga el <input> que tiene adentro
+  // y se lo pinta de apagado para que se note.
+  document.querySelectorAll(".como-boton, .frase label.audio")
+    .forEach((etiqueta) => {
+      etiqueta.classList.toggle("apagado", escuchando);
+      const entrada = etiqueta.querySelector("input");
+      if (entrada) entrada.disabled = escuchando;
+    });
+
   if (enFrase) {
     avisarFrase(modo === "frase"
       ? "Grabando \u00ab" + estado.nombre_frase + "\u00bb. Toca la frase y dale Terminar."
@@ -534,6 +597,9 @@ async function cargarFrases() {
           (frase.fecha ? " \u00b7 " + frase.fecha : "") + "</div>" +
       "</div>" +
       '<button data-practicar="' + escapar(frase.nombre) + '">Practicar</button>' +
+      '<label class="audio">Con un .wav' +
+        '<input type="file" accept=".wav,audio/wav" data-intento="' +
+        escapar(frase.nombre) + '"></label>' +
       '<button class="borrar" data-borrar="' + escapar(frase.nombre) + '">Borrar</button>' +
     "</div>"
   ).join("");
@@ -542,6 +608,26 @@ async function cargarFrases() {
     boton.addEventListener("click", async () => {
       document.getElementById("seccion-comparacion").hidden = true;
       await comenzar({ modo: "practicar", nombre: boton.dataset.practicar });
+    });
+  });
+
+  contenedor.querySelectorAll("[data-intento]").forEach((entrada) => {
+    entrada.addEventListener("change", async (evento) => {
+      const archivo = evento.target.files[0];
+      evento.target.value = "";
+      if (!archivo) return;
+
+      const nombre = entrada.dataset.intento;
+      document.getElementById("seccion-comparacion").hidden = true;
+      avisarFrase("Comparando " + archivo.name + " contra \u00ab" + nombre + "\u00bb...");
+
+      const respuesta = await subir("/api/frases/intento", nombre, archivo);
+      if (!respuesta.ok) {
+        avisarFrase(respuesta.motivo || "no pude comparar ese audio");
+        return;
+      }
+      avisarFrase("");
+      mostrarComparacion(respuesta.comparacion);
     });
   });
 

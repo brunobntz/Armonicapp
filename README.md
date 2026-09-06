@@ -65,7 +65,9 @@ valor por defecto, así que después de la primera vez son cuatro Enter.
 | Ver un acorde y sus notas guía | `python main.py --acorde F7` |
 | Transcribir una grabación | `python main.py --wav grabacion.wav --posicion 12 --escala blues_mayor --detalle` |
 | Guardar una frase de referencia | `python main.py --grabar-frase "lick de 3a" --posicion 3` (o la solapa **Frases** de la web) |
+| Importar una frase de un audio | `python main.py --grabar-frase "lick de Lean" --wav lean_01.wav --posicion 3` |
 | Practicar contra esa frase | `python main.py --practicar "lick de 3a"` (o la solapa **Frases** de la web) |
+| Practicar con un audio ya grabado | `python main.py --practicar "lick de 3a" --wav mi_intento.wav` |
 | Saber con qué armónica se grabó algo | `python main.py --wav ajeno.wav --que-tono` |
 | Medir el ruido de fondo | `python main.py --calibrar` |
 
@@ -125,6 +127,17 @@ Para medir ritmo de verdad hace falta material **métrico**: una escala en
 negras o corcheas parejas sobre la base, no un solo.
 
 **La transcripción** avisa cuando el audio es polifónico, con `--monofonia`.
+Y cuando importás una frase desde un `.wav`, ese control se corre solo y la
+importación se rechaza: una frase de referencia mal transcrita queda guardada
+para siempre y arruina todas las prácticas que vengan después.
+
+Lo que ese control **no** puede hacer es decirte de qué armónica es una
+grabación. Suena a que debería: no puede. Una armónica en Do, con bends,
+alcanza casi todas las notas del registro medio, así que una frase tocada en
+La leída como si fuera en Do cae entera dentro de lo posible —la tablatura
+sale distinta, pero no hay ninguna nota imposible que lo delate. Para eso está
+`--que-tono`, que compara las cuatro armónicas entre sí en vez de mirar una
+sola. Hay un test que documenta ese límite a propósito.
 
 ---
 
@@ -180,6 +193,7 @@ una versión web o de teléfono.
 | `posiciones.py` | Tonalidad por posición, pertenencia a escalas. Lee las tablas escritas a mano. |
 | `teoria.py` | Lo mismo, pero **calculado**. Cubre las 12 posiciones, acordes y arpegios. |
 | `tonalidad.py` | Deduce qué armónica y en qué tono se grabó algo. |
+| `transcripcion.py` | La cadena de un `.wav` a notas, y si ese audio sirve. |
 | `ritmo.py` | Desvío respecto del pulso, y si la medición es confiable. |
 | `tono.py` | El detector YIN, escrito a mano en numpy. |
 | `audio.py` | Leer y escribir `.wav`, ventanas, volumen. |
@@ -219,9 +233,10 @@ Tres solapas. **En vivo** tiene el medidor de afinación con una aguja que se
 mueve suave (en la terminal parpadea quince veces por segundo y no se puede
 leer mientras soplás), el diagrama de la armónica con la escala en verde, y la
 tablatura que vas tocando. **Frases** es el modo "repetí esta frase": grabás
-una frase de referencia con un nombre, y después le das Practicar y te dice
-nota por nota qué erraste, cuánto te desviaste del tiempo y cómo salió cada
-bend. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
+una frase de referencia con un nombre —o importás un `.wav`, tuyo o de
+Leandro—, y después le das Practicar y te dice nota por nota qué erraste,
+cuánto te desviaste del tiempo y cómo salió cada bend. El intento también
+puede ser un archivo, si ya lo grabaste con la grabadora de Windows. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
 los JSON que ya se guardaban.
 
 Los tres modos escuchan exactamente igual: lo único que cambia es qué hace el
@@ -245,7 +260,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 569 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 589 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

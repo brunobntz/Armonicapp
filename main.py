@@ -34,7 +34,8 @@ import config
 from armonica import (afinador, audio, exportacion, frases, mapeo, menu,
                       microfono, pantalla, posiciones, prioridades,
                       resumen as modulo_resumen, ritmo, segmentacion,
-                      tablas, tonalidad as modulo_tonalidad, tono)
+                      tablas, tonalidad as modulo_tonalidad, tono,
+                      transcripcion)
 from armonica.consola import preparar_consola
 
 
@@ -46,23 +47,10 @@ def transcribir_archivo(ruta, tonalidad, posicion=None, escala=None,
     Es la cadena completa del proyecto, en cinco líneas:
         leer audio -> detectar tono -> mapear a agujeros -> agrupar -> marcar
     """
-    muestras, frecuencia_muestreo = audio.leer_wav(ruta)
+    resultado = transcripcion.desde_archivo(ruta, tonalidad, posicion, escala)
 
-    # Normalizar antes de analizar. Sin esto, una grabación con poco volumen
-    # se descarta entera como si fuera silencio. Ver config.NORMALIZAR_ARCHIVOS.
-    if config.NORMALIZAR_ARCHIVOS:
-        muestras = audio.normalizar(muestras)
-
-    mediciones = tono.detectar_en_senal(muestras, frecuencia_muestreo)
-
-    tabla = mapeo.construir_tabla_inversa(tonalidad)
-    eventos = segmentacion.segmentar(mediciones, tabla,
-                                     frecuencia_muestreo=frecuencia_muestreo)
-
-    if posicion is not None and escala:
-        segmentacion.marcar_escala(eventos, tonalidad, posicion, escala)
-
-    return eventos, mediciones, muestras, frecuencia_muestreo
+    return (resultado.eventos, resultado.mediciones,
+            resultado.muestras, resultado.frecuencia_muestreo)
 
 
 def imprimir_resultado(eventos, mediciones, muestras, frecuencia_muestreo,
@@ -888,6 +876,51 @@ def _escuchar_hasta_ctrl_c(tonalidad, posicion, escala, titulo):
     return eventos, audio_grabado, frecuencia_muestreo
 
 
+def _frase_desde_archivo(argumentos, nombre):
+    """
+    Arma una frase a partir de un .wav en vez del microfono.
+
+    Sirve para las grabaciones que te manda Leandro y para tus propios audios
+    ya grabados. Devuelve (eventos, muestras, frecuencia) o None si el audio
+    no sirve.
+
+    LOS DOS CONTROLES
+
+    Un audio que viene de afuera puede tener una banda tocando encima, y puede
+    ser de otra armonica. Los dos casos dan una frase mal transcrita que queda
+    guardada para siempre y arruina cada practica futura. Por eso se revisan
+    antes de guardar y no despues.
+    """
+    print()
+    print(f"Leyendo {argumentos.wav} ...")
+
+    try:
+        resultado = transcripcion.desde_archivo(
+            argumentos.wav, argumentos.tonalidad,
+            argumentos.posicion, argumentos.escala,
+        )
+    except FileNotFoundError:
+        print(f"No encontre el archivo {argumentos.wav}")
+        return None
+    except ValueError as error:
+        print(f"No pude leer el audio: {error}")
+        return None
+
+    sirve, motivo, avisos = transcripcion.revisar(resultado, argumentos.tonalidad)
+
+    if not sirve:
+        print()
+        print(motivo)
+        print()
+        return None
+
+    for aviso in avisos:
+        print()
+        print(f"  OJO: {aviso}")
+
+    return resultado.eventos, resultado.muestras, resultado.frecuencia_muestreo
+
+
 def modo_grabar_frase(argumentos):
     """
     Graba una frase y la guarda como referencia para practicar despues.
@@ -898,17 +931,23 @@ def modo_grabar_frase(argumentos):
     """
     nombre = argumentos.grabar_frase
 
-    eventos, audio_grabado, frecuencia_muestreo = _escuchar_hasta_ctrl_c(
-        argumentos.tonalidad, argumentos.posicion, argumentos.escala,
-        f"Grabando la frase de referencia: {nombre}\nToca la frase como querrias tocarla.",
-    )
+    if argumentos.wav:
+        resultado = _frase_desde_archivo(argumentos, nombre)
+        if resultado is None:
+            return 1
+        eventos, audio_grabado, frecuencia_muestreo = resultado
+    else:
+        eventos, audio_grabado, frecuencia_muestreo = _escuchar_hasta_ctrl_c(
+            argumentos.tonalidad, argumentos.posicion, argumentos.escala,
+            f"Grabando la frase de referencia: {nombre}\nToca la frase como querrias tocarla.",
+        )
 
-    reconocidas = [e for e in eventos if e.nota is not None]
-    if not reconocidas:
-        print()
-        print("No se reconocio ninguna nota. La frase no se guardo.")
-        print("Corre  python main.py --calibrar  si el microfono no engancha.")
-        return 1
+        reconocidas = [e for e in eventos if e.nota is not None]
+        if not reconocidas:
+            print()
+            print("No se reconocio ninguna nota. La frase no se guardo.")
+            print("Corre  python main.py --calibrar  si el microfono no engancha.")
+            return 1
 
     try:
         frase = frases.desde_eventos(
@@ -971,10 +1010,26 @@ def modo_practicar_frase(argumentos):
     print(f"  {frase.cantidad} notas, {frase.duracion_seg:.1f} segundos, "
           f"armonica en {frase.tonalidad}")
 
-    eventos, _, _ = _escuchar_hasta_ctrl_c(
-        frase.tonalidad, frase.posicion, frase.escala,
-        "Ahora toca vos la misma frase.",
-    )
+    if argumentos.wav:
+        # El intento tambien puede venir de un archivo. Util para comparar dos
+        # grabaciones viejas, o la tuya contra la de Leandro, sin tocar ahora.
+        print()
+        print(f"Comparando contra {argumentos.wav} ...")
+        try:
+            resultado = transcripcion.desde_archivo(
+                argumentos.wav, frase.tonalidad, frase.posicion, frase.escala)
+        except FileNotFoundError:
+            print(f"No encontre el archivo {argumentos.wav}")
+            return 1
+        except ValueError as error:
+            print(f"No pude leer el audio: {error}")
+            return 1
+        eventos = resultado.eventos
+    else:
+        eventos, _, _ = _escuchar_hasta_ctrl_c(
+            frase.tonalidad, frase.posicion, frase.escala,
+            "Ahora toca vos la misma frase.",
+        )
 
     comparacion = frases.comparar(frase, eventos)
 
@@ -1123,9 +1178,11 @@ def crear_parser():
     parser.add_argument("--acorde", default=None,
                         help="muestra el arpegio de un acorde (ej: F7, Bbm, C)")
     parser.add_argument("--grabar-frase", default=None, metavar="NOMBRE",
-                        help="graba una frase de referencia")
+                        help="graba una frase de referencia (con --wav, la "
+                             "importa de un archivo en vez del microfono)")
     parser.add_argument("--practicar", default=None, metavar="NOMBRE",
-                        help="practica contra una frase guardada")
+                        help="practica contra una frase guardada (con --wav, "
+                             "compara un archivo en vez del microfono)")
     parser.add_argument("--frases", action="store_true",
                         help="lista las frases guardadas")
     parser.add_argument("--monofonia", action="store_true",

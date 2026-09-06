@@ -283,3 +283,22 @@ def test_normalizar_arregla_una_grabacion_demasiado_baja():
 
     normalizada = audio.normalizar(floja)
     assert audio.volumen_rms(normalizada) > config.UMBRAL_VOLUMEN_RMS
+
+
+def test_un_archivo_que_no_es_wav_da_un_error_claro(tmp_path):
+    """
+    Un mp3 o un m4a renombrado a .wav. Pasa seguido: la grabadora del teléfono
+    guarda en otro formato y el nombre no dice nada.
+
+    Este test existe porque el error salía como `wave.Error`, que NO hereda de
+    ValueError. Todos los que llamaban atrapaban ValueError, así que un archivo
+    equivocado rompía el modo --wav con un traceback y tiraba abajo el pedido
+    en el servidor web, en vez de decir qué pasó.
+    """
+    ruta = tmp_path / "en_realidad_es_un_mp3.wav"
+    ruta.write_bytes(b"ID3 esto no es un wav de ninguna manera")
+
+    with pytest.raises(ValueError) as fallo:
+        audio.leer_wav(str(ruta))
+
+    assert ".wav" in str(fallo.value)

@@ -45,7 +45,20 @@ def leer_wav(ruta):
     que produce nuestro generador de audios de prueba. Si algún día hace falta
     otro formato, este es el lugar.
     """
-    with wave.open(str(ruta), "rb") as archivo:
+    # wave.Error no hereda de ValueError, asi que sin esto un archivo que no
+    # sea .wav —un mp3 o un m4a renombrado, que es lo que pasa cuando la
+    # grabadora del teléfono guarda en otro formato— sube como una excepción
+    # que nadie atrapa. Se traduce acá, una vez, para todos los que llaman.
+    try:
+        archivo_abierto = wave.open(str(ruta), "rb")
+    except wave.Error as error:
+        raise ValueError(
+            f"El archivo {ruta} no es un .wav valido ({error}). "
+            f"Si lo grabaste con el telefono, puede ser un m4a o un mp3 con "
+            f"otro nombre: hay que convertirlo a .wav de 16 bits."
+        )
+
+    with archivo_abierto as archivo:
         canales = archivo.getnchannels()
         bytes_por_muestra = archivo.getsampwidth()
         frecuencia_muestreo = archivo.getframerate()

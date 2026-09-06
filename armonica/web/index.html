@@ -100,11 +100,20 @@
       <input id="nombre-frase" type="text" placeholder="nombre de la frase"
              maxlength="60">
       <button id="boton-grabar-frase" class="principal">Grabar</button>
+      <label class="como-boton" id="etiqueta-importar">
+        Importar un .wav
+        <input id="archivo-frase" type="file" accept=".wav,audio/wav">
+      </label>
       <button id="boton-terminar-frase" class="secundario" hidden>
         Terminar
       </button>
       <span id="estado-frase"></span>
     </div>
+    <p class="ayuda">
+      El .wav puede ser tuyo o de Leandro. Tiene que ser la armónica sola:
+      si atrás hay una base sonando, el detector de tono no puede separarlas
+      y la app te lo va a decir en vez de guardar una frase inventada.
+    </p>
   </section>
 
   <section>
