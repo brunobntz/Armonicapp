@@ -18,7 +18,14 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Antes de la primera sesión, medí el ruido de tu habitación. Es la calibración
+**Lo primero de todo: elegí el micrófono.** Abrí la app, andá a la solapa
+**Ajustes** y dale a Probar. Windows tiene siempre media docena de entradas y
+la predeterminada rara vez es la que usás: en la máquina donde se escribió
+esto era el micrófono de la cámara web, a un metro de la cara. Con el
+equivocado, la app "no anda" y en realidad está escuchando otra cosa. La barra
+de nivel te lo dice en dos segundos.
+
+Después, medí el ruido de tu habitación. Es la calibración
 más importante de todas y toma tres segundos:
 
 ```powershell
@@ -308,7 +315,7 @@ la mediana ni se entera.
 python main.py --web --posicion 12 --escala blues_mayor
 ```
 
-Tres solapas. **En vivo** tiene el medidor de afinación con una aguja que se
+Cuatro solapas. **En vivo** tiene el medidor de afinación con una aguja que se
 mueve suave (en la terminal parpadea quince veces por segundo y no se puede
 leer mientras soplás), el diagrama de la armónica con la escala en verde, y la
 tablatura que vas tocando. **Frases** es el modo "repetí esta frase": grabás
@@ -316,7 +323,14 @@ una frase de referencia con un nombre —o importás un `.wav`, tuyo o de
 Leandro—, y después le das Practicar y te dice nota por nota qué erraste,
 cuánto te desviaste del tiempo y cómo salió cada bend. El intento también
 puede ser un archivo, si ya lo grabaste con la grabadora de Windows. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
-los JSON que ya se guardaban.
+los JSON que ya se guardaban. Y **Ajustes** tiene el micrófono y la
+configuración: la armónica que tenés en la mano, la posición y la escala de
+referencia se cambian ahí, sin reiniciar nada.
+
+Arriba de todo, en **En vivo**, hay una **barra de nivel de entrada**. Es lo
+primero que hay que mirar cuando parece que no anda nada: sin ella, un
+micrófono equivocado y una armónica tocada bajito se ven exactamente igual
+—la pantalla quieta— y no hay forma de saber cuál de los dos es.
 
 Los tres modos escuchan exactamente igual: lo único que cambia es qué hace el
 servidor cuando terminás. Y los botones se dibujan a partir del estado que
@@ -339,7 +353,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 620 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 632 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 
