@@ -29,7 +29,13 @@ Te dice qué número poner en `UMBRAL_VOLUMEN_RMS` dentro de `config.py`.
 Sin eso, la app puede no detectar nada (si el umbral está muy alto) o detectar
 tu respiración (si está muy bajo).
 
-Y después, la interfaz web:
+Y después, la interfaz web. La forma corta es **doble clic en `Armonica.bat`**
+(o en el acceso directo del escritorio, si lo creaste): abre el navegador solo.
+La ventana negra que queda atrás ES el servidor, así que minimizala en vez de
+cerrarla. Para cambiar la armónica, la posición o la escala de arranque, editá
+la línea `set OPCIONES` que está adentro del `.bat`.
+
+Lo mismo desde la terminal:
 
 ```powershell
 python main.py --web --posicion 12 --escala blues_mayor
@@ -58,7 +64,7 @@ valor por defecto, así que después de la primera vez son cuatro Enter.
 
 | Qué querés | Comando |
 |---|---|
-| Abrir la interfaz web | `python main.py --web --posicion 12 --escala blues_mayor` |
+| Abrir la interfaz web | doble clic en `Armonica.bat`, o `python main.py --web --posicion 12 --escala blues_mayor` |
 | Tocar y ver la pantalla en vivo | `python main.py --vivo --posicion 12 --escala blues_mayor` |
 | Practicar la afinación de un bend | `python main.py --afinador --bend "-3''"` |
 | Consultar una escala sin tocar | `python main.py --teoria --posicion 12 --escala blues_mayor` |
