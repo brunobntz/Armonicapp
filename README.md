@@ -261,6 +261,7 @@ Los que más se usan:
 | `VENTANAS_SILENCIO_TOLERADAS` | Subilo si una nota tuya aparece partida en dos. |
 | `NOTACION` | `"flechas"` (↑4 ↓4') o `"guion"` (4 -4'). |
 | `FACTOR_CORRECCION_OCTAVA` | Corrige las notas que salen una o dos octavas más agudas. |
+| `VENTANAS_PARA_CONFIRMAR` | Cuántas ventanas seguidas hacen falta para cambiar el cartel grande. |
 | `TOLERANCIA_RITMO_MS` | Qué desvío del pulso todavía cuenta como a tiempo. |
 | `SUBDIVISION_RITMO` | Contra qué figura medir el pulso por defecto. |
 
@@ -354,7 +355,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 639 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 643 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

@@ -154,6 +154,38 @@ UMBRAL_VOLUMEN_RMS = 0.01
 #   - Más alto (0.15): solo notas claras y sostenidas, pero perdés frases rápidas.
 DURACION_MINIMA_SEG = 0.06
 
+# Cuántas ventanas seguidas tienen que dar la MISMA nota para que el cartel
+# grande de la pantalla la muestre.
+#
+# La tablatura pasa por segmentacion, que descarta lo que dura menos de
+# DURACION_MINIMA_SEG. El cartel grande no pasaba por ningún filtro: mostraba
+# la última ventana que dio nota, una por una, ochenta y seis veces por
+# segundo. Una sola ventana equivocada —un ataque, un cambio de nota, un golpe
+# de aire— se veía como un cambio de nota en la pantalla.
+#
+# Tres ventanas son unos 35 milisegundos de retraso: no se nota al tocar, y
+# saca los parpadeos de una y dos ventanas.
+#
+# Bajalo a 1 si querés la respuesta más inmediata posible y no te molesta el
+# parpadeo. Subilo si todavía ves notas que no tocaste.
+VENTANAS_PARA_CONFIRMAR = 3
+
+# Cuánto tiempo sin ninguna nota tiene que pasar para que el cartel se apague,
+# en segundos.
+#
+# Es un umbral distinto y MÁS LARGO que el de arriba, a propósito. Son dos
+# preguntas distintas:
+#
+#   mostrar una nota nueva   tiene que estar confirmada, para no parpadear
+#   apagar el cartel         tiene que aguantar los huecos de una nota larga
+#
+# Dentro de una nota sostenida hay ventanas sueltas donde el detector no
+# encuentra nada: un golpe de aire, un cambio de embocadura. Si el cartel se
+# apagara con tres ventanas vacías, el agujero desaparecería en cada
+# respiración. Con 0.4 segundos aguanta los huecos y se apaga cuando de verdad
+# dejaste de tocar.
+SEGUNDOS_PARA_APAGAR_CARTEL = 0.4
+
 # Cuánto silencio de armónica separa un TRAMO del siguiente, en segundos.
 #
 # Sirve para partir una grabación larga en los pedazos donde realmente hay

@@ -122,18 +122,77 @@ class EstadoCompartido:
         # queda un momento arriba y se puede leer de reojo mientras tocas.
         self.pico = 0.0
 
+        # Para el filtro del cartel grande. Ver actualizar(): una nota tiene
+        # que repetirse antes de mostrarse, y el cartel aguanta los huecos.
+        self._candidata = None
+        self._veces_seguidas = 0
+        self._ultima_nota_seg = None
+
     # --- Lo que escribe el hilo de audio ---
 
     def actualizar(self, nota, cents, volumen, segundos, eventos):
+        """
+        Recibe UNA ventana de analisis. Se llama unas ochenta veces por segundo.
+
+        POR QUE EL CARTEL NO MUESTRA CUALQUIER VENTANA
+
+        La tablatura pasa por segmentacion, que descarta lo que dura menos de
+        60 ms. El cartel grande no pasaba por ningun filtro: mostraba la ultima
+        ventana que dio nota, y ademas NUNCA SE BORRABA. Una sola ventana
+        equivocada quedaba en pantalla hasta la siguiente nota, y despues de
+        dejar de tocar seguia mostrando la ultima, como si todavia sonara.
+
+        Son dos reglas distintas para dos preguntas distintas:
+
+          para MOSTRAR una nota nueva  tiene que repetirse
+                                       VENTANAS_PARA_CONFIRMAR veces seguidas
+          para APAGAR el cartel        tienen que pasar
+                                       SEGUNDOS_PARA_APAGAR_CARTEL sin nada
+
+        La segunda es mas larga a proposito. Dentro de una nota sostenida hay
+        ventanas sueltas sin deteccion —un golpe de aire, un cambio de
+        embocadura—; si el cartel se apagara con esas, el agujero desapareceria
+        en cada respiracion.
+        """
         with self._candado:
-            if nota is not None:
-                self.nota_actual = nota
-                self.cents = cents
             self.volumen = volumen
             # El pico baja despacio y sube de golpe, como un vumetro.
             self.pico = max(volumen, self.pico * 0.90)
             self.segundos = segundos
             self.eventos = eventos
+
+            if nota is None:
+                # Ningun tono en esta ventana. El cartel se sostiene hasta que
+                # el silencio sea largo de verdad.
+                self._candidata = None
+                self._veces_seguidas = 0
+                if (self._ultima_nota_seg is not None
+                        and segundos - self._ultima_nota_seg
+                        > config.SEGUNDOS_PARA_APAGAR_CARTEL):
+                    self.nota_actual = None
+                    self.cents = 0.0
+                return
+
+            self._ultima_nota_seg = segundos
+
+            # Comparamos por tablatura y no por objeto: dos Nota iguales son
+            # el mismo agujero aunque sean instancias distintas.
+            clave = nota.como_tab()
+            if clave == self._candidata:
+                self._veces_seguidas += 1
+            else:
+                self._candidata = clave
+                self._veces_seguidas = 1
+
+            # La nota que ya esta en el cartel no tiene que reconfirmarse: solo
+            # se exige confirmacion para CAMBIARLO.
+            ya_esta = (self.nota_actual is not None
+                       and self.nota_actual.como_tab() == clave)
+
+            if ya_esta or self._veces_seguidas >= max(
+                    1, config.VENTANAS_PARA_CONFIRMAR):
+                self.nota_actual = nota
+                self.cents = cents
 
     def reiniciar(self):
         with self._candado:
@@ -143,6 +202,9 @@ class EstadoCompartido:
             self.cents = 0.0
             self.volumen = 0.0
             self.pico = 0.0
+            self._candidata = None
+            self._veces_seguidas = 0
+            self._ultima_nota_seg = None
             self.error_de_audio = ""
             self.segundos = 0.0
             self.eventos = []

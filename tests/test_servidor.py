@@ -18,6 +18,7 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
+import config
 from armonica import (audio, exportacion, frases, mapeo, segmentacion,
                       servidor)
 from herramientas import generar_wav
@@ -164,44 +165,121 @@ def test_el_estado_arranca_vacio():
     assert datos["cantidad_notas"] == 0
 
 
+def sostener(estado, tab, cents=0.0, desde=1.0, ventanas=None,
+             tonalidad="C"):
+    """
+    Toca la misma nota varias ventanas seguidas, como al sostenerla.
+
+    El cartel grande exige que una nota se repita antes de mostrarla: una sola
+    ventana no alcanza, y ese es justamente el punto. Los tests que solo
+    quieren "que haya una nota en pantalla" pasan por aca.
+    """
+    if ventanas is None:
+        ventanas = config.VENTANAS_PARA_CONFIRMAR
+    nota = mapeo.tab_a_nota(tab, tonalidad) if tab else None
+    for numero in range(ventanas):
+        estado.actualizar(nota, cents, 0.2, desde + numero * 0.012, [])
+
+
 def test_el_estado_guarda_la_nota_que_llega():
     estado = servidor.EstadoCompartido("C", 12, "blues_mayor")
-    nota = mapeo.tab_a_nota("-5", "C")
 
-    estado.actualizar(nota, -8.0, 0.2, 3.5, [])
+    sostener(estado, "-5", cents=-8.0, desde=3.5)
     datos = estado.como_diccionario()
 
     assert datos["nota"]["nombre"] == "F5"
     assert datos["cents"] == pytest.approx(-8.0)
-    assert datos["segundos"] == pytest.approx(3.5)
+
+
+def test_una_sola_ventana_no_alcanza_para_mostrar_una_nota():
+    """
+    EL FILTRO DEL CARTEL GRANDE.
+
+    La tablatura pasa por segmentacion, que descarta lo que dura menos de
+    60 ms. El cartel no pasaba por ningun filtro: mostraba la ultima ventana
+    que dio nota, ochenta y seis veces por segundo. Una sola ventana
+    equivocada —un ataque, un cambio de nota, un golpe de aire— se veia como
+    un cambio de nota en la pantalla.
+    """
+    estado = servidor.EstadoCompartido("C")
+
+    estado.actualizar(mapeo.tab_a_nota("-5", "C"), 0.0, 0.2, 1.0, [])
+    assert estado.como_diccionario()["nota"] is None
+
+    estado.actualizar(mapeo.tab_a_nota("-5", "C"), 0.0, 0.2, 1.01, [])
+    estado.actualizar(mapeo.tab_a_nota("-5", "C"), 0.0, 0.2, 1.02, [])
+    assert estado.como_diccionario()["nota"]["nombre"] == "F5"
+
+
+def test_una_ventana_suelta_no_cambia_la_nota_que_ya_se_muestra():
+    """El caso concreto: tocas el 1 y aparece el 8 por una sola ventana."""
+    estado = servidor.EstadoCompartido("C")
+    sostener(estado, "-1", desde=1.0)
+    assert estado.como_diccionario()["nota"]["nombre"] == "D4"
+
+    # Una ventana equivocada en el medio: el ↓8 es el ↓1 por cuatro.
+    estado.actualizar(mapeo.tab_a_nota("-8", "C"), 0.0, 0.2, 1.05, [])
+
+    assert estado.como_diccionario()["nota"]["nombre"] == "D4"
+
+
+def test_una_nota_que_de_verdad_cambia_se_muestra():
+    """El filtro no puede tragarse los cambios reales."""
+    estado = servidor.EstadoCompartido("C")
+    sostener(estado, "-1", desde=1.0)
+
+    sostener(estado, "-4", desde=1.2)
+
+    assert estado.como_diccionario()["nota"]["nombre"] == "D5"
 
 
 def test_el_estado_sostiene_la_nota_cuando_deja_de_llegar():
     """
-    Igual que en la terminal: entre nota y nota hay silencio, y sin esto el
-    agujero desapareceria en cada respiracion.
+    Igual que en la terminal: dentro de una nota sostenida hay ventanas
+    sueltas sin deteccion, y sin esto el agujero desapareceria en cada
+    respiracion.
     """
     estado = servidor.EstadoCompartido("C")
-    estado.actualizar(mapeo.tab_a_nota("-5", "C"), 0.0, 0.2, 1.0, [])
-    estado.actualizar(None, 0.0, 0.001, 1.5, [])
+    sostener(estado, "-5", desde=1.0)
+
+    estado.actualizar(None, 0.0, 0.001, 1.1, [])
+    estado.actualizar(None, 0.0, 0.001, 1.2, [])
 
     assert estado.como_diccionario()["nota"]["nombre"] == "F5"
+
+
+def test_el_cartel_se_apaga_cuando_el_silencio_es_largo():
+    """
+    Antes la nota quedaba en pantalla para siempre: dejabas de tocar, te ibas,
+    y la pantalla seguia mostrando el ultimo agujero como si sonara.
+
+    El umbral para apagar es mas largo que el de confirmar, a proposito: son
+    dos preguntas distintas y se resuelven con dos numeros distintos.
+    """
+    estado = servidor.EstadoCompartido("C")
+    sostener(estado, "-5", desde=1.0)
+
+    estado.actualizar(None, 0.0, 0.0,
+                      1.0 + config.SEGUNDOS_PARA_APAGAR_CARTEL + 0.2, [])
+
+    assert estado.como_diccionario()["nota"] is None
+    assert estado.como_diccionario()["cents"] == 0.0
 
 
 def test_el_estado_dice_si_la_nota_esta_en_la_escala():
     estado = servidor.EstadoCompartido("C", 12, "blues_mayor")
 
-    estado.actualizar(mapeo.tab_a_nota("-5", "C"), 0.0, 0.2, 1.0, [])
+    sostener(estado, "-5", desde=1.0)
     assert estado.como_diccionario()["nota"]["en_escala"] is True
 
-    estado.actualizar(mapeo.tab_a_nota("2", "C"), 0.0, 0.2, 2.0, [])
+    sostener(estado, "2", desde=2.0)
     assert estado.como_diccionario()["nota"]["en_escala"] is False
 
 
 def test_sin_escala_de_referencia_no_dice_ni_si_ni_no():
     """None, no False: sin escala elegida la pregunta no tiene sentido."""
     estado = servidor.EstadoCompartido("C")
-    estado.actualizar(mapeo.tab_a_nota("-5", "C"), 0.0, 0.2, 1.0, [])
+    sostener(estado, "-5", desde=1.0)
     assert estado.como_diccionario()["nota"]["en_escala"] is None
 
 
