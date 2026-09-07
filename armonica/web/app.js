@@ -17,6 +17,7 @@ let TOLERANCIA = 10;
 let inicio = null;
 let fuente = null;      // la conexión de eventos
 let celdasPorClave = {};
+let filasPorAgujero = {};
 
 
 /* ==========================================================================
@@ -378,7 +379,7 @@ function conectarEnVivo() {
 
 function dibujarEstado(estado) {
   dibujarMedidor(estado);
-  resaltarAgujero(estado.nota);
+  resaltarAgujero(estado.nota, estado.cents);
   dibujarTab(estado.tab);
   dibujarNivel(estado);
   sincronizarBotones(estado);
@@ -450,48 +451,62 @@ function ajustarZonaBuena() {
    El diagrama de la armónica
    ========================================================================== */
 
+/* Una fila por agujero, con las notas abriéndose hacia los costados.
+ *
+ * Los huecos se dibujan igual, vacíos: sin ellos la grilla se desarma y el
+ * agujero 1 no queda alineado con el 3, que es justo lo que hace legible que
+ * un bend sea un movimiento hacia afuera. */
 function dibujarDiagrama(filas) {
   const contenedor = document.getElementById("diagrama");
   contenedor.innerHTML = "";
   celdasPorClave = {};
+  filasPorAgujero = {};
 
-  // Los números de agujero, arriba de todo.
   const encabezado = document.createElement("div");
-  encabezado.className = "fila-diagrama";
-  encabezado.appendChild(document.createElement("div"));
-  for (let agujero = 1; agujero <= 10; agujero++) {
-    const numero = document.createElement("div");
-    numero.className = "numeros-agujeros";
-    numero.textContent = agujero;
-    encabezado.appendChild(numero);
-  }
+  encabezado.className = "encabezado-atril";
+  ["", "", "bend", "aspirado", "", "soplado", "bend", ""].forEach((texto) => {
+    const rotulo = document.createElement("span");
+    rotulo.textContent = texto;
+    encabezado.appendChild(rotulo);
+  });
   contenedor.appendChild(encabezado);
 
   filas.forEach((fila) => {
     const elemento = document.createElement("div");
     elemento.className = "fila-diagrama";
 
-    const etiqueta = document.createElement("div");
-    etiqueta.className = "etiqueta-fila";
-    etiqueta.textContent = fila.etiqueta;
-    elemento.appendChild(etiqueta);
+    fila.aspirado.forEach((celda) => elemento.appendChild(dibujarCelda(celda)));
 
-    fila.celdas.forEach((celda) => {
-      const caja = document.createElement("div");
-      if (!celda) {
-        caja.className = "celda vacia";
-        caja.textContent = "·";
-      } else {
-        caja.className = "celda" + (celda.en_escala ? " en-escala" : "");
-        caja.innerHTML = celda.tab +
-          '<span class="nombre">' + celda.nombre + "</span>";
-        celdasPorClave[clave(celda)] = caja;
-      }
-      elemento.appendChild(caja);
-    });
+    const numero = document.createElement("div");
+    numero.className = "numero-agujero";
+    numero.textContent = fila.agujero;
+    elemento.appendChild(numero);
 
+    fila.soplado.forEach((celda) => elemento.appendChild(dibujarCelda(celda)));
+
+    // La aguja del bend vive dentro de la fila y se mueve dentro de ella.
+    const aguja = document.createElement("div");
+    aguja.className = "aguja-bend";
+    aguja.hidden = true;
+    elemento.appendChild(aguja);
+
+    filasPorAgujero[fila.agujero] = { elemento: elemento, aguja: aguja };
     contenedor.appendChild(elemento);
   });
+}
+
+
+function dibujarCelda(celda) {
+  const caja = document.createElement("div");
+  if (!celda) {
+    caja.className = "celda vacia";
+    caja.innerHTML = "&nbsp;";
+    return caja;
+  }
+  caja.className = "celda" + (celda.en_escala ? " en-escala" : "");
+  caja.innerHTML = celda.tab + '<span class="nombre">' + celda.nombre + "</span>";
+  celdasPorClave[clave(celda)] = caja;
+  return caja;
 }
 
 
@@ -501,14 +516,64 @@ function clave(nota) {
 
 
 let celdaResaltada = null;
+let filaResaltada = null;
 
-function resaltarAgujero(nota) {
+function resaltarAgujero(nota, cents) {
   const nueva = nota ? celdasPorClave[clave(nota)] : null;
-  if (nueva === celdaResaltada) return;
 
-  if (celdaResaltada) celdaResaltada.classList.remove("actual");
-  if (nueva) nueva.classList.add("actual");
-  celdaResaltada = nueva;
+  if (nueva !== celdaResaltada) {
+    if (celdaResaltada) celdaResaltada.classList.remove("actual");
+    if (nueva) nueva.classList.add("actual");
+    celdaResaltada = nueva;
+  }
+
+  const fila = nota ? filasPorAgujero[nota.agujero] : null;
+  if (fila !== filaResaltada) {
+    if (filaResaltada) {
+      filaResaltada.elemento.classList.remove("sonando");
+      filaResaltada.aguja.hidden = true;
+    }
+    if (fila) fila.elemento.classList.add("sonando");
+    filaResaltada = fila;
+  }
+
+  moverAguja(nota, cents, nueva, fila);
+}
+
+
+/* Dónde poner la línea que marca tu afinación.
+ *
+ * Dos celdas vecinas del mismo lado están exactamente a un semitono, o sea a
+ * cien cents. Entonces la línea se corre desde el centro de la celda actual
+ * una fracción de columna igual a los cents de desvío.
+ *
+ * EL SIGNO DEPENDE DEL LADO, Y ES LA PARTE QUE IMPORTA
+ *
+ * Del lado aspirado los bends van hacia la IZQUIERDA, así que estar bajo de
+ * afinación es correrse a la izquierda. Del lado soplado los bends van hacia
+ * la DERECHA, así que estar bajo es correrse a la derecha. Sin esta distinción
+ * la aguja se movería para el lado contrario en los agujeros 8, 9 y 10, que
+ * son justamente donde más cuesta el bend. */
+function moverAguja(nota, cents, celda, fila) {
+  if (!nota || !celda || !fila) {
+    if (fila) fila.aguja.hidden = true;
+    return;
+  }
+
+  const anchoFila = fila.elemento.getBoundingClientRect().width;
+  if (!anchoFila) return;
+
+  const caja = celda.getBoundingClientRect();
+  const base = fila.elemento.getBoundingClientRect();
+  const centro = caja.left - base.left + caja.width / 2;
+
+  const haciaLaIzquierda = nota.direccion === "aspirado";
+  const corrimiento = (cents / 100) * (caja.width + 4) *
+                      (haciaLaIzquierda ? 1 : -1);
+
+  fila.aguja.hidden = false;
+  fila.aguja.style.left = (centro + corrimiento) / anchoFila * 100 + "%";
+  fila.aguja.classList.toggle("afinada", Math.abs(cents) <= TOLERANCIA);
 }
 
 

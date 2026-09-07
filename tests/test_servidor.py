@@ -110,13 +110,62 @@ def test_los_datos_iniciales_traen_la_configuracion(servidor_andando):
     assert "12a posicion" in datos["nombre_posicion"]
 
 
+def celdas_de(filas):
+    """Todas las celdas del atril, sin los huecos."""
+    return [celda
+            for fila in filas
+            for celda in fila["aspirado"] + fila["soplado"]
+            if celda]
+
+
 def test_los_datos_iniciales_traen_el_diagrama(servidor_andando):
+    """
+    Una fila por agujero, y TODAS con la misma cantidad de columnas.
+
+    Lo segundo no es un detalle de dibujo: si las filas no coincidieran, un
+    bend dejaria de leerse como un movimiento horizontal, que es lo unico que
+    esta disposicion aporta sobre la anterior.
+    """
     datos = traer_json(servidor_andando, "/api/inicio")
     diagrama = datos["diagrama"]
 
-    assert len(diagrama) >= 3          # soplado, aspirado y al menos un bend
+    assert len(diagrama) == 10
+    assert [fila["agujero"] for fila in diagrama] == list(range(1, 11))
     for fila in diagrama:
-        assert len(fila["celdas"]) == 10
+        assert len(fila["aspirado"]) == servidor.COLUMNAS_BEND_ASPIRADO + 1
+        assert len(fila["soplado"]) == servidor.COLUMNAS_BEND_SOPLADO + 1
+
+
+def test_el_atril_pone_los_bends_hacia_afuera():
+    """
+    El agujero 3 es el que tiene los tres bends, y son la prueba del orden:
+    cuanto mas lejos del numero, mas profundo el bend.
+    """
+    filas = servidor.diagrama_de_la_armonica("C")
+    tercero = next(f for f in filas if f["agujero"] == 3)
+
+    tabs = [celda["tab"] if celda else None for celda in tercero["aspirado"]]
+    assert tabs == ["-3" + "'" * 3, "-3''", "-3'", "-3"]
+
+    # Y las notas bajan de a un semitono hacia la izquierda.
+    # El -3 de una armonica en Do es un Si4 (midi 71), y los bends bajan de
+    # a un semitono: Sib, La, Lab.
+    midis = [celda["midi"] for celda in tercero["aspirado"]]
+    assert midis == [68, 69, 70, 71]
+
+    assert tercero["soplado"][0]["tab"] == "3"
+
+
+def test_el_atril_pone_los_bends_soplados_del_otro_lado():
+    """En el 10 los bends son soplados y van hacia la derecha."""
+    filas = servidor.diagrama_de_la_armonica("C")
+    decimo = next(f for f in filas if f["agujero"] == 10)
+
+    tabs = [celda["tab"] if celda else None for celda in decimo["soplado"]]
+    assert tabs == ["10", "10'", "10''"]
+
+    midis = [celda["midi"] for celda in decimo["soplado"]]
+    assert midis == [96, 95, 94]          # bajan hacia afuera, como el 3
 
 
 def test_el_diagrama_marca_los_agujeros_de_la_escala(servidor_andando):
@@ -125,31 +174,34 @@ def test_el_diagrama_marca_los_agujeros_de_la_escala(servidor_andando):
     solo un mapa y no una ayuda.
     """
     datos = traer_json(servidor_andando, "/api/inicio")
-    en_escala = [
-        celda for fila in datos["diagrama"] for celda in fila["celdas"]
-        if celda and celda["en_escala"]
-    ]
+    en_escala = [c for c in celdas_de(datos["diagrama"]) if c["en_escala"]]
     assert len(en_escala) > 10
 
 
 def test_el_diagrama_deja_huecos_donde_no_hay_nota():
-    """El agujero 5 no tiene bend, y ahí la celda va vacía."""
+    """
+    El agujero 5 no tiene ningun bend, y ahi van celdas vacias.
+
+    Se mandan como None y no se omiten: son las que mantienen alineadas las
+    diez filas.
+    """
     filas = servidor.diagrama_de_la_armonica("C")
-    fila_de_bends = next(f for f in filas if f["etiqueta"] == "bend")
-    assert fila_de_bends["celdas"][4] is None      # el agujero 5
+    quinto = next(f for f in filas if f["agujero"] == 5)
+
+    assert quinto["aspirado"][:3] == [None, None, None]
+    assert quinto["aspirado"][3]["tab"] == "-5"
+    assert quinto["soplado"][1:] == [None, None]
 
 
 def test_el_diagrama_funciona_sin_escala_de_referencia():
     filas = servidor.diagrama_de_la_armonica("C")
     assert filas
-    assert not any(celda["en_escala"]
-                   for fila in filas for celda in fila["celdas"] if celda)
+    assert not any(celda["en_escala"] for celda in celdas_de(filas))
 
 
 def test_el_diagrama_funciona_con_otra_armonica():
     filas = servidor.diagrama_de_la_armonica("G", 2, "blues")
-    primera = filas[0]["celdas"][0]
-    assert primera["nombre"] == "G3"
+    assert filas[0]["soplado"][0]["nombre"] == "G3"
 
 
 # =============================================================================
@@ -1074,13 +1126,13 @@ def test_cambiar_la_armonica_rehace_el_diagrama(servidor_andando):
     devolverlo entero: la pantalla no sabe que nota da cada agujero.
     """
     antes = traer_json(servidor_andando, "/api/inicio")
-    assert antes["diagrama"][0]["celdas"][0]["nombre"] == "C4"
+    assert antes["diagrama"][0]["soplado"][0]["nombre"] == "C4"
 
     respuesta = mandar(servidor_andando, "/api/configuracion", {"tonalidad": "A"})
 
     assert respuesta["ok"] is True
     assert respuesta["inicio"]["tonalidad"] == "A"
-    assert respuesta["inicio"]["diagrama"][0]["celdas"][0]["nombre"] == "A3"
+    assert respuesta["inicio"]["diagrama"][0]["soplado"][0]["nombre"] == "A3"
 
 
 def test_cambiar_la_posicion_cambia_el_tono_que_suena(servidor_andando):

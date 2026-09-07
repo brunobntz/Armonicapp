@@ -257,13 +257,40 @@ class EstadoCompartido:
                                          self.escala)
 
 
+# Cuántas columnas de bend hay de cada lado. Salen de la armónica y no de un
+# gusto: el bend aspirado más profundo es el del agujero 3, que baja tres
+# semitonos, y el soplado más profundo es el del 10, que baja dos.
+COLUMNAS_BEND_ASPIRADO = 3
+COLUMNAS_BEND_SOPLADO = 2
+
+
 def diagrama_de_la_armonica(tonalidad, posicion=None, escala=None):
     """
-    El mapa de la armónica para dibujar: qué nota da cada agujero y si está
-    en la escala de referencia.
+    El mapa de la armónica para dibujar, una fila por agujero.
 
-    Se calcula una sola vez, cuando el navegador carga la página. No cambia
-    mientras tocás.
+    POR QUE ASI Y NO EN FILAS DE SOPLADO Y ASPIRADO
+
+    La versión anterior tenía una fila para soplado, otra para aspirado y una
+    más por cada nivel de bend. Es la forma en que están escritas las tablas, y
+    es la forma equivocada de mirarlas mientras tocás: los tres bends del
+    agujero 3 quedaban repartidos en tres filas distintas, cuando son una sola
+    cosa —una nota que baja— vista desde tres lugares.
+
+    Acá cada agujero es una fila y sus notas se abren hacia los costados. Para
+    el agujero 3 de una armónica en Do, de izquierda a derecha:
+
+        Ab   A   Bb   B  |  3  |  G
+
+    donde Ab es el tercer bend aspirado, B el aspirado sin bend, y G el
+    soplado. A la izquierda lo aspirado, y cuanto más lejos del número, más
+    profundo el bend; a la derecha lo soplado, con la misma idea.
+
+    Es la disposición que usa Bending Trainer, y no es casualidad que funcione:
+    puesto así, un bend es un movimiento hacia AFUERA, y se puede seguir con el
+    ojo mientras lo hacés.
+
+    Cada celda trae su `midi` porque la pantalla lo necesita para ubicar la
+    línea que marca dónde está tu afinación entre una nota y la siguiente.
     """
     en_escala = set()
     if posicion and escala:
@@ -277,58 +304,51 @@ def diagrama_de_la_armonica(tonalidad, posicion=None, escala=None):
         except ValueError:
             en_escala = set()
 
-    filas = []
-    formas = mapeo.todas_las_formas(tonalidad)
     por_clave = {}
-    for lista in formas.values():
+    for lista in mapeo.todas_las_formas(tonalidad).values():
         for nota in lista:
             por_clave[(nota.agujero, nota.direccion, nota.bend)] = nota
 
-    definicion = [
-        ("soplado", mapeo.SOPLADO, 0),
-        ("aspirado", mapeo.ASPIRADO, 0),
-        ("bend", None, 1),
-        ("bend 2", None, 2),
-        ("bend 3", None, 3),
-    ]
+    def celda(agujero, direccion, bend):
+        nota = por_clave.get((agujero, direccion, bend))
+        if nota is None:
+            return None
+        return {
+            "tab": nota.como_tab(),
+            "nombre": nota.nombre,
+            "midi": nota.midi,
+            "agujero": nota.agujero,
+            "direccion": nota.direccion,
+            "bend": nota.bend,
+            "en_escala": nota.midi in en_escala,
+        }
 
-    for etiqueta, direccion, bend in definicion:
-        celdas = []
-        hay_alguna = False
+    filas = []
+    for agujero in range(1, 11):
+        # De afuera hacia adentro: el bend más profundo va más lejos del
+        # número. Los huecos se mandan como None a propósito, para que todas
+        # las filas tengan la misma cantidad de columnas y la grilla quede
+        # alineada: sin eso, el agujero 1 y el 3 no coincidirían.
+        aspirados = [
+            celda(agujero, mapeo.ASPIRADO, bend)
+            for bend in range(COLUMNAS_BEND_ASPIRADO, 0, -1)
+        ]
+        aspirados.append(celda(agujero, mapeo.ASPIRADO, 0))
 
-        for agujero in range(1, 11):
-            nota = None
-            if direccion is not None:
-                nota = por_clave.get((agujero, direccion, bend))
-            else:
-                for prueba in (mapeo.ASPIRADO, mapeo.SOPLADO):
-                    nota = por_clave.get((agujero, prueba, bend))
-                    if nota is not None:
-                        break
+        soplados = [celda(agujero, mapeo.SOPLADO, 0)]
+        soplados.extend(
+            celda(agujero, mapeo.SOPLADO, bend)
+            for bend in range(1, COLUMNAS_BEND_SOPLADO + 1)
+        )
 
-            if nota is None:
-                celdas.append(None)
-                continue
-
-            hay_alguna = True
-            celdas.append({
-                "tab": nota.como_tab(),
-                "nombre": nota.nombre,
-                "agujero": nota.agujero,
-                "direccion": nota.direccion,
-                "bend": nota.bend,
-                "en_escala": nota.midi in en_escala,
-            })
-
-        if hay_alguna:
-            filas.append({"etiqueta": etiqueta, "celdas": celdas})
+        filas.append({
+            "agujero": agujero,
+            "aspirado": aspirados,
+            "soplado": soplados,
+        })
 
     return filas
 
-
-# =============================================================================
-# El hilo que escucha
-# =============================================================================
 
 def escuchar(estado, detener):
     """

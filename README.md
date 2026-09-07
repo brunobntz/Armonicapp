@@ -329,6 +329,17 @@ los JSON que ya se guardaban. Y **Ajustes** tiene el micrófono y la
 configuración: la armónica que tenés en la mano, la posición y la escala de
 referencia se cambian ahí, sin reiniciar nada.
 
+El diagrama de la armónica tiene **una fila por agujero**, con las notas
+abriéndose hacia los costados: a la izquierda lo aspirado, a la derecha lo
+soplado, y cuanto más lejos del número, más profundo el bend. Es la
+disposición de Bending Trainer, y no es capricho: puesta así, un bend es un
+movimiento **horizontal** y se puede seguir con el ojo mientras lo hacés.
+
+Una **línea rosa** marca dónde está tu afinación entre una nota y la de al
+lado. En un bend a medio hacer la ves en el medio, y se pone verde cuando
+llegaste. El signo depende del lado: del lado aspirado los bends bajan hacia
+la izquierda, del lado soplado hacia la derecha.
+
 Arriba de todo, en **En vivo**, hay una **barra de nivel de entrada**. Es lo
 primero que hay que mirar cuando parece que no anda nada: sin ella, un
 micrófono equivocado y una armónica tocada bajito se ven exactamente igual
@@ -355,7 +366,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 643 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 645 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 
