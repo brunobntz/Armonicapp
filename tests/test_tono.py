@@ -11,6 +11,7 @@ Cómo correrlos:   python -m pytest tests/test_tono.py -v
 import numpy as np
 import pytest
 
+import config
 from armonica import notas, tono
 from herramientas import generar_wav
 
@@ -513,3 +514,162 @@ def test_la_proporcion_del_fundamental_es_casi_cero_donde_no_hay_nada():
 
 def test_el_silencio_da_proporcion_cero_sin_dividir_por_cero():
     assert tono.proporcion_del_fundamental(np.zeros(TAMANO), 440.0, FS) == 0.0
+
+
+# =============================================================================
+# La correccion de octava
+#
+# YIN recorre los retardos de menor a mayor y se queda con el primero que baja
+# del umbral. Si un armonico agudo domina, su retardo —mas corto— aparece
+# antes y gana: la nota sale una o dos octavas mas aguda, con confianza alta.
+#
+# El sintoma en la armonica: tocas el agujero 1 aspirado (Re4) y aparece el 8
+# aspirado (Re6), que es exactamente cuatro veces la frecuencia.
+# =============================================================================
+
+def armonicos(fundamental_hz, pesos, duracion=0.2, ruido=0.0, semilla=11):
+    """Una nota donde nosotros decidimos el peso de cada armonico."""
+    cantidad = int(config.FRECUENCIA_MUESTREO * duracion)
+    tiempo = np.arange(cantidad) / config.FRECUENCIA_MUESTREO
+    onda = np.zeros(cantidad)
+    for indice, peso in enumerate(pesos, start=1):
+        onda += peso * np.sin(2 * np.pi * fundamental_hz * indice * tiempo)
+    onda /= np.max(np.abs(onda))
+    if ruido:
+        onda += np.random.default_rng(semilla).normal(0, ruido, cantidad)
+    return (onda * 0.5)[:config.TAMANO_VENTANA]
+
+
+def test_un_armonico_dominante_ya_no_sube_dos_octavas():
+    """
+    EL CASO QUE APARECIO USANDO LA APP.
+
+    Re4 (293.7 Hz) con el cuarto armonico dominante se reportaba como Re6
+    (1174.7 Hz) con confianza 0.95. En una armonica en Do eso es tocar el
+    agujero 1 aspirado y ver el 8 aspirado.
+    """
+    re4 = notas.midi_a_frecuencia(62)
+    bloque = armonicos(re4, [0.08, 0.10, 0.08, 1.00, 0.10, 0.08, 0.10, 0.60])
+
+    frecuencia, _ = tono.detectar_frecuencia(bloque)
+
+    assert frecuencia == pytest.approx(re4, rel=0.02)
+
+
+def test_un_segundo_armonico_dominante_tampoco_sube_una_octava():
+    do4 = notas.midi_a_frecuencia(60)
+    bloque = armonicos(do4, [0.10, 1.00, 0.10, 0.60, 0.05, 0.05, 0.05, 0.30])
+
+    frecuencia, _ = tono.detectar_frecuencia(bloque)
+
+    assert frecuencia == pytest.approx(do4, rel=0.02)
+
+
+def test_una_nota_aguda_legitima_no_se_baja_dos_octavas():
+    """
+    LA TRAMPA DE ESTA CORRECCION, Y POR QUE LA REGLA ES "CLARAMENTE MEJOR".
+
+    Una onda que se repite cada T se repite tambien cada 2T y cada 4T, siempre.
+    Medido sobre este Do6: el retardo correcto vale 0.001 y sus multiplos 0.002
+    y 0.005, los tres "buenos". Una regla que aceptara cualquier multiplo bueno
+    bajaria DOS OCTAVAS todas las notas agudas de la armonica.
+    """
+    do6 = notas.midi_a_frecuencia(84)
+    bloque = armonicos(do6, [1.0, 0.45, 0.30, 0.15, 0.08, 0.04, 0.02, 0.01])
+
+    frecuencia, _ = tono.detectar_frecuencia(bloque)
+
+    assert frecuencia == pytest.approx(do6, rel=0.02)
+
+
+def test_la_correccion_no_toca_un_timbre_normal():
+    """En los 31 agujeros de la armonica, con timbre normal, no cambia nada."""
+    for midi in range(60, 91):
+        esperada = notas.midi_a_frecuencia(midi)
+        bloque = armonicos(esperada, [1.0, 0.45, 0.30, 0.15, 0.08])
+
+        frecuencia, _ = tono.detectar_frecuencia(bloque)
+
+        assert frecuencia is not None, f"se perdio la nota midi {midi}"
+        assert frecuencia == pytest.approx(esperada, rel=0.02)
+
+
+def test_la_correccion_no_se_aplica_por_docenas():
+    """
+    Solo x2 y x4, nunca x3. Y este test existe por un error de verdad.
+
+    Un Re5 tocado sobre una base con un Sol2 de bajo: 587 dividido 3 da 196,
+    que es EXACTAMENTE ese bajo, y la senal se repite ahi de verdad. La primera
+    version de la correccion "acertaba" y convertia la nota de la armonica en
+    la nota del bajo. Rompio un test que ya estaba en la suite.
+
+    Por la razon entre valores no se podian separar: el falso positivo media
+    0.504 y un caso legitimo media 0.500. Lo que los separa es el intervalo:
+    un x3 es una docena y casi siempre viene de otro instrumento, no de un
+    armonico de la propia lengueta.
+    """
+    # Se prueba la regla directamente y no con una senal fabricada: con una
+    # mezcla de armonica mas bajo, YIN encuentra el bajo POR SU CUENTA, sin
+    # que la correccion intervenga, y el test no probaria lo que dice probar.
+    #
+    # La curva se arma a mano: un valle mediocre en tau, uno buenisimo en
+    # tau*3 —la trampa— y ninguno en tau*2 ni tau*4.
+    tau = 75
+    tau_maximo = 300
+    curva = np.ones(tau_maximo) * 0.5
+    curva[tau] = 0.11
+    curva[tau * 2] = 0.40
+    curva[tau * 3] = 0.02          # el bajo: mucho mejor, pero es una docena
+
+    corregido = tono._corregir_octava(curva, tau, tau_maximo,
+                                      config.UMBRAL_YIN, factor=0.7)
+
+    assert corregido == tau, "corrigio por x3 y no tenia que hacerlo"
+
+    # Y para que se vea que la regla si funciona cuando el valle esta en x2:
+    curva[tau * 2] = 0.02
+    assert tono._corregir_octava(curva, tau, tau_maximo,
+                                 config.UMBRAL_YIN, factor=0.7) == tau * 2
+
+
+def test_la_correccion_se_puede_apagar():
+    """
+    Con el factor en cero queda el comportamiento viejo.
+
+    Sirve para poder medir la diferencia, que es como se eligio el valor.
+    """
+    re4 = notas.midi_a_frecuencia(62)
+    bloque = armonicos(re4, [0.08, 0.10, 0.08, 1.00, 0.10, 0.08, 0.10, 0.60])
+
+    tau_maximo = int(config.FRECUENCIA_MUESTREO / config.FRECUENCIA_MINIMA_HZ) + 1
+    diferencia = tono._funcion_diferencia(np.asarray(bloque, dtype=np.float64),
+                                          tau_maximo)
+    curva = tono._diferencia_media_normalizada(diferencia)
+    tau = tono._buscar_primer_minimo(curva, config.UMBRAL_YIN, 11, tau_maximo)
+
+    sin_corregir = tono._corregir_octava(curva, tau, tau_maximo,
+                                         config.UMBRAL_YIN, factor=0.0)
+    corregido = tono._corregir_octava(curva, tau, tau_maximo,
+                                      config.UMBRAL_YIN, factor=0.7)
+
+    assert sin_corregir == tau
+    assert corregido == pytest.approx(tau * 4, abs=2)
+
+
+def test_si_la_correccion_no_pasa_las_verificaciones_queda_la_original():
+    """
+    La correccion nunca puede dejar las cosas peor que no corregir.
+
+    La primera version reemplazaba el periodo y seguia de largo. Medido sobre
+    124 notas legitimas, eso PERDIA entre 35 y 56: la correccion las empujaba a
+    una frecuencia sin energia, la verificacion del fundamental las rechazaba,
+    y la nota salia como "no se" en vez de salir bien.
+    """
+    for midi in range(72, 91):          # el registro agudo, donde mas pasaba
+        esperada = notas.midi_a_frecuencia(midi)
+        bloque = armonicos(esperada, [0.5, 1.0, 0.8, 0.6, 0.4, 0.3, 0.2, 0.1],
+                           ruido=0.03)
+
+        frecuencia, _ = tono.detectar_frecuencia(bloque)
+
+        assert frecuencia is not None, f"se perdio la nota midi {midi}"

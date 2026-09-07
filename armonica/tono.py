@@ -113,33 +113,57 @@ def detectar_frecuencia(bloque, frecuencia_muestreo=None, umbral=None,
     if tau is None:
         return None, 0.0
 
-    tau_afinado = _afinar_con_parabola(normalizada, tau)
+    # --- Los candidatos, del más grave al que encontró YIN ---
+    #
+    # La corrección de octava propone un período MÁS LARGO cuando sospecha que
+    # el que se encontró era un armónico. Se prueba primero, pero no se impone:
+    # si no pasa las verificaciones de abajo, se cae al original.
+    #
+    # POR QUE ASI Y NO REEMPLAZANDO DIRECTO
+    #
+    # La primera versión reemplazaba el período y seguía de largo. Medido sobre
+    # 124 notas legítimas, eso PERDIA entre 35 y 56: la corrección las empujaba
+    # a una frecuencia donde no había energía, la verificación del fundamental
+    # las rechazaba, y la nota salía como "no sé" en vez de salir bien. Se
+    # arreglaba un error creando otro.
+    #
+    # Con esta forma, la corrección no puede dejar las cosas peor que no
+    # corregir: en el peor caso se descarta y queda lo de antes.
+    candidatos = []
+    tau_corregido = _corregir_octava(normalizada, tau, tau_maximo, umbral)
+    if tau_corregido != tau:
+        candidatos.append(tau_corregido)
+    candidatos.append(tau)
 
-    # De retardo a frecuencia: si la onda se repite cada tau muestras y hay
-    # `frecuencia_muestreo` muestras por segundo, se repite esta cantidad de
-    # veces por segundo.
-    frecuencia = frecuencia_muestreo / tau_afinado
+    for candidato in candidatos:
+        tau_afinado = _afinar_con_parabola(normalizada, candidato)
 
-    # Una última verificación: la interpolación puede empujar el resultado un
-    # poco fuera del rango pedido.
-    if not (frecuencia_minima <= frecuencia <= frecuencia_maxima):
-        return None, 0.0
+        # De retardo a frecuencia: si la onda se repite cada tau muestras y hay
+        # `frecuencia_muestreo` muestras por segundo, se repite esta cantidad
+        # de veces por segundo.
+        frecuencia = frecuencia_muestreo / tau_afinado
 
-    # Última verificación: ¿hay energía DE VERDAD en esa frecuencia?
-    # Ver proporcion_del_fundamental() para el porqué. Es lo que distingue una
-    # nota real de dos agujeros sonando juntos.
-    if config.ENERGIA_FUNDAMENTAL_MINIMA > 0:
-        proporcion = proporcion_del_fundamental(bloque, frecuencia,
-                                                frecuencia_muestreo)
-        if proporcion < config.ENERGIA_FUNDAMENTAL_MINIMA:
-            return None, 0.0
+        # La interpolación puede empujar el resultado un poco fuera del rango.
+        if not (frecuencia_minima <= frecuencia <= frecuencia_maxima):
+            continue
 
-    # La confianza es lo contrario de la "aperiodicidad" que mide YIN.
-    # normalizada[tau] cerca de 0 = muy periódica = confianza cerca de 1.
-    confianza = float(1.0 - normalizada[tau])
-    confianza = max(0.0, min(1.0, confianza))
+        # ¿Hay energía DE VERDAD en esa frecuencia? Ver
+        # proporcion_del_fundamental() para el porqué. Es lo que distingue una
+        # nota real de dos agujeros sonando juntos.
+        if config.ENERGIA_FUNDAMENTAL_MINIMA > 0:
+            proporcion = proporcion_del_fundamental(bloque, frecuencia,
+                                                    frecuencia_muestreo)
+            if proporcion < config.ENERGIA_FUNDAMENTAL_MINIMA:
+                continue
 
-    return float(frecuencia), confianza
+        # La confianza es lo contrario de la "aperiodicidad" que mide YIN.
+        # normalizada[tau] cerca de 0 = muy periódica = confianza cerca de 1.
+        confianza = float(1.0 - normalizada[candidato])
+        confianza = max(0.0, min(1.0, confianza))
+
+        return float(frecuencia), confianza
+
+    return None, 0.0
 
 
 def proporcion_del_fundamental(bloque, frecuencia_hz, frecuencia_muestreo):
@@ -300,6 +324,91 @@ def _buscar_primer_minimo(normalizada, umbral, tau_minimo, tau_maximo):
     # "no sé" antes que arriesgar una nota inventada sobre ruido: la app
     # transcribe lo que tocás, y una nota de más ensucia más que una de menos.
     return None
+
+
+def _corregir_octava(normalizada, tau, tau_maximo, umbral, factor=None):
+    """
+    Si el período verdadero es un múltiplo del encontrado, devuelve ese.
+
+    QUE ARREGLA
+
+    YIN recorre los retardos de menor a mayor y se queda con el primero que
+    baja del umbral. Cuando un armónico agudo domina el sonido, su retardo
+    —más corto— aparece antes y gana. La nota sale una o dos octavas más
+    aguda de lo que tocaste, y con confianza alta, que es lo peor: no hay
+    ninguna señal de que algo anduvo mal.
+
+    Medido sobre señales fabricadas a propósito: un Do4 con el cuarto armónico
+    dominante se reportaba como Do6. En una armónica en Do eso es tocar el
+    agujero 1 aspirado y ver el 8 aspirado, que es exactamente el sintoma que
+    aparecio usando la app.
+
+    POR QUE LA REGLA ES "CLARAMENTE MEJOR" Y NO "TAMBIEN BUENO"
+
+    Porque una onda que se repite cada T se repite también cada 2T, 3T y 4T,
+    siempre y por definición. Si aceptáramos cualquier múltiplo que también
+    baje del umbral, TODAS las notas agudas bajarían dos octavas. Medido sobre
+    un Do6 legítimo, el retardo correcto vale 0.001 y sus múltiplos 0.002 y
+    0.005: los tres pasan cualquier umbral razonable.
+
+    Lo que separa los dos casos es la comparación entre ellos:
+
+        Do6 legítimo          0.001 -> 0.005   el múltiplo es 5 veces PEOR
+        Do4 con 4to armónico  0.046 -> 0.004   el múltiplo es 11 veces MEJOR
+
+    Por eso se exige que el múltiplo mida menos del `factor` del original.
+
+    Entre los candidatos que pasan se elige el de menor valor y no el más
+    grave: en un caso medido, el x2 y el x4 pasaban los dos, y el x4 —que era
+    el correcto— tenía el valor mucho más bajo.
+    """
+    if factor is None:
+        factor = config.FACTOR_CORRECCION_OCTAVA
+
+    if factor <= 0:
+        return tau
+
+    referencia = normalizada[tau]
+    mejor_tau = tau
+    mejor_valor = referencia
+
+    # SOLO OCTAVAS: x2 y x4. El x3 queda afuera a proposito.
+    #
+    # Un x3 es una docena, no una octava, y esa relacion casi nunca viene de
+    # un armonico de la propia lengueta: viene de OTRO instrumento. El caso
+    # que lo puso en evidencia estaba en la suite antes de esta correccion:
+    # un Re5 tocado sobre una base con un Sol2 de bajo. 587 dividido 3 es 196,
+    # que es exactamente ese bajo, y la senal de verdad se repite ahi. La
+    # correccion "acertaba" y convertia la nota de la armonica en la del bajo.
+    #
+    # Por razon sola no se pueden separar: el falso positivo media 0.504 y un
+    # caso legitimo media 0.500. Lo que los separa es el intervalo.
+    for multiplo in (2, 4):
+        candidato = tau * multiplo
+        if candidato >= tau_maximo:
+            break
+
+        # El múltiplo exacto puede caer corrido un par de muestras: la
+        # interpolación y el ruido mueven el mínimo. Miramos alrededor.
+        #
+        # El margen es PROPORCIONAL al retardo y no fijo. Con un margen fijo de
+        # tres muestras, en una nota aguda —donde el retardo son veinte
+        # muestras— se estaría mirando un rango enorme en términos musicales, y
+        # cualquier valle de ruido pasa por mínimo del múltiplo.
+        margen = max(1, candidato // 20)
+        desde = max(1, candidato - margen)
+        hasta = min(tau_maximo, candidato + margen + 1)
+        local = int(np.argmin(normalizada[desde:hasta])) + desde
+        valor = normalizada[local]
+
+        # Dos condiciones: que sea claramente mejor que el original, y que por
+        # su cuenta sea un mínimo aceptable. Lo segundo evita "corregir" hacia
+        # un valle de ruido que casualmente resultó más bajo.
+        if valor < referencia * factor and valor < umbral and valor < mejor_valor:
+            mejor_tau = local
+            mejor_valor = valor
+
+    return mejor_tau
 
 
 def _afinar_con_parabola(normalizada, tau):

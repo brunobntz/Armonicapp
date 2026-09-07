@@ -72,6 +72,42 @@ PICO_NORMALIZACION = 0.7
 #   - Más alto (0.20): más permisivo. Detecta más, pero también detecta ruido.
 UMBRAL_YIN = 0.12
 
+# Cuánto mejor tiene que ser un período MÁS LARGO para preferirlo al que
+# encontró YIN. Es la corrección de los errores de octava.
+#
+# EL PROBLEMA
+#
+# YIN recorre los retardos de menor a mayor y se queda con el primero que baja
+# del umbral. Si un armónico agudo domina el sonido, su retardo —que es más
+# corto— aparece primero, y YIN devuelve esa frecuencia con toda confianza.
+# Medido: una nota de Do4 con el cuarto armónico dominante se reportaba como
+# Do6, con confianza 0.95. En la armónica eso es tocar el agujero 1 y ver el 8.
+#
+# POR QUE NO ALCANZA CON "ELEGIR EL PERIODO MAS LARGO QUE TAMBIEN SEA BUENO"
+#
+# Porque una onda que se repite cada T también se repite cada 2T, 3T y 4T,
+# SIEMPRE. Medido sobre un Do6 legítimo: el retardo correcto da 0.001 y sus
+# múltiplos dan 0.002 y 0.005, todos "buenos". Con esa regla, cada nota aguda
+# bajaría dos octavas.
+#
+# Lo que distingue los dos casos no es que el múltiplo sea bueno, sino que sea
+# CLARAMENTE MEJOR que el que encontró YIN:
+#
+#   Do6 legítimo:            0.001 -> 0.005   el múltiplo es 5 veces PEOR
+#   Do4 con 4to armónico:    0.046 -> 0.004   el múltiplo es 11 veces MEJOR
+#
+# 0.7 quiere decir "el múltiplo tiene que medir menos del 70% que el original".
+# El número sale de las mediciones, no de la intuición: los casos que hay que
+# corregir daban razones de 0.09 a 0.50, y los que NO hay que tocar daban 2.0
+# o más. Cualquier valor entre 0.5 y 1.0 separa los dos grupos; 0.7 queda
+# centrado.
+#
+# Sobre 372 casos fabricados con un armónico dominante, arregla el 61%. Sobre
+# 124 notas legítimas no rompe ninguna: la corrección se verifica antes de
+# aceptarse y, si no pasa, queda lo que había. Subirlo a 0.95 arregla cuatro
+# puntos más; no vale el riesgo de aflojar una regla que hoy es segura.
+FACTOR_CORRECCION_OCTAVA = 0.7
+
 # Cuánta energía tiene que haber EN la frecuencia detectada para aceptarla.
 # Se mide como amplitud del fundamental dividida por el volumen del bloque.
 #
