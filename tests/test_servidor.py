@@ -1595,3 +1595,184 @@ def test_si_el_microfono_falla_siempre_se_rinde_y_lo_dice():
     assert len(intentos) == servidor.INTENTOS_DE_MICROFONO
     assert "ocupado" in estado.error_de_audio
     assert estado.escuchando is False
+
+
+# =============================================================================
+# Ponerle nombre y descripcion a lo que grabas, y agrupar frases en bolsas
+# =============================================================================
+
+def test_la_sesion_guarda_titulo_y_descripcion(servidor_andando, tmp_path,
+                                               monkeypatch):
+    """
+    Sin esto, dentro de un mes tenes doce carpetas con fecha y hora y ninguna
+    forma de saber cual era la que valia la pena.
+    """
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+
+    mandar(servidor_andando, "/api/comenzar", {
+        "modo": "sesion",
+        "titulo": "Escala 12a ida y vuelta",
+        "comentario": "probando el bend del 3 sobre la base de Sol",
+    })
+
+    estado = servidor.Manejador.estado
+    estado.eventos = [
+        segmentacion.Evento(
+            nota=mapeo.tab_a_nota(tab, "C"), inicio_seg=i * 0.5,
+            duracion_seg=0.4, frecuencia_hz=440.0, cents=0.0,
+            confianza=0.99, ventanas=30,
+        )
+        for i, tab in enumerate(["-2", "4", "-4", "-5"])
+    ]
+
+    respuesta = mandar(servidor_andando, "/api/terminar")
+
+    assert respuesta["ok"] is True
+    guardados = sorted(os.listdir(str(tmp_path)))
+
+    # El titulo va DESPUES de la fecha: los archivos se siguen ordenando solos
+    # por fecha, que es como se buscan.
+    assert any("_escala-12a-ida-y-vuelta_tab.txt" in n for n in guardados)
+
+    tab = next(n for n in guardados if n.endswith("_tab.txt"))
+    with open(os.path.join(str(tmp_path), tab), encoding="utf-8") as archivo:
+        texto = archivo.read()
+    assert "Escala 12a ida y vuelta" in texto
+    assert "probando el bend del 3" in texto
+
+
+def test_una_sesion_sin_titulo_se_guarda_igual(servidor_andando, tmp_path,
+                                               monkeypatch):
+    """Los dos campos son opcionales: no pueden frenarte cuando querés tocar."""
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+
+    mandar(servidor_andando, "/api/comenzar", {"modo": "sesion"})
+    servidor.Manejador.estado.eventos = [
+        segmentacion.Evento(
+            nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0, duracion_seg=0.4,
+            frecuencia_hz=440.0, cents=0.0, confianza=0.99, ventanas=30,
+        )
+    ]
+
+    respuesta = mandar(servidor_andando, "/api/terminar")
+
+    assert respuesta["ok"] is True
+    assert any(n.endswith("_tab.txt") for n in os.listdir(str(tmp_path)))
+
+
+def test_una_frase_guarda_su_descripcion_y_su_bolsa(servidor_andando,
+                                                    carpeta_de_frases):
+    mandar(servidor_andando, "/api/comenzar", {
+        "modo": "frase",
+        "nombre": "turnaround de la clase",
+        "comentario": "el que cierra la vuelta, con el bend del 3",
+        "bolsa": "turnarounds",
+    })
+
+    servidor.Manejador.estado.eventos = [
+        segmentacion.Evento(
+            nota=mapeo.tab_a_nota(tab, "C"), inicio_seg=i * 0.4,
+            duracion_seg=0.3, frecuencia_hz=440.0, cents=0.0,
+            confianza=0.99, ventanas=30,
+        )
+        for i, tab in enumerate(["-2", "-3''", "4"])
+    ]
+
+    respuesta = mandar(servidor_andando, "/api/terminar")
+    assert respuesta["ok"] is True
+
+    guardada = frases.buscar("turnaround de la clase")
+    assert guardada.comentario == "el que cierra la vuelta, con el bend del 3"
+    assert guardada.bolsa == "turnarounds"
+
+
+def test_la_lista_de_frases_trae_las_bolsas_que_existen(servidor_andando,
+                                                        carpeta_de_frases):
+    """
+    Para poder ofrecerlas sin que tengas que acordarte de como las escribiste.
+    """
+    for nombre, bolsa in (("una", "turnarounds"), ("dos", "turnarounds"),
+                          ("tres", "para calentar"), ("cuatro", "")):
+        frase = frases.desde_eventos(
+            [segmentacion.Evento(
+                nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0,
+                duracion_seg=0.3, frecuencia_hz=440.0, cents=0.0,
+                confianza=0.9, ventanas=20)],
+            nombre, bolsa=bolsa)
+        frases.guardar(frase)
+
+    datos = traer_json(servidor_andando, "/api/frases")
+
+    assert datos["bolsas"] == ["para calentar", "turnarounds"]
+    assert len(datos["frases"]) == 4
+    sin_bolsa = [f for f in datos["frases"] if not f["bolsa"]]
+    assert len(sin_bolsa) == 1
+
+
+def test_mover_varias_frases_a_una_bolsa_de_una_vez(servidor_andando,
+                                                    carpeta_de_frases):
+    """
+    Acepta varios nombres porque asi se usa: marcas cinco frases del mismo
+    tema y las mandas juntas.
+    """
+    for nombre in ("una", "dos", "tres"):
+        frases.guardar(frases.desde_eventos(
+            [segmentacion.Evento(
+                nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0,
+                duracion_seg=0.3, frecuencia_hz=440.0, cents=0.0,
+                confianza=0.9, ventanas=20)],
+            nombre))
+
+    respuesta = mandar(servidor_andando, "/api/frases/bolsa",
+                       {"nombres": ["una", "tres"], "bolsa": "turnarounds"})
+
+    assert respuesta["ok"] is True
+    assert respuesta["movidas"] == 2
+    assert frases.buscar("una").bolsa == "turnarounds"
+    assert frases.buscar("dos").bolsa == ""
+    assert frases.buscar("tres").bolsa == "turnarounds"
+
+
+def test_sacar_una_frase_de_su_bolsa(servidor_andando, carpeta_de_frases):
+    """Con la bolsa vacia se saca, que es lo natural: es el mismo gesto."""
+    frases.guardar(frases.desde_eventos(
+        [segmentacion.Evento(
+            nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0, duracion_seg=0.3,
+            frecuencia_hz=440.0, cents=0.0, confianza=0.9, ventanas=20)],
+        "una", bolsa="turnarounds"))
+
+    mandar(servidor_andando, "/api/frases/bolsa",
+           {"nombres": ["una"], "bolsa": ""})
+
+    assert frases.buscar("una").bolsa == ""
+
+
+def test_la_bolsa_sobrevive_a_guardar_y_volver_a_leer(tmp_path):
+    """Es un campo nuevo del archivo: si no se persiste, no sirve de nada."""
+    frase = frases.desde_eventos(
+        [segmentacion.Evento(
+            nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0, duracion_seg=0.3,
+            frecuencia_hz=440.0, cents=0.0, confianza=0.9, ventanas=20)],
+        "una", comentario="algo", bolsa="turnarounds")
+
+    ruta = frases.guardar(frase, str(tmp_path))
+    leida = frases.cargar(ruta)
+
+    assert leida.bolsa == "turnarounds"
+    assert leida.comentario == "algo"
+
+
+def test_una_frase_vieja_sin_bolsa_se_lee_igual(tmp_path):
+    """Los archivos que ya tenias no tienen el campo, y no pueden romperse."""
+    import json as modulo_json
+
+    ruta = tmp_path / "vieja.json"
+    ruta.write_text(modulo_json.dumps({
+        "version": 1, "nombre": "vieja", "tonalidad": "C",
+        "notas": [{"tab": "4", "inicio_seg": 0.0, "duracion_seg": 0.3}],
+    }), encoding="utf-8")
+
+    leida = frases.cargar(str(ruta))
+
+    assert leida.bolsa == ""
+    assert leida.cantidad == 1

@@ -344,6 +344,23 @@ mientras no grabás, el audio se tira y la historia se recorta a
 megas de audio por minuto sin que hayas tocado nada que quisieras guardar. Al
 apretar Grabar se tira todo lo anterior y ahí sí se guarda hasta el final.
 
+Antes de grabar podés ponerle un **nombre** y una **descripción** a lo que
+estás por tocar. Los dos son opcionales y van debajo del botón, para no
+frenarte cuando querés grabar y ya. Pero dentro de un mes son la diferencia
+entre doce carpetas con fecha y hora y saber cuál era la que valía la pena: el
+nombre va al archivo (`2026-09-08_18-30-00_bloque-t2_tab.txt`, después de la
+fecha para que sigan ordenándose solos) y los dos al encabezado de la tab, del
+resumen y del JSON.
+
+En **Frases** pasa lo mismo, y ahí importa más porque una frase dura cuatro
+segundos: mientras grabás hay un cartel con un punto rojo, el reloj, la barra
+de nivel y la tablatura saliendo en vivo. Antes lo único que aparecía era una
+línea de texto, y para cuando la leías ya habías terminado de tocar.
+
+Las frases se pueden agrupar en **bolsas** —"turnarounds", "clase de junio",
+"para calentar"—. Marcás varias con su casilla, escribís la bolsa y van todas
+juntas. Después filtrás por bolsa y practicás solo esas.
+
 El diagrama de la armónica tiene **una fila por agujero**, con las notas
 abriéndose hacia los costados: a la izquierda lo aspirado, a la derecha lo
 soplado, y cuanto más lejos del número, más profundo el bend. Es la
@@ -381,7 +398,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 657 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 665 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

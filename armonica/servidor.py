@@ -113,6 +113,13 @@ class EstadoCompartido:
         self.modo = "sesion"
         self.nombre_frase = ""
 
+        # Lo que vos escribis antes de grabar: como se llama y de que se
+        # trata. Sin esto, dentro de un mes tenes doce carpetas con fecha y
+        # hora y ninguna forma de saber cual era la que valia la pena.
+        self.titulo = ""
+        self.comentario = ""
+        self.bolsa = ""
+
         # ESCUCHAR Y GRABAR SON DOS COSAS DISTINTAS
         #
         # `escuchando` es el microfono abierto: la app lo deja prendido todo el
@@ -244,6 +251,9 @@ class EstadoCompartido:
     def reiniciar(self):
         with self._candado:
             self.modo = "sesion"
+            self.titulo = ""
+            self.comentario = ""
+            self.bolsa = ""
             self.grabando = False
             self.grabacion_lista = False
             self.inicio_grabacion_seg = 0.0
@@ -275,6 +285,7 @@ class EstadoCompartido:
                 "grabando": self.grabando,
                 "modo": self.modo,
                 "nombre_frase": self.nombre_frase,
+                "titulo": self.titulo,
                 "tonalidad": self.tonalidad,
                 "posicion": self.posicion,
                 "escala": self.escala,
@@ -602,6 +613,8 @@ def guardar(estado):
         escala=estado.escala,
         muestras=estado.audio_grabado,
         frecuencia_muestreo=estado.frecuencia_muestreo,
+        titulo=estado.titulo,
+        comentario=estado.comentario,
     )
     estado.ultimo_guardado = {que: os.path.basename(ruta)
                               for que, ruta in rutas.items()}
@@ -852,6 +865,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._terminar())
         if self.path == "/api/frases/borrar":
             return self._responder_json(self._borrar_frase(cuerpo))
+        if self.path == "/api/frases/bolsa":
+            return self._responder_json(self._mover_de_bolsa(cuerpo))
         if self.path == "/api/configuracion":
             return self._responder_json(self._cambiar_configuracion(cuerpo))
         self.send_error(404)
@@ -891,6 +906,8 @@ class Manejador(SimpleHTTPRequestHandler):
         opciones = {
             "tonalidad": (parametros.get("tonalidad", [""])[0] or "").strip(),
             "igual": parametros.get("igual", ["0"])[0] == "1",
+            "comentario": (parametros.get("comentario", [""])[0] or "").strip(),
+            "bolsa": (parametros.get("bolsa", [""])[0] or "").strip(),
             # El pedazo a guardar, en segundos desde el principio del audio.
             # Sin esto se guarda el archivo entero.
             "desde": _numero(parametros.get("desde", [""])[0]),
@@ -966,6 +983,9 @@ class Manejador(SimpleHTTPRequestHandler):
         estado.reiniciar()
         estado.modo = modo
         estado.nombre_frase = nombre
+        estado.titulo = (peticion.get("titulo") or "").strip()[:80]
+        estado.comentario = (peticion.get("comentario") or "").strip()[:400]
+        estado.bolsa = (peticion.get("bolsa") or "").strip()[:40]
         estado.grabando = True
         estado.pedir("arrancar")
         return {"ok": True}
@@ -1019,6 +1039,7 @@ class Manejador(SimpleHTTPRequestHandler):
             frase = frases.desde_eventos(
                 estado.eventos, estado.nombre_frase, estado.tonalidad,
                 estado.posicion, estado.escala,
+                comentario=estado.comentario, bolsa=estado.bolsa,
             )
         except ValueError as error:
             return {"ok": False, "modo": "frase", "motivo": str(error)}
@@ -1166,7 +1187,9 @@ class Manejador(SimpleHTTPRequestHandler):
             try:
                 frase = frases.desde_eventos(
                     resultado.eventos, nombre, tonalidad,
-                    estado.posicion, estado.escala)
+                    estado.posicion, estado.escala,
+                    comentario=opciones["comentario"],
+                    bolsa=opciones["bolsa"])
             except ValueError as fallo:
                 return {"ok": False, "motivo": str(fallo)}
 
@@ -1245,11 +1268,40 @@ class Manejador(SimpleHTTPRequestHandler):
                 "tonalidad": frase.tonalidad,
                 "posicion": frase.posicion,
                 "fecha": (frase.fecha or "")[:10],
+                "comentario": frase.comentario,
+                "bolsa": frase.bolsa,
                 "tab": frase.tablatura()[:16],
                 "hay_audio": os.path.isfile(
                     os.path.splitext(ruta)[0] + "_audio.wav"),
             })
-        return {"frases": salida}
+        # Las bolsas que existen hoy, para poder ofrecerlas sin que tengas
+        # que acordarte de como las escribiste.
+        bolsas = sorted({f["bolsa"] for f in salida if f["bolsa"]})
+        return {"frases": salida, "bolsas": bolsas}
+
+    def _mover_de_bolsa(self, peticion):
+        """
+        Cambia la bolsa de una o varias frases. Con la bolsa vacia, las saca.
+
+        Acepta varios nombres de una porque asi se usa: marcas cinco frases
+        que son del mismo tema y las mandas juntas.
+        """
+        peticion = peticion or {}
+        nombres = peticion.get("nombres") or []
+        if isinstance(nombres, str):
+            nombres = [nombres]
+        bolsa = (peticion.get("bolsa") or "").strip()[:40]
+
+        movidas = 0
+        for nombre in nombres:
+            frase = frases.buscar(nombre)
+            if frase is None:
+                continue
+            frase.bolsa = bolsa
+            frases.guardar(frase)
+            movidas += 1
+
+        return {"ok": movidas > 0, "movidas": movidas}
 
     def _borrar_frase(self, peticion):
         nombre = (peticion or {}).get("nombre", "")

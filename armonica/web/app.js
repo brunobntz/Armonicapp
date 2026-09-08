@@ -27,6 +27,7 @@ let filasPorAgujero = {};
 document.addEventListener("DOMContentLoaded", async () => {
   configurarSolapas();
   configurarBotones();
+  configurarBolsas();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -107,7 +108,11 @@ function configurarBotones() {
     } else {
       document.getElementById("seccion-resumen").hidden = true;
       document.getElementById("aviso-guardado").textContent = "";
-      await comenzar({ modo: "sesion" });
+      await comenzar({
+        modo: "sesion",
+        titulo: document.getElementById("titulo-sesion").value,
+        comentario: document.getElementById("descripcion-sesion").value,
+      });
     }
 
     grabar.disabled = false;
@@ -124,7 +129,12 @@ function configurarBotones() {
         return;
       }
       document.getElementById("seccion-comparacion").hidden = true;
-      await comenzar({ modo: "frase", nombre: nombre });
+      await comenzar({
+        modo: "frase",
+        nombre: nombre,
+        comentario: document.getElementById("descripcion-frase").value,
+        bolsa: document.getElementById("bolsa-frase").value,
+      });
     });
 
   document.getElementById("boton-terminar-frase")
@@ -275,7 +285,11 @@ async function importar(nombre, archivo, igual, tramo) {
  * otro lado. */
 async function subir(ruta, nombre, archivo, extra) {
   const partes = ["nombre=" + encodeURIComponent(nombre),
-                  "archivo=" + encodeURIComponent(archivo.name || "")];
+                  "archivo=" + encodeURIComponent(archivo.name || ""),
+                  "comentario=" + encodeURIComponent(
+                    document.getElementById("descripcion-frase").value),
+                  "bolsa=" + encodeURIComponent(
+                    document.getElementById("bolsa-frase").value)];
 
   const tonalidad = document.getElementById("tonalidad-frase").value;
   if (tonalidad) partes.push("tonalidad=" + encodeURIComponent(tonalidad));
@@ -842,10 +856,12 @@ function sincronizarBotones(estado) {
       if (entrada) entrada.disabled = grabando;
     });
 
+  dibujarCartelDeFrase(estado, enFrase);
+
   if (enFrase) {
     avisarFrase(modo === "frase"
-      ? "Grabando \u00ab" + estado.nombre_frase + "\u00bb. Toca la frase y dale Terminar."
-      : "Practicando \u00ab" + estado.nombre_frase + "\u00bb. Tocala y dale Terminar.");
+      ? "Cuando termines, dale a Terminar."
+      : "Tocala igual que la referencia y dale a Terminar.");
   } else if (grabando) {
     avisarFrase(AVISO_SESION);
   } else if (document.getElementById("estado-frase").textContent === AVISO_SESION) {
@@ -859,27 +875,133 @@ function sincronizarBotones(estado) {
 const AVISO_SESION = "Hay una sesi\u00f3n en vivo andando. Terminala primero.";
 
 
+/* El cartel grande de "te estoy escuchando", en la solapa Frases.
+ *
+ * Una frase dura cuatro segundos. Antes lo unico que pasaba al apretar Grabar
+ * era que aparecia un boton chico y una linea de texto: para cuando lo leias,
+ * ya habias terminado de tocar. Ahora hay un punto rojo latiendo, el reloj, la
+ * barra de nivel y la tablatura saliendo en vivo. */
+function dibujarCartelDeFrase(estado, enFrase) {
+  const cartel = document.getElementById("grabando-frase");
+  if (!cartel) return;
+
+  cartel.hidden = !enFrase;
+  if (!enFrase) return;
+
+  const que = estado.modo === "frase" ? "Grabando" : "Practicando";
+  document.getElementById("que-se-graba").textContent =
+    que + " \u00ab" + estado.nombre_frase + "\u00bb";
+
+  const minutos = Math.floor(estado.segundos / 60);
+  const segundos = String(Math.floor(estado.segundos % 60)).padStart(2, "0");
+  document.getElementById("reloj-frase").textContent =
+    estado.cantidad_notas + " notas \u00b7 " + minutos + ":" + segundos;
+
+  const tab = document.getElementById("tab-frase");
+  tab.textContent = (estado.tab || []).length
+    ? estado.tab.join(" ")
+    : "Toc\u00e1 la frase\u2026";
+}
+
+
+/* La bolsa que estás mirando. "" es todas. */
+let bolsaElegida = "";
+let frasesMarcadas = new Set();
+let ultimasFrases = [];
+
+
 async function cargarFrases() {
   const datos = await pedir("/api/frases");
-  const contenedor = document.getElementById("lista-frases");
+  ultimasFrases = datos.frases || [];
 
-  if (!datos.frases || !datos.frases.length) {
-    contenedor.innerHTML = '<div class="aviso">Todav\u00eda no guardaste ninguna ' +
-      "frase. Escrib\u00ed un nombre arriba, dale Grabar y toc\u00e1 la frase como " +
-      "querr\u00edas tocarla.</div>";
+  llenarBolsasConocidas(datos.bolsas || []);
+  dibujarFiltrosDeBolsa(datos.bolsas || []);
+  dibujarListaDeFrases();
+}
+
+
+/* Las bolsas que ya usaste, para que el campo las ofrezca solo. Es un
+ * <datalist>: te sugiere las que hay, pero podés escribir una nueva. */
+function llenarBolsasConocidas(bolsas) {
+  const lista = document.getElementById("bolsas-conocidas");
+  if (lista) {
+    lista.innerHTML = bolsas
+      .map((b) => '<option value="' + escapar(b) + '">').join("");
+  }
+}
+
+
+function dibujarFiltrosDeBolsa(bolsas) {
+  const donde = document.getElementById("filtros-bolsa");
+  const sinBolsa = ultimasFrases.some((f) => !f.bolsa);
+
+  const opciones = [{ clave: "", texto: "todas" }]
+    .concat(bolsas.map((b) => ({ clave: b, texto: b })));
+  if (sinBolsa) opciones.push({ clave: " ", texto: "sin bolsa" });
+
+  // Si la bolsa que estabas mirando ya no existe, volvemos a todas.
+  if (bolsaElegida && !opciones.some((o) => o.clave === bolsaElegida)) {
+    bolsaElegida = "";
+  }
+
+  donde.innerHTML = opciones.map((opcion) =>
+    '<button class="bolsa' + (opcion.clave === bolsaElegida ? " activa" : "") +
+    '" data-bolsa="' + escapar(opcion.clave) + '">' +
+    escapar(opcion.texto) + "</button>").join("");
+
+  donde.querySelectorAll("[data-bolsa]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      bolsaElegida = boton.dataset.bolsa;
+      dibujarFiltrosDeBolsa(bolsas);
+      dibujarListaDeFrases();
+    });
+  });
+}
+
+
+function frasesVisibles() {
+  if (bolsaElegida === "") return ultimasFrases;
+  if (bolsaElegida === " ") return ultimasFrases.filter((f) => !f.bolsa);
+  return ultimasFrases.filter((f) => f.bolsa === bolsaElegida);
+}
+
+
+function dibujarListaDeFrases() {
+  const contenedor = document.getElementById("lista-frases");
+  const visibles = frasesVisibles();
+
+  if (!ultimasFrases.length) {
+    contenedor.innerHTML = '<div class="aviso">Todavía no guardaste ninguna ' +
+      "frase. Escribí un nombre arriba, dale Grabar y tocá la frase como " +
+      "querrías tocarla.</div>";
+    actualizarMovedor();
     return;
   }
 
-  contenedor.innerHTML = datos.frases.map((frase) =>
+  if (!visibles.length) {
+    contenedor.innerHTML = '<div class="aviso">No hay frases en esta bolsa.</div>';
+    actualizarMovedor();
+    return;
+  }
+
+  contenedor.innerHTML = visibles.map((frase) =>
     '<div class="frase">' +
+      '<input type="checkbox" data-marcar="' + escapar(frase.nombre) + '"' +
+        (frasesMarcadas.has(frase.nombre) ? " checked" : "") + ">" +
       '<div class="datos">' +
-        "<h3>" + escapar(frase.nombre) + "</h3>" +
+        "<h3>" + escapar(frase.nombre) +
+          (frase.bolsa
+            ? ' <span class="etiqueta-bolsa">' + escapar(frase.bolsa) + "</span>"
+            : "") + "</h3>" +
+        (frase.comentario
+          ? '<div class="descripcion">' + escapar(frase.comentario) + "</div>"
+          : "") +
         '<div class="tab-corta">' + frase.tab.join(" ") +
-          (frase.notas > frase.tab.length ? " \u2026" : "") + "</div>" +
-        '<div class="ayuda">' + frase.notas + " notas \u00b7 " +
-          frase.duracion_seg.toFixed(1) + " s \u00b7 arm\u00f3nica en " + frase.tonalidad +
-          (frase.posicion ? " \u00b7 " + frase.posicion + "\u00aa posici\u00f3n" : "") +
-          (frase.fecha ? " \u00b7 " + frase.fecha : "") + "</div>" +
+          (frase.notas > frase.tab.length ? " …" : "") + "</div>" +
+        '<div class="ayuda">' + frase.notas + " notas · " +
+          frase.duracion_seg.toFixed(1) + " s · armónica en " + frase.tonalidad +
+          (frase.posicion ? " · " + frase.posicion + "ª posición" : "") +
+          (frase.fecha ? " · " + frase.fecha : "") + "</div>" +
       "</div>" +
       (frase.hay_audio
         ? '<audio controls preload="none" src="/api/frases/audio?nombre=' +
@@ -892,6 +1014,14 @@ async function cargarFrases() {
       '<button class="borrar" data-borrar="' + escapar(frase.nombre) + '">Borrar</button>' +
     "</div>"
   ).join("");
+
+  contenedor.querySelectorAll("[data-marcar]").forEach((casilla) => {
+    casilla.addEventListener("change", () => {
+      if (casilla.checked) frasesMarcadas.add(casilla.dataset.marcar);
+      else frasesMarcadas.delete(casilla.dataset.marcar);
+      actualizarMovedor();
+    });
+  });
 
   contenedor.querySelectorAll("[data-practicar]").forEach((boton) => {
     boton.addEventListener("click", async () => {
@@ -908,7 +1038,7 @@ async function cargarFrases() {
 
       const nombre = entrada.dataset.intento;
       document.getElementById("seccion-comparacion").hidden = true;
-      avisarFrase("Comparando " + archivo.name + " contra \u00ab" + nombre + "\u00bb...");
+      avisarFrase("Comparando " + archivo.name + " contra «" + nombre + "»...");
 
       const respuesta = await subir("/api/frases/intento", nombre, archivo, {});
       if (!respuesta.ok) {
@@ -923,14 +1053,63 @@ async function cargarFrases() {
   contenedor.querySelectorAll("[data-borrar]").forEach((boton) => {
     boton.addEventListener("click", async () => {
       const nombre = boton.dataset.borrar;
-      if (!confirm("\u00bfBorrar la frase \u00ab" + nombre + "\u00bb?")) return;
+      if (!confirm("¿Borrar la frase «" + nombre + "»?")) return;
       await pedir("/api/frases/borrar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nombre: nombre }),
       });
+      frasesMarcadas.delete(nombre);
       cargarFrases();
     });
+  });
+
+  actualizarMovedor();
+}
+
+
+/* Los controles para mandar las marcadas a una bolsa. Aparecen recien cuando
+ * marcaste algo: mostrarlos siempre seria ruido. */
+function actualizarMovedor() {
+  const caja = document.getElementById("mover-a-bolsa");
+  if (!caja) return;
+
+  caja.hidden = frasesMarcadas.size === 0;
+  document.getElementById("cuantas-marcadas").textContent =
+    frasesMarcadas.size === 1 ? "1 frase marcada"
+                              : frasesMarcadas.size + " frases marcadas";
+}
+
+
+function configurarBolsas() {
+  const mover = document.getElementById("boton-mover");
+  if (!mover) return;
+
+  mover.addEventListener("click", async () => {
+    const destino = document.getElementById("bolsa-destino").value.trim();
+    const respuesta = await pedir("/api/frases/bolsa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nombres: Array.from(frasesMarcadas),
+        bolsa: destino,
+      }),
+    });
+
+    avisarFrase(respuesta.ok
+      ? respuesta.movidas + (destino
+          ? " frases a «" + destino + "»."
+          : " frases sacadas de su bolsa.")
+      : "no pude mover nada");
+
+    frasesMarcadas.clear();
+    document.getElementById("bolsa-destino").value = "";
+    cargarFrases();
+  });
+
+  document.getElementById("boton-desmarcar").addEventListener("click", () => {
+    frasesMarcadas.clear();
+    dibujarListaDeFrases();
   });
 }
 
@@ -1032,7 +1211,7 @@ function aPorcentaje(volumen) {
 
 function marcarUmbral() {
   const umbral = aPorcentaje(inicio.umbral_volumen || 0.01);
-  ["marca-umbral", "marca-umbral-ajustes"].forEach((id) => {
+  ["marca-umbral", "marca-umbral-ajustes", "marca-umbral-frases"].forEach((id) => {
     const marca = document.getElementById(id);
     if (marca) marca.style.left = umbral + "%";
   });
@@ -1043,7 +1222,7 @@ function dibujarNivel(estado) {
   const ancho = aPorcentaje(estado.pico);
   const umbral = inicio.umbral_volumen || 0.01;
 
-  ["barra-nivel", "barra-nivel-ajustes"].forEach((id) => {
+  ["barra-nivel", "barra-nivel-ajustes", "barra-nivel-frases"].forEach((id) => {
     const barra = document.getElementById(id);
     if (!barra) return;
     barra.style.width = ancho + "%";

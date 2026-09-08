@@ -37,6 +37,31 @@ from armonica import prioridades, resumen as modulo_resumen, segmentacion
 CARPETA_POR_DEFECTO = "sesiones"
 
 
+def _apodo(titulo, largo_maximo=32):
+    """
+    El titulo convertido en algo que pueda ser parte de un nombre de archivo.
+
+    Devuelve "" si no hay titulo, o "_lo-que-sea" si lo hay. Se quedan solo
+    letras, numeros y guiones: los espacios y los acentos dan problemas al
+    copiar archivos entre programas, y no vale la pena pelearse con eso.
+    """
+    if not titulo:
+        return ""
+
+    limpio = []
+    for caracter in titulo.strip().lower():
+        if caracter.isalnum() and caracter.isascii():
+            limpio.append(caracter)
+        elif caracter in " -_":
+            limpio.append("-")
+
+    apodo = "".join(limpio).strip("-")
+    while "--" in apodo:
+        apodo = apodo.replace("--", "-")
+
+    return ("_" + apodo[:largo_maximo].strip("-")) if apodo else ""
+
+
 def marca_de_tiempo(momento=None):
     """
     El nombre base de una sesión: 2026-09-04_19-30-15
@@ -53,18 +78,25 @@ def marca_de_tiempo(momento=None):
 def guardar_sesion(eventos, tonalidad="C", posicion=None, escala=None,
                    muestras=None, frecuencia_muestreo=None,
                    analisis_ritmico=None, carpeta=None, momento=None,
-                   notacion=None):
+                   notacion=None, titulo="", comentario=""):
     """
     Escribe los cuatro archivos y devuelve un diccionario con las rutas.
 
     `muestras` es opcional: si no le pasás audio, no guarda el .wav y los otros
     tres archivos se escriben igual.
+
+    `titulo` y `comentario` son tuyos y opcionales: qué estabas tocando y por
+    qué. Sin eso, dentro de un mes tenés doce carpetas con fecha y hora y
+    ninguna forma de saber cuál era la que valía la pena.
+
+    El título va DESPUES de la fecha en el nombre del archivo, no antes: así
+    los archivos se siguen ordenando solos por fecha, que es como se buscan.
     """
     if carpeta is None:
         carpeta = CARPETA_POR_DEFECTO
 
     os.makedirs(carpeta, exist_ok=True)
-    base = os.path.join(carpeta, marca_de_tiempo(momento))
+    base = os.path.join(carpeta, marca_de_tiempo(momento) + _apodo(titulo))
 
     datos = modulo_resumen.resumir(eventos, tonalidad, posicion, escala)
     hallazgos, sin_medir = prioridades.analizar(
@@ -75,11 +107,18 @@ def guardar_sesion(eventos, tonalidad="C", posicion=None, escala=None,
 
     # --- La tablatura ---
     rutas["tab"] = base + "_tab.txt"
-    _escribir(rutas["tab"], _texto_de_tab(eventos, datos, notacion))
+    _escribir(rutas["tab"],
+              _texto_de_tab(eventos, datos, notacion, titulo, comentario))
 
     # --- El resumen ---
     rutas["resumen"] = base + "_resumen.txt"
-    _escribir(rutas["resumen"], "\n".join([
+    encabezado = []
+    if titulo:
+        encabezado += [titulo, "=" * len(titulo)]
+    if comentario:
+        encabezado += [comentario, ""]
+
+    _escribir(rutas["resumen"], "\n".join(encabezado + [
         modulo_resumen.como_texto(datos, analisis_ritmico),
         "",
         prioridades.imprimir(hallazgos, sin_medir),
@@ -90,7 +129,7 @@ def guardar_sesion(eventos, tonalidad="C", posicion=None, escala=None,
     rutas["eventos"] = base + "_eventos.json"
     _escribir(rutas["eventos"], json.dumps(
         _sesion_a_diccionario(eventos, datos, tonalidad, posicion, escala,
-                              analisis_ritmico, notacion),
+                              analisis_ritmico, notacion, titulo, comentario),
         indent=2, ensure_ascii=False,
     ))
 
@@ -113,9 +152,15 @@ def _escribir(ruta, texto):
         archivo.write(texto.replace("\n", "\r\n"))
 
 
-def _texto_de_tab(eventos, datos, notacion):
+def _texto_de_tab(eventos, datos, notacion, titulo="", comentario=""):
     """El archivo de tablatura: encabezado corto y después la tab."""
     lineas = []
+    if titulo:
+        lineas.append(titulo)
+        lineas.append("=" * len(titulo))
+    if comentario:
+        lineas.append(comentario)
+        lineas.append("")
     lineas.append(f"Armonica en {datos.tonalidad}")
     if datos.posicion:
         lineas.append(f"{datos.posicion}a posicion, tocando en {datos.tonalidad_resultante}")
@@ -139,7 +184,8 @@ def _texto_de_tab(eventos, datos, notacion):
 
 
 def _sesion_a_diccionario(eventos, datos, tonalidad, posicion, escala,
-                          analisis_ritmico, notacion):
+                          analisis_ritmico, notacion, titulo="",
+                          comentario=""):
     """
     Arma la estructura que va al JSON.
 
@@ -150,6 +196,8 @@ def _sesion_a_diccionario(eventos, datos, tonalidad, posicion, escala,
     return {
         "version": 1,
         "fecha": datetime.now().isoformat(timespec="seconds"),
+        "titulo": titulo,
+        "comentario": comentario,
         "configuracion": {
             "tonalidad": tonalidad,
             "posicion": posicion,

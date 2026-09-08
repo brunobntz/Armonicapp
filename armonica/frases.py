@@ -84,6 +84,11 @@ class Frase:
     fecha: str = ""
     comentario: str = ""
 
+    # La bolsa donde la pusiste. Es una sola palabra tuya —"turnarounds",
+    # "clase de junio", "para calentar"— y sirve para no tener treinta frases
+    # sueltas en una lista sin forma. Vacia quiere decir "sin clasificar".
+    bolsa: str = ""
+
     @property
     def cantidad(self):
         return len(self.notas)
@@ -106,7 +111,7 @@ class Frase:
 
 
 def desde_eventos(eventos, nombre, tonalidad="C", posicion=None, escala=None,
-                  comentario="", notacion=None):
+                  comentario="", notacion=None, bolsa=""):
     """
     Convierte una transcripción en una frase de referencia.
 
@@ -125,6 +130,7 @@ def desde_eventos(eventos, nombre, tonalidad="C", posicion=None, escala=None,
         posicion=posicion,
         escala=escala,
         comentario=comentario,
+        bolsa=bolsa,
         fecha=datetime.now().isoformat(timespec="seconds"),
         notas=[
             NotaDeFrase(
@@ -587,6 +593,7 @@ def guardar(frase, carpeta=None):
         "nombre": frase.nombre,
         "fecha": frase.fecha,
         "comentario": frase.comentario,
+        "bolsa": frase.bolsa,
         "tonalidad": frase.tonalidad,
         "posicion": frase.posicion,
         "escala": frase.escala,
@@ -611,6 +618,7 @@ def cargar(ruta):
         escala=datos.get("escala"),
         fecha=datos.get("fecha", ""),
         comentario=datos.get("comentario", ""),
+        bolsa=datos.get("bolsa", ""),
         notas=[
             NotaDeFrase(
                 tab=nota["tab"],

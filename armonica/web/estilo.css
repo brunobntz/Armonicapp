@@ -485,3 +485,88 @@ select:disabled { opacity: 0.4; }
   color: var(--verde);
 }
 #aviso-guardado.problema { color: var(--amarillo); }
+
+/* --- Los rotulos: nombre y descripcion antes de grabar --- */
+
+.fila-rotulos { margin-top: 10px; }
+.fila-rotulos input[type="text"] { flex: 1; min-width: 180px; }
+
+/* --- El cartel de "estoy grabando una frase" ---
+ *
+ * Una frase dura cuatro segundos. Con solo una linea de texto no llegabas a
+ * darte cuenta de que la app te estaba escuchando: para cuando lo leias, ya
+ * habias terminado de tocar. */
+
+.grabando {
+  background: var(--panel);
+  border: 1px solid rgba(232, 101, 74, 0.45);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+.titulo-grabando {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+.titulo-grabando #reloj-frase {
+  color: var(--tenue);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.punto-rojo {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--rojo);
+  animation: latir 1.1s ease-in-out infinite;
+}
+@keyframes latir {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+#tab-frase {
+  margin-top: 10px;
+  min-height: 20px;
+  color: var(--texto);
+}
+
+/* --- Las bolsas --- */
+
+#filtros-bolsa { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
+.bolsa {
+  background: transparent;
+  border: 1px solid var(--borde);
+  color: var(--tenue);
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.bolsa.activa { background: var(--azul); border-color: var(--azul); color: #0d1117; }
+
+#mover-a-bolsa { margin-top: 12px; }
+
+.frase input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--azul);
+  cursor: pointer;
+}
+.frase .descripcion {
+  font-size: 13px;
+  color: var(--tenue);
+  font-style: italic;
+}
+.etiqueta-bolsa {
+  font-size: 11px;
+  color: var(--azul);
+  border: 1px solid rgba(90, 169, 240, 0.4);
+  border-radius: 10px;
+  padding: 1px 8px;
+}

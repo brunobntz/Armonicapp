@@ -23,10 +23,23 @@
 
   <!-- Un solo botón. La app ya está escuchando: esto decide si lo que tocás
        se guarda o no. -->
-  <section class="controles">
-    <button id="boton-grabar" class="principal">Grabar esta sesión</button>
-    <span id="contadores"></span>
-    <span id="aviso-guardado"></span>
+  <section>
+    <div class="controles">
+      <button id="boton-grabar" class="principal">Grabar esta sesión</button>
+      <span id="contadores"></span>
+      <span id="aviso-guardado"></span>
+    </div>
+
+    <!-- Los dos campos son opcionales, y por eso van DEBAJO del botón: no
+         tienen que frenarte cuando querés grabar y ya. Pero dentro de un mes
+         son la diferencia entre doce carpetas con fecha y hora y saber cuál
+         era la que valía la pena. -->
+    <div class="controles fila-rotulos">
+      <input id="titulo-sesion" type="text" maxlength="80"
+             placeholder="nombre de la sesión (opcional)">
+      <input id="descripcion-sesion" type="text" maxlength="400"
+             placeholder="qué estás practicando (opcional)">
+    </div>
   </section>
 
   <!-- La barra de nivel. Es lo primero que hay que mirar cuando "no anda
@@ -122,8 +135,32 @@
       <button id="boton-terminar-frase" class="secundario" hidden>
         Terminar
       </button>
-      <span id="estado-frase"></span>
     </div>
+
+    <div class="controles fila-rotulos">
+      <input id="descripcion-frase" type="text" maxlength="400"
+             placeholder="qué es esta frase (opcional)">
+      <input id="bolsa-frase" type="text" maxlength="40" list="bolsas-conocidas"
+             placeholder="bolsa (opcional)">
+      <datalist id="bolsas-conocidas"></datalist>
+    </div>
+
+    <!-- Mientras grabás una frase pasa lo mismo que en la solapa En vivo,
+         pero acá no se veía nada: solo una línea de texto. Una frase dura
+         cuatro segundos, así que necesitás saber YA que te está escuchando. -->
+    <div id="grabando-frase" class="grabando" hidden>
+      <div class="titulo-grabando">
+        <span class="punto-rojo"></span>
+        <strong id="que-se-graba"></strong>
+        <span id="reloj-frase"></span>
+      </div>
+      <div class="barra-nivel"><div id="barra-nivel-frases"></div>
+        <div id="marca-umbral-frases"></div>
+      </div>
+      <div id="tab-frase" class="tab-corta">Tocá la frase…</div>
+    </div>
+
+    <p id="estado-frase" class="ayuda"></p>
 
     <!-- El selector de armónica va en esta línea y no arriba a propósito:
          solo afecta a lo que importás. Lo que grabás con el micrófono usa la
@@ -154,6 +191,17 @@
 
   <section>
     <h2>Tus frases</h2>
+    <div class="controles" id="controles-bolsas">
+      <span class="ayuda">Bolsa:</span>
+      <span id="filtros-bolsa"></span>
+    </div>
+    <div class="controles" id="mover-a-bolsa" hidden>
+      <span id="cuantas-marcadas" class="ayuda"></span>
+      <input id="bolsa-destino" type="text" maxlength="40"
+             list="bolsas-conocidas" placeholder="mandarlas a la bolsa...">
+      <button id="boton-mover" class="principal">Mover</button>
+      <button id="boton-desmarcar" class="secundario">Desmarcar</button>
+    </div>
     <div id="lista-frases"></div>
   </section>
 
