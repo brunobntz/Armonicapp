@@ -474,3 +474,14 @@ select:disabled { opacity: 0.4; }
   height: 34px;
   max-width: 240px;
 }
+
+/* La confirmacion de que se guardo, al lado del boton.
+ *
+ * Va aca y no solo en el resumen porque el resumen esta abajo de las diez
+ * filas del diagrama: apretabas Terminar y guardar, se guardaba bien, y no
+ * veias absolutamente nada porque la confirmacion quedaba fuera de pantalla. */
+#aviso-guardado {
+  font-size: 14px;
+  color: var(--verde);
+}
+#aviso-guardado.problema { color: var(--amarillo); }

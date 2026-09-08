@@ -65,6 +65,13 @@ REFRESCOS_POR_SEGUNDO = 15
 # archivo equivocado no se lea entero a memoria antes de darnos cuenta.
 MAXIMO_SUBIDA_BYTES = 60 * 1024 * 1024
 
+# Cuantas veces seguidas se intenta reabrir el microfono antes de darse por
+# vencido, y cuanto se espera entre intento e intento. Ver `escuchar`: con el
+# microfono prendido todo el tiempo, que el hilo se muera una vez ya no es un
+# final aceptable.
+INTENTOS_DE_MICROFONO = 5
+ESPERA_ENTRE_INTENTOS = 0.5
+
 # Lo que se le dice al navegador cuando el archivo no se puede leer. El error
 # de audio.leer_wav nombra el archivo, que en la terminal es justo lo que
 # queres saber; acá ese archivo es un temporal con nombre inventado y decirlo
@@ -417,91 +424,139 @@ def escuchar(estado, detener):
 
     Sin ese recorte, estar sentado con la app abierta sumaría diez megas de
     audio por minuto sin que hayas tocado nada.
+
+    Y SE VUELVE A ABRIR SOLO
+
+    `captura.ventanas()` TERMINA cuando el micrófono deja de entregar audio
+    por unos segundos: lo desenchufaste, otro programa lo tomó, el driver
+    hipó. Eso existe para que una sesión con el micrófono desconectado no se
+    cuelgue para siempre, y está bien.
+
+    Pero con el micrófono prendido todo el tiempo, que el hilo termine ahí es
+    un final malísimo: la app deja de escuchar en silencio y no vuelve nunca.
+    Apareció así, y cuesta de diagnosticar porque no hay error que mostrar:
+    `escuchando` en false y `error_de_audio` vacío.
+
+    Por eso el bucle de afuera lo reabre. Si falla varias veces seguidas se
+    rinde, y ahí sí hay algo concreto que decirte en pantalla.
     """
     from armonica import microfono
 
     tabla = mapeo.construir_tabla_inversa(estado.tonalidad)
-    mediciones = []
+    fallos = 0
 
-    try:
-        with microfono.CapturaMicrofono(dispositivo=estado.dispositivo) as captura:
-            estado.frecuencia_muestreo = captura.frecuencia_muestreo
-            ultimo_recalculo = -1.0
-            eventos = []
-            ventanas_en_pantalla = int(
-                config.SEGUNDOS_EN_PANTALLA * estado.frecuencia_muestreo
-                / config.SALTO_VENTANA
-            )
+    while not detener.is_set():
+        try:
+            _una_vuelta_de_microfono(estado, detener, tabla, microfono)
+            fallos = 0
+        except Exception as error:      # noqa: BLE001
+            # Antes esto solo se imprimia en la terminal, que es justo la
+            # ventana que nadie mira cuando está usando la app. Ahora también
+            # viaja a la pantalla: un micrófono ocupado por otro programa, o
+            # desenchufado, se veía idéntico a "no estoy tocando fuerte".
+            print(f"  El hilo de audio se corto: {error}")
+            estado.error_de_audio = str(error)
+            fallos += 1
 
-            for instante, ventana in captura.ventanas():
-                if detener.is_set():
-                    break
+        if detener.is_set():
+            break
 
-                # Los pedidos del otro hilo. Son dos y se atienden acá porque
-                # este es el hilo que tiene la captura en la mano.
-                pedido = estado.tomar_pedido()
-                if pedido == "arrancar":
-                    mediciones = []
-                    eventos = []
-                    captura.olvidar_lo_grabado()
-                    estado.inicio_grabacion_seg = instante
-                elif pedido == "cerrar":
-                    estado.mediciones = list(mediciones)
-                    estado.audio_grabado = captura.audio_grabado()
-                    estado.grabacion_lista = True
+        if fallos >= INTENTOS_DE_MICROFONO:
+            if not estado.error_de_audio:
+                estado.error_de_audio = (
+                    "el microfono dejo de entregar audio y no pude reabrirlo"
+                )
+            break
 
-                volumen = audio.volumen_rms(ventana)
-
-                if volumen < config.UMBRAL_VOLUMEN_RMS:
-                    frecuencia, confianza = None, 0.0
-                else:
-                    frecuencia, confianza = tono.detectar_frecuencia(
-                        ventana, estado.frecuencia_muestreo
-                    )
-
-                mediciones.append({
-                    "tiempo_seg": instante, "frecuencia": frecuencia,
-                    "confianza": confianza, "volumen": volumen,
-                })
-
-                nota, cents = (None, 0.0)
-                if frecuencia is not None:
-                    nota, cents = mapeo.frecuencia_a_nota(
-                        frecuencia, tabla_inversa=tabla
-                    )
-
-                # La segmentación se rehace unas pocas veces por segundo, no en
-                # cada ventana: es lo único caro del bucle.
-                if instante - ultimo_recalculo >= 1.0 / REFRESCOS_POR_SEGUNDO:
-                    ultimo_recalculo = instante
-                    eventos = segmentacion.segmentar(
-                        mediciones, tabla,
-                        frecuencia_muestreo=estado.frecuencia_muestreo,
-                    )
-                    if estado.posicion and estado.escala:
-                        segmentacion.marcar_escala(
-                            eventos, estado.tonalidad, estado.posicion,
-                            estado.escala,
-                        )
-
-                estado.actualizar(nota, cents, volumen, instante, eventos)
-
-                # Sin grabar solo mostramos: ni el audio ni la historia larga
-                # le sirven a nadie, y las dos crecen para siempre.
-                if not estado.grabando:
-                    captura.olvidar_lo_grabado()
-                    if len(mediciones) > ventanas_en_pantalla * 2:
-                        del mediciones[:-ventanas_en_pantalla]
-
-    except Exception as error:      # noqa: BLE001
-        # Antes esto solo se imprimia en la terminal, que es justo la ventana
-        # que nadie mira cuando esta usando la app. Ahora tambien viaja a la
-        # pantalla: un microfono ocupado por otro programa, o desenchufado,
-        # se veia identico a "no estoy tocando lo bastante fuerte".
-        print(f"  El hilo de audio se corto: {error}")
-        estado.error_de_audio = str(error)
+        # Si `ventanas()` se agotó sin excepción, no hubo error: el micrófono
+        # se quedó callado y volvemos a intentar sin contarlo como falla dura.
+        time.sleep(ESPERA_ENTRE_INTENTOS)
 
     estado.escuchando = False
+
+
+def _una_vuelta_de_microfono(estado, detener, tabla, microfono):
+    """
+    Abre el micrófono y analiza hasta que se corte. Lo llama `escuchar`.
+
+    Está separado nada más que para que el bucle de reintentos de arriba se
+    lea de un vistazo: acá adentro no hay ninguna decisión sobre reabrir.
+    """
+    with microfono.CapturaMicrofono(dispositivo=estado.dispositivo) as captura:
+        estado.frecuencia_muestreo = captura.frecuencia_muestreo
+        estado.escuchando = True
+        estado.error_de_audio = ""
+
+        # Los tiempos arrancan de cero en cada apertura, así que la historia
+        # anterior no se puede mezclar con la nueva: quedaría una nota de
+        # veinte segundos donde hubo un corte.
+        mediciones = []
+        eventos = []
+        ultimo_recalculo = -1.0
+        ventanas_en_pantalla = int(
+            config.SEGUNDOS_EN_PANTALLA * estado.frecuencia_muestreo
+            / config.SALTO_VENTANA
+        )
+
+        for instante, ventana in captura.ventanas():
+            if detener.is_set():
+                return
+
+            # Los pedidos del otro hilo. Son dos y se atienden acá porque
+            # este es el hilo que tiene la captura en la mano.
+            pedido = estado.tomar_pedido()
+            if pedido == "arrancar":
+                mediciones = []
+                eventos = []
+                captura.olvidar_lo_grabado()
+                estado.inicio_grabacion_seg = instante
+            elif pedido == "cerrar":
+                estado.mediciones = list(mediciones)
+                estado.audio_grabado = captura.audio_grabado()
+                estado.grabacion_lista = True
+
+            volumen = audio.volumen_rms(ventana)
+
+            if volumen < config.UMBRAL_VOLUMEN_RMS:
+                frecuencia, confianza = None, 0.0
+            else:
+                frecuencia, confianza = tono.detectar_frecuencia(
+                    ventana, estado.frecuencia_muestreo
+                )
+
+            mediciones.append({
+                "tiempo_seg": instante, "frecuencia": frecuencia,
+                "confianza": confianza, "volumen": volumen,
+            })
+
+            nota, cents = (None, 0.0)
+            if frecuencia is not None:
+                nota, cents = mapeo.frecuencia_a_nota(
+                    frecuencia, tabla_inversa=tabla
+                )
+
+            # La segmentación se rehace unas pocas veces por segundo, no en
+            # cada ventana: es lo único caro del bucle.
+            if instante - ultimo_recalculo >= 1.0 / REFRESCOS_POR_SEGUNDO:
+                ultimo_recalculo = instante
+                eventos = segmentacion.segmentar(
+                    mediciones, tabla,
+                    frecuencia_muestreo=estado.frecuencia_muestreo,
+                )
+                if estado.posicion and estado.escala:
+                    segmentacion.marcar_escala(
+                        eventos, estado.tonalidad, estado.posicion,
+                        estado.escala,
+                    )
+
+            estado.actualizar(nota, cents, volumen, instante, eventos)
+
+            # Sin grabar solo mostramos: ni el audio ni la historia larga
+            # le sirven a nadie, y las dos crecen para siempre.
+            if not estado.grabando:
+                captura.olvidar_lo_grabado()
+                if len(mediciones) > ventanas_en_pantalla * 2:
+                    del mediciones[:-ventanas_en_pantalla]
 
 
 def encender_microfono(clase):
@@ -717,6 +772,44 @@ class Manejador(SimpleHTTPRequestHandler):
 
     def log_message(self, formato, *args):
         """Silencia el registro de cada pedido, que llena la terminal."""
+
+    def end_headers(self):
+        """
+        Nada se cachea. Nunca.
+
+        POR QUE ESTO ARREGLA UN ERROR DE VERDAD
+
+        Las respuestas JSON ya decian no-store, pero los archivos de la pagina
+        —index.html, app.js, estilo.css— los servia SimpleHTTPRequestHandler,
+        que solo manda Last-Modified. Sin un Cache-Control, el navegador aplica
+        cache HEURISTICA: se guarda el archivo y durante horas ni pregunta si
+        cambio.
+
+        El resultado es de los peores que hay: actualizas la app, la abris, y
+        seguis usando la version anterior sin ninguna senal. Paso: los botones
+        nuevos no aparecian y el viejo, que estaba deshabilitado, "no hacia
+        nada".
+
+        Esto corre en tu maquina y los archivos pesan unos kilobytes: no hay
+        nada que ganar cacheandolos.
+        """
+        if not self._puse_cache:
+            self._puse_cache = True
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+        super().end_headers()
+
+    def send_header(self, palabra, valor):
+        if palabra.lower() == "cache-control":
+            self._puse_cache = True
+        super().send_header(palabra, valor)
+
+    _puse_cache = False
+
+    def handle_one_request(self):
+        # Cada pedido arranca con la cuenta en cero: el mismo objeto atiende
+        # varios pedidos seguidos cuando la conexion se reutiliza.
+        self._puse_cache = False
+        super().handle_one_request()
 
     # --- GET ---
 

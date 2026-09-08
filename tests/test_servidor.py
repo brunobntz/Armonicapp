@@ -1355,6 +1355,11 @@ def correr_el_hilo(estado, ventanas, guion=None):
                 guion[numero]()
             yield instante, ventana
 
+        # Con un microfono de verdad, que se acaben las ventanas significa que
+        # dejo de entregar audio, y `escuchar` lo REABRE. Con este falso eso
+        # seria un bucle infinito: cortamos aca.
+        detener.set()
+
     captura.ventanas = ventanas_con_guion
 
     anterior = microfono.CapturaMicrofono
@@ -1497,3 +1502,96 @@ def test_los_pedidos_se_toman_una_sola_vez():
     estado.pedir("arrancar")
     assert estado.tomar_pedido() == "arrancar"
     assert estado.tomar_pedido() is None
+
+
+def test_los_archivos_de_la_pagina_no_se_cachean(servidor_andando):
+    """
+    UN ERROR QUE NO SE VE Y CONFUNDE MUCHISIMO.
+
+    Las respuestas JSON ya decian no-store, pero index.html, app.js y
+    estilo.css los servia SimpleHTTPRequestHandler, que solo manda
+    Last-Modified. Sin Cache-Control, el navegador aplica cache HEURISTICA: se
+    guarda el archivo y durante horas ni pregunta si cambio.
+
+    El resultado: actualizas la app, la abris, y seguis usando la version
+    anterior sin ninguna senal de que eso esta pasando. Botones nuevos que no
+    aparecen, botones viejos que "no hacen nada".
+    """
+    for archivo in ("/", "/app.js", "/estilo.css"):
+        with urllib.request.urlopen(servidor_andando + archivo, timeout=5) as r:
+            cache = r.headers.get("Cache-Control", "")
+        assert "no-store" in cache, f"{archivo} se puede cachear: {cache!r}"
+
+
+def test_las_respuestas_json_tampoco_se_cachean(servidor_andando):
+    with urllib.request.urlopen(servidor_andando + "/api/inicio", timeout=5) as r:
+        assert "no-store" in r.headers.get("Cache-Control", "")
+        # Y una sola vez: la cabecera no se manda duplicada.
+        assert len(r.headers.get_all("Cache-Control") or []) == 1
+
+
+def test_si_el_microfono_se_cae_se_vuelve_a_abrir():
+    """
+    EL ERROR MAS DIFICIL DE VER DE TODOS.
+
+    captura.ventanas() TERMINA cuando el microfono deja de entregar audio por
+    unos segundos. Eso existe para que una sesion con el microfono
+    desconectado no se cuelgue, y esta bien.
+
+    Pero con el microfono prendido todo el tiempo, que el hilo termine ahi
+    deja la app sorda para siempre y SIN NINGUN ERROR QUE MOSTRAR: escuchando
+    en false y error_de_audio vacio. Aparecio asi, probando en el navegador.
+    """
+    from armonica import microfono
+
+    aperturas = []
+    detener = threading.Event()
+
+    def abrir(**kwargs):
+        aperturas.append(1)
+        if len(aperturas) >= 3:
+            detener.set()
+        return CapturaFalsa(ventanas_de_silencio(3))
+
+    estado = servidor.EstadoCompartido("C")
+    anterior = microfono.CapturaMicrofono
+    servidor.ESPERA_ENTRE_INTENTOS = 0.0
+    microfono.CapturaMicrofono = abrir
+    try:
+        servidor.escuchar(estado, detener)
+    finally:
+        microfono.CapturaMicrofono = anterior
+        servidor.ESPERA_ENTRE_INTENTOS = 0.5
+
+    assert len(aperturas) == 3, "tendria que haber reabierto el microfono"
+    assert estado.error_de_audio == ""      # agotarse no es un error
+
+
+def test_si_el_microfono_falla_siempre_se_rinde_y_lo_dice():
+    """
+    Reintentar para siempre seria peor: la app giraria en silencio.
+
+    Despues de unos intentos se rinde y deja un motivo en el estado, que es lo
+    que la pantalla muestra arriba de la barra de nivel.
+    """
+    from armonica import microfono
+
+    intentos = []
+
+    def abrir_rompiendo(**kwargs):
+        intentos.append(1)
+        raise OSError("el microfono esta ocupado por otro programa")
+
+    estado = servidor.EstadoCompartido("C")
+    anterior = microfono.CapturaMicrofono
+    servidor.ESPERA_ENTRE_INTENTOS = 0.0
+    microfono.CapturaMicrofono = abrir_rompiendo
+    try:
+        servidor.escuchar(estado, threading.Event())
+    finally:
+        microfono.CapturaMicrofono = anterior
+        servidor.ESPERA_ENTRE_INTENTOS = 0.5
+
+    assert len(intentos) == servidor.INTENTOS_DE_MICROFONO
+    assert "ocupado" in estado.error_de_audio
+    assert estado.escuchando is False

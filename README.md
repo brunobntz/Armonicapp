@@ -18,8 +18,11 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-**Lo primero de todo: elegí el micrófono.** Abrí la app, andá a la solapa
-**Ajustes** y dale a Probar. Windows tiene siempre media docena de entradas y
+**Lo primero de todo: elegí el micrófono, y elegilo EXPLÍCITAMENTE.** Abrí
+la app y andá a la solapa **Ajustes**. No dejes puesto "el predeterminado de
+Windows": medido en esta máquina, con esa opción el micrófono se agota y se
+reabre cada pocos segundos, mientras que eligiendo el mismo aparato por su
+nombre anda de corrido. Windows tiene siempre media docena de entradas y
 la predeterminada rara vez es la que usás: en la máquina donde se escribió
 esto era el micrófono de la cámara web, a un metro de la cara. Con el
 equivocado, la app "no anda" y en realidad está escuchando otra cosa. La barra
@@ -378,7 +381,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 653 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 657 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

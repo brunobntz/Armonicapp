@@ -103,8 +103,10 @@ function configurarBotones() {
       const respuesta = await pedir("/api/terminar", { method: "POST" });
       delete grabar.dataset.guardando;
       mostrarResumen(respuesta);
+      avisarQueSeGuardo(respuesta);
     } else {
       document.getElementById("seccion-resumen").hidden = true;
+      document.getElementById("aviso-guardado").textContent = "";
       await comenzar({ modo: "sesion" });
     }
 
@@ -600,6 +602,34 @@ function dibujarTab(tabs) {
 /* ==========================================================================
    El resumen al terminar
    ========================================================================== */
+
+/* Decir, ARRIBA Y AL LADO DEL BOTON, que paso al guardar.
+ *
+ * El resumen se dibuja al final de la pagina, despues de las diez filas del
+ * diagrama. Apretabas Terminar y guardar, se guardaba bien, y no pasaba nada
+ * visible: la confirmacion estaba a dos pantallas de distancia. */
+function avisarQueSeGuardo(respuesta) {
+  const aviso = document.getElementById("aviso-guardado");
+  const archivos = Object.keys(respuesta.guardado || {}).length;
+
+  if (!respuesta.ok) {
+    aviso.className = "problema";
+    aviso.textContent = respuesta.motivo || "no se pudo guardar";
+  } else if (!archivos) {
+    aviso.className = "problema";
+    aviso.textContent = "No se guardó nada: no se reconoció ninguna nota.";
+  } else {
+    aviso.className = "";
+    const notas = (respuesta.resumen || {}).notas || 0;
+    aviso.textContent = "Guardado en sesiones/ — " + notas + " notas.";
+    // Y llevamos la vista al resumen, que es lo que queres leer ahora.
+    document.getElementById("seccion-resumen")
+      .scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  setTimeout(() => { aviso.textContent = ""; }, 12000);
+}
+
 
 function mostrarResumen(respuesta) {
   const seccion = document.getElementById("seccion-resumen");
