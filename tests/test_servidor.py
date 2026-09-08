@@ -1161,18 +1161,34 @@ def test_no_se_puede_configurar_una_posicion_sin_tabla(servidor_andando):
     assert "tablas" in respuesta["motivo"]
 
 
-def test_no_se_puede_cambiar_la_configuracion_mientras_escucha(servidor_andando):
+def test_se_puede_cambiar_la_configuracion_mientras_escucha(servidor_andando):
     """
-    El hilo de audio ya armo su tabla de notas con la armonica anterior.
-    Cambiarla en el medio dejaria media sesion transcrita con una armonica y
-    media con otra, sin ninguna senal de que paso.
+    Escuchar no bloquea nada: el microfono esta prendido todo el tiempo.
+
+    Antes esto estaba prohibido, y con razon: escuchar y grabar eran lo mismo.
+    Ahora son dos cosas distintas y cambiar de armonica mientras mirabas la
+    pantalla, sin estar grabando nada, no rompe nada.
     """
-    servidor.Manejador.estado.escuchando = True
+    respuesta = mandar(servidor_andando, "/api/configuracion",
+                       {"tonalidad": "A"})
+
+    assert respuesta["ok"] is True
+    assert servidor.Manejador.estado.tonalidad == "A"
+
+
+def test_no_se_puede_cambiar_la_configuracion_mientras_graba(servidor_andando):
+    """
+    Grabando si esta prohibido, y por el mismo motivo de siempre: el hilo de
+    audio armo su tabla de notas con la armonica anterior, y cambiarla en el
+    medio dejaria media sesion transcrita con una y media con otra, sin
+    ninguna senal de que paso.
+    """
+    servidor.Manejador.estado.grabando = True
     try:
         respuesta = mandar(servidor_andando, "/api/configuracion",
                            {"tonalidad": "A"})
     finally:
-        servidor.Manejador.estado.escuchando = False
+        servidor.Manejador.estado.grabando = False
 
     assert respuesta["ok"] is False
     assert servidor.Manejador.estado.tonalidad == "C"
@@ -1266,3 +1282,218 @@ def test_pedir_el_audio_de_una_frase_que_no_esta(servidor_andando, carpeta_de_fr
         assert False, "tendria que haber dado 404"
     except urllib.error.HTTPError as fallo:
         assert fallo.code == 404
+
+
+# =============================================================================
+# El microfono queda prendido: escuchar y grabar son dos cosas distintas
+#
+# Estos tests usan un microfono FALSO. Es la unica manera de probar el bucle
+# de audio entero —los pedidos entre hilos, el recorte de memoria, que se
+# guarde solo lo grabado— sin una placa de sonido y sin tocar nada.
+# =============================================================================
+
+class CapturaFalsa:
+    """
+    Un microfono de mentira que entrega las ventanas que le pongamos.
+
+    Imita la interfaz de microfono.CapturaMicrofono: entra y sale como
+    contexto, entrega ventanas con su instante, y va guardando lo que "entro"
+    para poder devolverlo al final.
+    """
+
+    def __init__(self, ventanas, frecuencia_muestreo=44100):
+        self.frecuencia_muestreo = frecuencia_muestreo
+        self._ventanas = ventanas
+        self._grabado = []
+        self.olvidos = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def ventanas(self):
+        import config as configuracion
+
+        salto = configuracion.SALTO_VENTANA / self.frecuencia_muestreo
+        for numero, ventana in enumerate(self._ventanas):
+            self._grabado.append(ventana)
+            yield numero * salto, ventana
+
+    def audio_grabado(self):
+        import numpy as np
+
+        if not self._grabado:
+            return np.zeros(0, dtype=np.float32)
+        return np.concatenate(self._grabado)
+
+    def olvidar_lo_grabado(self):
+        self._grabado = []
+        self.olvidos += 1
+
+
+def correr_el_hilo(estado, ventanas, guion=None):
+    """
+    Corre `escuchar` de punta a punta con un microfono falso.
+
+    `guion` es un diccionario {numero_de_ventana: funcion} para poder apretar
+    Grabar y Terminar en el medio del bucle, que es cuando pasan de verdad.
+    """
+    import numpy as np
+    from armonica import microfono
+
+    captura = CapturaFalsa(ventanas)
+    detener = threading.Event()
+    guion = guion or {}
+
+    ventanas_originales = captura.ventanas
+
+    def ventanas_con_guion():
+        for numero, (instante, ventana) in enumerate(ventanas_originales()):
+            if numero in guion:
+                guion[numero]()
+            yield instante, ventana
+
+    captura.ventanas = ventanas_con_guion
+
+    anterior = microfono.CapturaMicrofono
+    microfono.CapturaMicrofono = lambda **kwargs: captura
+    try:
+        servidor.escuchar(estado, detener)
+    finally:
+        microfono.CapturaMicrofono = anterior
+
+    return captura
+
+
+def ventanas_de_silencio(cuantas):
+    import numpy as np
+    import config as configuracion
+
+    return [np.zeros(configuracion.TAMANO_VENTANA, dtype=np.float32)
+            for _ in range(cuantas)]
+
+
+def test_sin_grabar_el_audio_no_se_acumula():
+    """
+    EL MOTIVO POR EL QUE ESTO IMPORTA.
+
+    El microfono queda prendido todo el tiempo que la app esta abierta. Sin
+    tirar lo que entra, estar sentado sin tocar suma diez megas por minuto, y
+    a la media hora la app se comio la memoria de la maquina.
+    """
+    estado = servidor.EstadoCompartido("C")
+    captura = correr_el_hilo(estado, ventanas_de_silencio(40))
+
+    assert estado.grabando is False
+    assert captura.olvidos > 30          # tira lo grabado en cada ventana
+    assert len(captura.audio_grabado()) == 0
+
+
+def test_grabando_si_se_acumula():
+    estado = servidor.EstadoCompartido("C")
+    estado.grabando = True
+
+    captura = correr_el_hilo(estado, ventanas_de_silencio(20))
+
+    assert captura.olvidos == 0
+    assert len(captura.audio_grabado()) > 0
+
+
+def test_apretar_grabar_tira_lo_de_antes():
+    """
+    Lo que se guarda arranca cuando apretaste Grabar, no cuando abriste la app.
+
+    Sin esto, darle a Terminar y guardar despues de veinte minutos con la app
+    abierta guardaria los veinte minutos.
+    """
+    import config as configuracion
+
+    estado = servidor.EstadoCompartido("C")
+
+    def apretar_grabar():
+        estado.grabando = True
+        estado.pedir("arrancar")
+
+    captura = correr_el_hilo(
+        estado, ventanas_de_silencio(30), guion={20: apretar_grabar})
+
+    # Solo las diez ventanas de despues del pedido.
+    esperado = 10 * configuracion.TAMANO_VENTANA
+    assert len(captura.audio_grabado()) == pytest.approx(esperado, rel=0.2)
+
+
+def test_al_terminar_el_hilo_deja_el_audio_y_las_mediciones():
+    """
+    El hilo de audio es el unico que puede cerrar una grabacion: es el que
+    tiene la captura. El hilo del HTTP se lo pide y espera.
+    """
+    estado = servidor.EstadoCompartido("C")
+
+    def apretar_grabar():
+        estado.grabando = True
+        estado.pedir("arrancar")
+
+    def apretar_terminar():
+        estado.grabando = False
+        estado.pedir("cerrar")
+
+    correr_el_hilo(estado, ventanas_de_silencio(40),
+                   guion={10: apretar_grabar, 30: apretar_terminar})
+
+    assert estado.grabacion_lista is True
+    assert estado.audio_grabado is not None
+    assert len(estado.audio_grabado) > 0
+    assert estado.mediciones
+
+
+def test_sin_grabar_la_historia_se_recorta():
+    """
+    La tablatura de lo ultimo que tocaste se sigue mostrando, pero acotada.
+
+    Se guardan config.SEGUNDOS_EN_PANTALLA y no mas: el resto no lo mira nadie
+    y crece para siempre.
+    """
+    import config as configuracion
+
+    estado = servidor.EstadoCompartido("C")
+    ventanas_en_pantalla = int(
+        configuracion.SEGUNDOS_EN_PANTALLA * 44100 / configuracion.SALTO_VENTANA
+    )
+
+    correr_el_hilo(estado, ventanas_de_silencio(ventanas_en_pantalla * 3))
+
+    # El hilo deja de recortar recien al pasar el doble del tope.
+    assert len(estado.eventos) == 0        # era silencio: no hay notas
+    assert estado.escuchando is False      # el bucle termino
+
+
+def test_el_estado_en_vivo_distingue_escuchar_de_grabar():
+    """
+    Son dos banderas distintas y la pantalla necesita las dos.
+
+    Cuando eran una sola, probar el microfono desde Ajustes dejaba la app
+    "escuchando" en modo prueba y los dos botones de la solapa En vivo
+    quedaban muertos: uno porque ya escuchaba y el otro porque no era una
+    sesion. Es el error que hizo falta este cambio.
+    """
+    estado = servidor.EstadoCompartido("C")
+    datos = estado.como_diccionario()
+
+    assert datos["escuchando"] is False
+    assert datos["grabando"] is False
+
+    estado.escuchando = True
+    assert estado.como_diccionario()["escuchando"] is True
+    assert estado.como_diccionario()["grabando"] is False
+
+
+def test_los_pedidos_se_toman_una_sola_vez():
+    estado = servidor.EstadoCompartido("C")
+
+    assert estado.tomar_pedido() is None
+
+    estado.pedir("arrancar")
+    assert estado.tomar_pedido() == "arrancar"
+    assert estado.tomar_pedido() is None

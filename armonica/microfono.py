@@ -189,6 +189,17 @@ class CapturaMicrofono:
             return np.zeros(0, dtype=np.float32)
         return np.concatenate(self._grabado)
 
+    def olvidar_lo_grabado(self):
+        """
+        Tira lo que se venia guardando y arranca de cero.
+
+        Hace falta porque el micrófono queda encendido todo el tiempo que la
+        app está abierta. Sin esto, estar sentado sin tocar suma diez megas de
+        audio por minuto, y lo que se guardara al final sería todo lo que pasó
+        desde que abriste la app y no lo que quisiste grabar.
+        """
+        self._grabado = []
+
     def hubo_descartes(self):
         """Si el sistema perdió audio en algún momento."""
         return self._descartes > 0

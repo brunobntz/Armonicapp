@@ -262,6 +262,7 @@ Los que más se usan:
 | `NOTACION` | `"flechas"` (↑4 ↓4') o `"guion"` (4 -4'). |
 | `FACTOR_CORRECCION_OCTAVA` | Corrige las notas que salen una o dos octavas más agudas. |
 | `VENTANAS_PARA_CONFIRMAR` | Cuántas ventanas seguidas hacen falta para cambiar el cartel grande. |
+| `SEGUNDOS_EN_PANTALLA` | Cuánto de lo tocado se recuerda mientras NO estás grabando. |
 | `TOLERANCIA_RITMO_MS` | Qué desvío del pulso todavía cuenta como a tiempo. |
 | `SUBDIVISION_RITMO` | Contra qué figura medir el pulso por defecto. |
 
@@ -329,6 +330,17 @@ los JSON que ya se guardaban. Y **Ajustes** tiene el micrófono y la
 configuración: la armónica que tenés en la mano, la posición y la escala de
 referencia se cambian ahí, sin reiniciar nada.
 
+**El micrófono queda encendido todo el tiempo.** Abrís la app y podés tocar y
+ver lo que sale sin apretar nada: el medidor, el diagrama y la tablatura
+funcionan siempre. Grabar es una decisión aparte, con un solo botón que dice
+*Grabar esta sesión* y después *Terminar y guardar*.
+
+Escuchar y grabar son dos cosas distintas, y vale la pena entender por qué:
+mientras no grabás, el audio se tira y la historia se recorta a
+`SEGUNDOS_EN_PANTALLA`. Sin ese recorte, dejar la app abierta sumaría diez
+megas de audio por minuto sin que hayas tocado nada que quisieras guardar. Al
+apretar Grabar se tira todo lo anterior y ahí sí se guarda hasta el final.
+
 El diagrama de la armónica tiene **una fila por agujero**, con las notas
 abriéndose hacia los costados: a la izquierda lo aspirado, a la derecha lo
 soplado, y cuanto más lejos del número, más profundo el bend. Es la
@@ -366,7 +378,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 645 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 653 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

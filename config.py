@@ -186,6 +186,17 @@ VENTANAS_PARA_CONFIRMAR = 3
 # dejaste de tocar.
 SEGUNDOS_PARA_APAGAR_CARTEL = 0.4
 
+# Cuántos segundos de lo tocado se guardan en memoria MIENTRAS NO ESTÁS
+# GRABANDO, para poder mostrarte la tablatura de lo último que hiciste.
+#
+# El micrófono queda encendido todo el tiempo que la app está abierta, y eso
+# obliga a poner un tope: sin él, cada minuto de estar ahí sentado suma diez
+# megas de audio y ochenta mil mediciones, y a la media hora la app se comió
+# la memoria de la máquina sin que hayas tocado nada que quisieras guardar.
+#
+# Cuando apretás Grabar, el tope no se aplica: ahí se guarda todo.
+SEGUNDOS_EN_PANTALLA = 20.0
+
 # Cuánto silencio de armónica separa un TRAMO del siguiente, en segundos.
 #
 # Sirve para partir una grabación larga en los pedazos donde realmente hay

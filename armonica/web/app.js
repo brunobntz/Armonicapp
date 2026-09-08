@@ -27,7 +27,6 @@ let filasPorAgujero = {};
 document.addEventListener("DOMContentLoaded", async () => {
   configurarSolapas();
   configurarBotones();
-  configurarPrueba();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -88,21 +87,28 @@ function configurarSolapas() {
    ========================================================================== */
 
 function configurarBotones() {
-  const empezar = document.getElementById("boton-empezar");
-  const terminar = document.getElementById("boton-terminar");
+  const grabar = document.getElementById("boton-grabar");
 
-  empezar.addEventListener("click", async () => {
-    empezar.disabled = true;
-    document.getElementById("seccion-resumen").hidden = true;
-    await comenzar({ modo: "sesion" });
-  });
+  /* Un solo boton para las dos cosas, porque son la misma decision vista en
+   * dos momentos: "quiero que esto quede" y "listo, guardalo". El microfono
+   * ya esta prendido, asi que no hay un tercer estado que explicar. */
+  grabar.addEventListener("click", async () => {
+    grabar.disabled = true;
 
-  terminar.addEventListener("click", async () => {
-    terminar.disabled = true;
-    terminar.textContent = "Guardando...";
-    const respuesta = await pedir("/api/terminar", { method: "POST" });
-    terminar.textContent = "Terminar y guardar";
-    mostrarResumen(respuesta);
+    if (grabar.dataset.grabando === "si") {
+      // La bandera frena a sincronizarBotones, que si no pisaria el texto
+      // quince veces por segundo mientras se guarda.
+      grabar.dataset.guardando = "si";
+      grabar.textContent = "Guardando...";
+      const respuesta = await pedir("/api/terminar", { method: "POST" });
+      delete grabar.dataset.guardando;
+      mostrarResumen(respuesta);
+    } else {
+      document.getElementById("seccion-resumen").hidden = true;
+      await comenzar({ modo: "sesion" });
+    }
+
+    grabar.disabled = false;
   });
 
   // --- Los de la solapa Frases ---
@@ -356,7 +362,6 @@ async function comenzar(cuerpo) {
   });
   if (!respuesta.ok) {
     avisarFrase(respuesta.motivo || "no pude empezar");
-    document.getElementById("boton-empezar").disabled = false;
   }
   return respuesta;
 }
@@ -386,8 +391,10 @@ function dibujarEstado(estado) {
 
   const minutos = Math.floor(estado.segundos / 60);
   const segundos = String(Math.floor(estado.segundos % 60)).padStart(2, "0");
-  document.getElementById("contadores").textContent = estado.escuchando
-    ? `${estado.cantidad_notas} notas · ${minutos}:${segundos}`
+  // El contador es de la GRABACION, no de estar escuchando: si contara
+  // siempre, diria "cuatro mil notas" por haber dejado la app abierta.
+  document.getElementById("contadores").textContent = estado.grabando
+    ? `● ${estado.cantidad_notas} notas · ${minutos}:${segundos}`
     : "";
 }
 
@@ -772,36 +779,44 @@ function dibujarSesiones(sesiones) {
    ========================================================================== */
 
 function sincronizarBotones(estado) {
-  const escuchando = estado.escuchando;
+  const grabando = estado.grabando;
   const modo = estado.modo || "sesion";
-  const enFrase = escuchando && (modo === "frase" || modo === "practicar");
+  const enFrase = grabando && (modo === "frase" || modo === "practicar");
+  const enSesion = grabando && modo === "sesion";
 
-  document.getElementById("boton-empezar").disabled = escuchando;
-  document.getElementById("boton-terminar").disabled =
-    !(escuchando && modo === "sesion");
+  // El boton de grabar cuenta las dos cosas: si esta grabando y si lo que
+  // esta grabando es una sesion o una frase. Grabando una frase, este boton
+  // no puede hacer nada: el que termina es el de la solapa Frases.
+  const grabar = document.getElementById("boton-grabar");
+  grabar.dataset.grabando = enSesion ? "si" : "no";
+  grabar.disabled = grabando && !enSesion;
+  grabar.className = enSesion ? "secundario" : "principal";
+  if (grabar.dataset.guardando !== "si") {
+    grabar.textContent = enSesion ? "Terminar y guardar" : "Grabar esta sesión";
+  }
 
-  document.getElementById("boton-grabar-frase").disabled = escuchando;
+  document.getElementById("boton-grabar-frase").disabled = grabando;
   document.getElementById("boton-terminar-frase").hidden = !enFrase;
-  document.getElementById("nombre-frase").disabled = escuchando;
-  document.getElementById("tonalidad-frase").disabled = escuchando;
+  document.getElementById("nombre-frase").disabled = grabando;
+  document.getElementById("tonalidad-frase").disabled = grabando;
 
   document.querySelectorAll("#lista-frases button")
-    .forEach((boton) => { boton.disabled = escuchando; });
+    .forEach((boton) => { boton.disabled = grabando; });
 
   // Un <label> no se puede deshabilitar: se apaga el <input> que tiene adentro
   // y se lo pinta de apagado para que se note.
   document.querySelectorAll(".como-boton, .frase label.audio")
     .forEach((etiqueta) => {
-      etiqueta.classList.toggle("apagado", escuchando);
+      etiqueta.classList.toggle("apagado", grabando);
       const entrada = etiqueta.querySelector("input");
-      if (entrada) entrada.disabled = escuchando;
+      if (entrada) entrada.disabled = grabando;
     });
 
   if (enFrase) {
     avisarFrase(modo === "frase"
       ? "Grabando \u00ab" + estado.nombre_frase + "\u00bb. Toca la frase y dale Terminar."
       : "Practicando \u00ab" + estado.nombre_frase + "\u00bb. Tocala y dale Terminar.");
-  } else if (escuchando) {
+  } else if (grabando) {
     avisarFrase(AVISO_SESION);
   } else if (document.getElementById("estado-frase").textContent === AVISO_SESION) {
     // El aviso valia mientras la sesion estaba andando. Si sigue ahi
@@ -1020,9 +1035,8 @@ function dibujarNivel(estado) {
   texto.className = "ayuda";
 
   if (!estado.escuchando) {
-    texto.innerHTML = "Dale a <strong>Empezar a escuchar</strong> y sopl\u00e1: " +
-      "esta barra se tiene que mover. Si no se mueve, and\u00e1 a " +
-      "<strong>Ajustes</strong> y eleg\u00ed otro micr\u00f3fono.";
+    texto.innerHTML = "El micr\u00f3fono no est\u00e1 abierto. Prob\u00e1 " +
+      "eligiendo otro en <strong>Ajustes</strong>.";
   } else if (estado.pico < umbral) {
     texto.innerHTML = "Escuchando, pero no llega nada por encima del umbral. " +
       "Si est\u00e1s tocando, el micr\u00f3fono elegido no es el que us\u00e1s.";
@@ -1128,33 +1142,3 @@ function mostrarResultadoDeAjustes() {
 }
 
 
-/* Probar el microfono: escucha un rato y no guarda nada. Es el modo mas
- * barato de contestar la pregunta "¿me esta escuchando?". */
-function configurarPrueba() {
-  const boton = document.getElementById("boton-probar");
-  if (!boton) return;
-
-  boton.addEventListener("click", async () => {
-    const aviso = document.getElementById("estado-microfono");
-
-    if (boton.dataset.andando === "si") {
-      const respuesta = await pedir("/api/terminar", { method: "POST" });
-      boton.dataset.andando = "no";
-      boton.textContent = "Probar";
-      aviso.textContent = respuesta.notas
-        ? "Reconoci\u00f3 " + respuesta.notas + " notas. El micr\u00f3fono anda."
-        : "No reconoci\u00f3 ninguna nota.";
-      return;
-    }
-
-    await guardarAjustes();     // primero fijamos el microfono elegido
-    const respuesta = await comenzar({ modo: "prueba" });
-    if (respuesta.ok) {
-      boton.dataset.andando = "si";
-      boton.textContent = "Terminar la prueba";
-      aviso.textContent = "Sopl\u00e1: la barra de abajo se tiene que mover.";
-    } else {
-      aviso.textContent = respuesta.motivo || "no pude abrir el micr\u00f3fono";
-    }
-  });
-}

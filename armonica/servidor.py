@@ -43,6 +43,7 @@ import json
 import os
 import tempfile
 import threading
+import time
 import urllib.parse
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -105,7 +106,31 @@ class EstadoCompartido:
         self.modo = "sesion"
         self.nombre_frase = ""
 
+        # ESCUCHAR Y GRABAR SON DOS COSAS DISTINTAS
+        #
+        # `escuchando` es el microfono abierto: la app lo deja prendido todo el
+        # tiempo, para que puedas tocar y ver lo que sale sin decidir nada
+        # antes. `grabando` es querer que eso quede guardado.
+        #
+        # Antes eran lo mismo y por eso habia que apretar un boton para que la
+        # pantalla mostrara algo. Peor: al probar el microfono desde Ajustes,
+        # la app quedaba escuchando en modo "prueba" y los dos botones de la
+        # solapa En vivo quedaban muertos, uno porque ya escuchaba y el otro
+        # porque no era una sesion.
         self.escuchando = False
+        self.grabando = False
+
+        # Lo que el hilo del HTTP le pide al hilo de audio. Son las dos unicas
+        # cosas que el hilo de audio no puede decidir solo, porque tiene la
+        # captura: arrancar una grabacion limpia y cerrarla.
+        self._pedido = None
+        self.grabacion_lista = False
+
+        # En que segundo del reloj del microfono empezo la grabacion. El reloj
+        # corre desde que se abrio el microfono, asi que sin esto el contador
+        # de la pantalla diria "0:14" apenas apretaste Grabar.
+        self.inicio_grabacion_seg = 0.0
+
         self.nota_actual = None
         self.cents = 0.0
         self.volumen = 0.0
@@ -127,6 +152,21 @@ class EstadoCompartido:
         self._candidata = None
         self._veces_seguidas = 0
         self._ultima_nota_seg = None
+
+    # --- Lo que se piden los dos hilos ---
+
+    def pedir(self, que):
+        with self._candado:
+            self._pedido = que
+            if que == "arrancar":
+                self.grabacion_lista = False
+
+    def tomar_pedido(self):
+        """Devuelve el pedido pendiente y lo borra. Lo llama el hilo de audio."""
+        with self._candado:
+            pedido = self._pedido
+            self._pedido = None
+            return pedido
 
     # --- Lo que escribe el hilo de audio ---
 
@@ -197,6 +237,9 @@ class EstadoCompartido:
     def reiniciar(self):
         with self._candado:
             self.modo = "sesion"
+            self.grabando = False
+            self.grabacion_lista = False
+            self.inicio_grabacion_seg = 0.0
             self.nombre_frase = ""
             self.nota_actual = None
             self.cents = 0.0
@@ -222,6 +265,7 @@ class EstadoCompartido:
 
             datos = {
                 "escuchando": self.escuchando,
+                "grabando": self.grabando,
                 "modo": self.modo,
                 "nombre_frase": self.nombre_frase,
                 "tonalidad": self.tonalidad,
@@ -230,7 +274,11 @@ class EstadoCompartido:
                 "volumen": round(self.volumen, 4),
                 "pico": round(self.pico, 4),
                 "error_de_audio": self.error_de_audio,
-                "segundos": round(self.segundos, 1),
+                # El contador es de la GRABACION y no del microfono, que
+                # viene andando desde que abriste la app.
+                "segundos": round(
+                    self.segundos - self.inicio_grabacion_seg
+                    if self.grabando else self.segundos, 1),
                 "cents": round(self.cents, 1),
                 "cantidad_notas": len(eventos),
                 "nota": None,
@@ -356,6 +404,19 @@ def escuchar(estado, detener):
 
     Es el mismo bucle del modo en vivo de la terminal. La única diferencia es
     que en vez de dibujar, deja el resultado en un objeto que otro hilo lee.
+
+    EL MICROFONO QUEDA ENCENDIDO SIEMPRE
+
+    Este hilo arranca cuando arranca el servidor y no para hasta que cerrás la
+    app. Podés tocar y ver lo que sale sin apretar nada. Grabar es una decisión
+    aparte, y lo único que cambia es qué se guarda en memoria:
+
+        sin grabar   se tira el audio y se recorta la historia a
+                     config.SEGUNDOS_EN_PANTALLA
+        grabando     se guarda todo, que es lo que después va al disco
+
+    Sin ese recorte, estar sentado con la app abierta sumaría diez megas de
+    audio por minuto sin que hayas tocado nada.
     """
     from armonica import microfono
 
@@ -367,10 +428,27 @@ def escuchar(estado, detener):
             estado.frecuencia_muestreo = captura.frecuencia_muestreo
             ultimo_recalculo = -1.0
             eventos = []
+            ventanas_en_pantalla = int(
+                config.SEGUNDOS_EN_PANTALLA * estado.frecuencia_muestreo
+                / config.SALTO_VENTANA
+            )
 
             for instante, ventana in captura.ventanas():
                 if detener.is_set():
                     break
+
+                # Los pedidos del otro hilo. Son dos y se atienden acá porque
+                # este es el hilo que tiene la captura en la mano.
+                pedido = estado.tomar_pedido()
+                if pedido == "arrancar":
+                    mediciones = []
+                    eventos = []
+                    captura.olvidar_lo_grabado()
+                    estado.inicio_grabacion_seg = instante
+                elif pedido == "cerrar":
+                    estado.mediciones = list(mediciones)
+                    estado.audio_grabado = captura.audio_grabado()
+                    estado.grabacion_lista = True
 
                 volumen = audio.volumen_rms(ventana)
 
@@ -408,7 +486,12 @@ def escuchar(estado, detener):
 
                 estado.actualizar(nota, cents, volumen, instante, eventos)
 
-            estado.audio_grabado = captura.audio_grabado()
+                # Sin grabar solo mostramos: ni el audio ni la historia larga
+                # le sirven a nadie, y las dos crecen para siempre.
+                if not estado.grabando:
+                    captura.olvidar_lo_grabado()
+                    if len(mediciones) > ventanas_en_pantalla * 2:
+                        del mediciones[:-ventanas_en_pantalla]
 
     except Exception as error:      # noqa: BLE001
         # Antes esto solo se imprimia en la terminal, que es justo la ventana
@@ -418,8 +501,38 @@ def escuchar(estado, detener):
         print(f"  El hilo de audio se corto: {error}")
         estado.error_de_audio = str(error)
 
-    estado.mediciones = mediciones
     estado.escuchando = False
+
+
+def encender_microfono(clase):
+    """
+    Arranca el hilo de audio si no esta andando. Idempotente a proposito.
+
+    Lo llaman el arranque del servidor y el cambio de microfono en Ajustes, y
+    ninguno de los dos deberia tener que saber si ya habia uno prendido.
+    """
+    if clase.hilo_audio is not None and clase.hilo_audio.is_alive():
+        return False
+
+    clase.estado.error_de_audio = ""
+    clase.estado.escuchando = True
+    clase.detener = threading.Event()
+    clase.hilo_audio = threading.Thread(
+        target=escuchar, args=(clase.estado, clase.detener), daemon=True
+    )
+    clase.hilo_audio.start()
+    return True
+
+
+def apagar_microfono(clase):
+    """Corta el hilo de audio y espera a que termine."""
+    if clase.detener is not None:
+        clase.detener.set()
+    if clase.hilo_audio is not None:
+        clase.hilo_audio.join(timeout=3.0)
+    clase.hilo_audio = None
+    clase.detener = None
+    clase.estado.escuchando = False
 
 
 def guardar(estado):
@@ -594,6 +707,11 @@ class Manejador(SimpleHTTPRequestHandler):
     hilo_audio = None
     detener = None
 
+    # Si la app puede prender el microfono sola. La pone arrancar(), y los
+    # tests la dejan en False: ahi el microfono no se abre nunca, que es lo
+    # que permite probar todo el servidor sin una placa de sonido.
+    audio_automatico = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=CARPETA_WEB, **kwargs)
 
@@ -725,53 +843,74 @@ class Manejador(SimpleHTTPRequestHandler):
     # --- Las acciones ---
 
     def _comenzar(self, peticion=None):
+        """
+        Empieza a GRABAR. El microfono ya venia encendido.
+
+        Antes esto tambien prendia el microfono, y por eso habia que apretar un
+        boton para que la pantalla mostrara algo. Ahora la app escucha desde
+        que la abris y esto solo marca desde donde guardar.
+        """
         clase = type(self)
-        if clase.estado.escuchando:
-            return {"ok": False, "motivo": "ya esta escuchando"}
+        estado = clase.estado
+
+        if estado.grabando:
+            return {"ok": False, "motivo": "ya esta grabando"}
 
         peticion = peticion or {}
         modo = peticion.get("modo", "sesion")
         nombre = (peticion.get("nombre") or "").strip()
 
-        if modo == "prueba":
-            nombre = ""
         if modo in ("frase", "practicar") and not nombre:
             return {"ok": False, "motivo": "falta el nombre de la frase"}
 
         if modo == "practicar" and frases.buscar(nombre) is None:
             return {"ok": False, "motivo": f"no encontre la frase {nombre!r}"}
 
-        clase.estado.reiniciar()
-        clase.estado.modo = modo
-        clase.estado.nombre_frase = nombre
-        clase.estado.escuchando = True
-        clase.detener = threading.Event()
-        clase.hilo_audio = threading.Thread(
-            target=escuchar, args=(clase.estado, clase.detener), daemon=True
-        )
-        clase.hilo_audio.start()
+        # Por si el microfono se cayo (lo desenchufaste, otro programa lo tomo).
+        if clase.audio_automatico:
+            encender_microfono(clase)
+
+        estado.reiniciar()
+        estado.modo = modo
+        estado.nombre_frase = nombre
+        estado.grabando = True
+        estado.pedir("arrancar")
         return {"ok": True}
+
+    def _esperar_la_grabacion(self, segundos=2.0):
+        """
+        Espera a que el hilo de audio deje el audio y las mediciones.
+
+        El hilo de audio es el que tiene la captura, asi que es el unico que
+        puede cerrar una grabacion. Este hilo le avisa y espera.
+
+        Si no hay hilo —en los tests, donde nunca se abre el microfono— vuelve
+        enseguida y se guarda lo que haya en el estado, que es justamente lo
+        que esos tests ponen a mano.
+        """
+        clase = type(self)
+        if clase.hilo_audio is None or not clase.hilo_audio.is_alive():
+            return
+
+        limite = time.monotonic() + segundos
+        while time.monotonic() < limite:
+            if clase.estado.grabacion_lista:
+                return
+            time.sleep(0.02)
 
     def _terminar(self):
         clase = type(self)
-        if clase.detener is not None:
-            clase.detener.set()
-        if clase.hilo_audio is not None:
-            clase.hilo_audio.join(timeout=3.0)
-
-        clase.estado.escuchando = False
         estado = clase.estado
 
-        # Los tres modos escuchan igual; lo que cambia es que se hace despues.
+        estado.grabando = False
+        estado.pedir("cerrar")
+        self._esperar_la_grabacion()
+
+        # Los tres modos graban igual; lo que cambia es que se hace despues.
         if estado.modo == "frase":
             return self._terminar_grabando_frase(estado)
         if estado.modo == "practicar":
             return self._terminar_practicando(estado)
-        if estado.modo == "prueba":
-            # Probar el microfono no deja rastro: no es una sesion.
-            notas = len([e for e in estado.eventos if e.nota is not None])
-            estado.reiniciar()
-            return {"ok": True, "modo": "prueba", "notas": notas}
 
         rutas = guardar(estado)
         return {
@@ -1080,9 +1219,9 @@ class Manejador(SimpleHTTPRequestHandler):
         clase = type(self)
         estado = clase.estado
 
-        if estado.escuchando:
+        if estado.grabando:
             return {"ok": False,
-                    "motivo": "no se puede cambiar mientras esta escuchando"}
+                    "motivo": "no se puede cambiar mientras esta grabando"}
 
         peticion = peticion or {}
 
@@ -1112,6 +1251,14 @@ class Manejador(SimpleHTTPRequestHandler):
         if "dispositivo" in peticion:
             valor = peticion["dispositivo"]
             estado.dispositivo = None if valor in ("", None) else int(valor)
+
+        # El hilo de audio se reinicia SIEMPRE, cambies lo que cambies. Abrio
+        # el microfono viejo y no lo va a soltar solo, y ademas armo su tabla
+        # de notas una sola vez al arrancar: si cambiaste de armonica y no lo
+        # reiniciamos, sigue transcribiendo con la anterior.
+        if clase.audio_automatico:
+            apagar_microfono(clase)
+            encender_microfono(clase)
 
         return {"ok": True, "inicio": self._datos_iniciales()}
 
@@ -1275,6 +1422,10 @@ def arrancar(tonalidad="C", posicion=None, escala=None, puerto=8000,
     print("  Solo escucha en tu propia maquina: no hay nada en internet.")
     print("  Ctrl+C para apagarlo.")
     print()
+
+    # El microfono se prende solo: podes tocar y ver sin apretar nada.
+    Manejador.audio_automatico = True
+    encender_microfono(Manejador)
 
     if abrir_navegador:
         threading.Timer(0.7, lambda: webbrowser.open(direccion)).start()
