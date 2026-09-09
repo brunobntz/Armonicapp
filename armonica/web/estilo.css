@@ -19,6 +19,13 @@
 
 * { box-sizing: border-box; }
 
+/* El atributo `hidden` del navegador pone display:none, pero con la
+ * prioridad mas baja que existe: cualquier regla nuestra que diga display
+ * —como .controles { display: flex }— le gana y el elemento aparece igual.
+ * Paso: la barra de "mandar a la lista" y el formulario de editar lista
+ * quedaban a la vista con hidden puesto. Esta regla lo arregla para todos. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--fondo);
@@ -550,7 +557,7 @@ select:disabled { opacity: 0.4; }
 }
 .bolsa.activa { background: var(--azul); border-color: var(--azul); color: #0d1117; }
 
-#mover-a-bolsa { margin-top: 12px; }
+#mover-a-lista, #editar-lista { margin-top: 12px; }
 
 .frase input[type="checkbox"] {
   width: 17px;
@@ -563,10 +570,25 @@ select:disabled { opacity: 0.4; }
   color: var(--tenue);
   font-style: italic;
 }
-.etiqueta-bolsa {
+.etiqueta-lista {
   font-size: 11px;
   color: var(--azul);
   border: 1px solid rgba(90, 169, 240, 0.4);
   border-radius: 10px;
   padding: 1px 8px;
 }
+
+/* --- La frase pendiente: lo que salio, y la decision --- */
+
+.pendiente {
+  background: var(--panel);
+  border: 1px solid rgba(90, 169, 240, 0.45);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-top: 14px;
+}
+.pendiente h3 { margin: 0 0 10px; font-size: 15px; }
+.pendiente .tab { background: var(--fondo); }
+.pendiente .aviso { margin-top: 10px; }
+.pendiente .fila-rotulos { margin-top: 12px; }
+#pendiente-estado { color: var(--amarillo); }

@@ -84,10 +84,14 @@ class Frase:
     fecha: str = ""
     comentario: str = ""
 
-    # La bolsa donde la pusiste. Es una sola palabra tuya —"turnarounds",
-    # "clase de junio", "para calentar"— y sirve para no tener treinta frases
-    # sueltas en una lista sin forma. Vacia quiere decir "sin clasificar".
-    bolsa: str = ""
+    # La lista de reproduccion en la que esta. Es un nombre tuyo —
+    # "turnarounds", "clase de junio", "para calentar"— y sirve para no tener
+    # treinta frases sueltas sin forma. Vacia quiere decir "en ninguna".
+    #
+    # Una frase esta en UNA lista, no en varias. Es mas simple de entender y
+    # de mostrar, y es como se usa: la frase de la clase del martes va a la
+    # lista de la clase del martes.
+    lista: str = ""
 
     @property
     def cantidad(self):
@@ -111,7 +115,7 @@ class Frase:
 
 
 def desde_eventos(eventos, nombre, tonalidad="C", posicion=None, escala=None,
-                  comentario="", notacion=None, bolsa=""):
+                  comentario="", notacion=None, lista=""):
     """
     Convierte una transcripción en una frase de referencia.
 
@@ -130,7 +134,7 @@ def desde_eventos(eventos, nombre, tonalidad="C", posicion=None, escala=None,
         posicion=posicion,
         escala=escala,
         comentario=comentario,
-        bolsa=bolsa,
+        lista=lista,
         fecha=datetime.now().isoformat(timespec="seconds"),
         notas=[
             NotaDeFrase(
@@ -593,7 +597,7 @@ def guardar(frase, carpeta=None):
         "nombre": frase.nombre,
         "fecha": frase.fecha,
         "comentario": frase.comentario,
-        "bolsa": frase.bolsa,
+        "lista": frase.lista,
         "tonalidad": frase.tonalidad,
         "posicion": frase.posicion,
         "escala": frase.escala,
@@ -618,7 +622,9 @@ def cargar(ruta):
         escala=datos.get("escala"),
         fecha=datos.get("fecha", ""),
         comentario=datos.get("comentario", ""),
-        bolsa=datos.get("bolsa", ""),
+        # "bolsa" fue el nombre de este campo durante un dia. Se sigue
+        # leyendo para no perder lo que se haya guardado con el.
+        lista=datos.get("lista", datos.get("bolsa", "")),
         notas=[
             NotaDeFrase(
                 tab=nota["tab"],
@@ -641,7 +647,9 @@ def listar(carpeta=None):
 
     encontradas = []
     for archivo in sorted(os.listdir(carpeta)):
-        if not archivo.endswith(".json"):
+        # Los archivos con guion bajo adelante son de la app, no frases: ahi
+        # vive _listas.json. Sin esto, se leeria como una frase sin notas.
+        if not archivo.endswith(".json") or archivo.startswith("_"):
             continue
         ruta = os.path.join(carpeta, archivo)
         try:
@@ -659,3 +667,160 @@ def buscar(nombre, carpeta=None):
         if os.path.basename(ruta) == objetivo:
             return cargar(ruta)
     return None
+
+
+# =============================================================================
+# Las listas de reproducción
+# =============================================================================
+#
+# POR QUE HAY UN ARCHIVO APARTE Y NO ALCANZA CON EL CAMPO DE CADA FRASE
+#
+# Cada frase dice en qué lista está. Con eso solo, una lista "existe" mientras
+# tenga al menos una frase adentro: no podrías crear la lista "clase del
+# martes" antes de grabar la primera frase, ni renombrarla, ni ordenarlas.
+# Las listas son una cosa con nombre propio, y por eso viven en su archivo:
+#
+#     frases/_listas.json
+#
+# El guion bajo adelante es lo que hace que `listar()` no lo confunda con una
+# frase. El archivo guarda el orden en que las creaste, que es el orden en que
+# se muestran.
+
+ARCHIVO_DE_LISTAS = "_listas.json"
+
+
+def _ruta_de_listas(carpeta):
+    if carpeta is None:
+        carpeta = CARPETA_POR_DEFECTO
+    return os.path.join(carpeta, ARCHIVO_DE_LISTAS)
+
+
+def _leer_listas(carpeta=None):
+    """Los nombres de las listas, en el orden en que se crearon."""
+    ruta = _ruta_de_listas(carpeta)
+    if not os.path.isfile(ruta):
+        return []
+    try:
+        with io.open(ruta, encoding="utf-8") as archivo:
+            datos = json.load(archivo)
+    except (ValueError, OSError):
+        return []
+    return [str(n) for n in datos.get("listas", []) if str(n).strip()]
+
+
+def _escribir_listas(nombres, carpeta=None):
+    ruta = _ruta_de_listas(carpeta)
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with io.open(ruta, "w", encoding="utf-8", newline="") as archivo:
+        archivo.write(json.dumps({"version": 1, "listas": nombres},
+                                 indent=2, ensure_ascii=False))
+
+
+def limpiar_nombre_de_lista(nombre):
+    """Un nombre de lista, sin espacios de más y con un largo razonable."""
+    return " ".join((nombre or "").split())[:40]
+
+
+def listar_listas(carpeta=None):
+    """
+    Las listas que hay, cada una con cuántas frases tiene.
+
+    Devuelve una lista de diccionarios {"nombre", "frases"}. Las listas del
+    archivo van primero, en su orden; después, cualquier lista que aparezca
+    en alguna frase y no esté en el archivo —por ejemplo una que se puso desde
+    la terminal— para que nada quede invisible.
+    """
+    conteo = {}
+    for _, ruta in listar(carpeta):
+        frase = cargar(ruta)
+        if frase.lista:
+            conteo[frase.lista] = conteo.get(frase.lista, 0) + 1
+
+    nombres = _leer_listas(carpeta)
+    for suelta in sorted(conteo):
+        if suelta not in nombres:
+            nombres.append(suelta)
+
+    return [{"nombre": n, "frases": conteo.get(n, 0)} for n in nombres]
+
+
+def crear_lista(nombre, carpeta=None):
+    """Crea una lista vacía. Devuelve el nombre limpio, o "" si no sirve."""
+    nombre = limpiar_nombre_de_lista(nombre)
+    if not nombre:
+        return ""
+    nombres = _leer_listas(carpeta)
+    if nombre not in nombres:
+        nombres.append(nombre)
+        _escribir_listas(nombres, carpeta)
+    return nombre
+
+
+def renombrar_lista(viejo, nuevo, carpeta=None):
+    """
+    Cambia el nombre de una lista y arrastra a todas sus frases.
+
+    Devuelve cuántas frases se movieron. Si el nombre nuevo ya existe, las
+    dos listas se juntan: es lo que querrías si escribiste "Turnarounds" y
+    "turnarounds" en días distintos.
+    """
+    nuevo = limpiar_nombre_de_lista(nuevo)
+    if not nuevo or nuevo == viejo:
+        return 0
+
+    nombres = _leer_listas(carpeta)
+    nombres = [n for n in nombres if n != viejo]
+    if nuevo not in nombres:
+        nombres.append(nuevo)
+    _escribir_listas(nombres, carpeta)
+
+    movidas = 0
+    for _, ruta in listar(carpeta):
+        frase = cargar(ruta)
+        if frase.lista == viejo:
+            frase.lista = nuevo
+            guardar(frase, carpeta)
+            movidas += 1
+    return movidas
+
+
+def borrar_lista(nombre, carpeta=None):
+    """
+    Borra una lista. Las frases NO se borran: quedan sin lista.
+
+    Es una decisión, y es la conservadora: borrar una lista es ordenar, y
+    ordenar no debería poder hacer desaparecer una grabación.
+    """
+    nombres = [n for n in _leer_listas(carpeta) if n != nombre]
+    _escribir_listas(nombres, carpeta)
+
+    sacadas = 0
+    for _, ruta in listar(carpeta):
+        frase = cargar(ruta)
+        if frase.lista == nombre:
+            frase.lista = ""
+            guardar(frase, carpeta)
+            sacadas += 1
+    return sacadas
+
+
+def asignar_a_lista(nombres_de_frases, lista, carpeta=None):
+    """
+    Pone una o varias frases en una lista. Con la lista vacía, las saca.
+
+    Si la lista no existía, se crea: elegir una lista para una frase ya es
+    querer que esa lista exista.
+    """
+    lista = limpiar_nombre_de_lista(lista)
+    if lista:
+        crear_lista(lista, carpeta)
+
+    movidas = 0
+    for nombre in nombres_de_frases:
+        frase = buscar(nombre, carpeta)
+        if frase is None:
+            continue
+        frase.lista = lista
+        guardar(frase, carpeta)
+        movidas += 1
+    return movidas

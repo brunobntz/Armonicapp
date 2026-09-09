@@ -27,7 +27,8 @@ let filasPorAgujero = {};
 document.addEventListener("DOMContentLoaded", async () => {
   configurarSolapas();
   configurarBotones();
-  configurarBolsas();
+  configurarListas();
+  configurarPendiente();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -39,6 +40,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   ajustarZonaBuena();
 
   conectarEnVivo();
+  recuperarPendiente();
 });
 
 
@@ -119,22 +121,15 @@ function configurarBotones() {
   });
 
   // --- Los de la solapa Frases ---
+  //
+  // Grabar ya no pide nombre: se lo pones al terminar, cuando viste lo que
+  // salio. Por eso aca no hay ningun campo que leer.
   document.getElementById("boton-grabar-frase")
     .addEventListener("click", async () => {
-      const campo = document.getElementById("nombre-frase");
-      const nombre = campo.value.trim();
-      if (!nombre) {
-        avisarFrase("Pone un nombre antes de grabar.");
-        campo.focus();
-        return;
-      }
+      ocultarPendiente();
+      limpiarTramos();
       document.getElementById("seccion-comparacion").hidden = true;
-      await comenzar({
-        modo: "frase",
-        nombre: nombre,
-        comentario: document.getElementById("descripcion-frase").value,
-        bolsa: document.getElementById("bolsa-frase").value,
-      });
+      await comenzar({ modo: "frase" });
     });
 
   document.getElementById("boton-terminar-frase")
@@ -152,29 +147,25 @@ function configurarBotones() {
       evento.target.value = "";               // asi se puede volver a elegir
       if (!archivo) return;
 
-      const campo = document.getElementById("nombre-frase");
-      const nombre = campo.value.trim() || sinExtension(archivo.name);
-      campo.value = nombre;
-
+      ocultarPendiente();
       document.getElementById("seccion-comparacion").hidden = true;
-      await elegirQueImportar(nombre, archivo);
+      await elegirQueImportar(archivo);
     });
 }
 
 
 /* Un audio puede ser una frase o puede ser una clase entera.
  *
- * Antes de guardar nada, se busca donde hay armonica. Si hay un solo tramo,
- * el archivo ES la frase y se guarda sin preguntar. Si hay varios, alguien
- * estuvo hablando en el medio y hay que elegir cual guardar: guardar la clase
- * entera daria una referencia con diez segundos de silencio adentro, contra
- * la que es imposible practicar. */
-async function elegirQueImportar(nombre, archivo) {
-  limpiarDudoso();
+ * Antes de transcribir nada, se busca donde hay armonica. Si hay un solo
+ * tramo, el archivo ES la frase y pasa directo a la vista previa. Si hay
+ * varios, alguien estuvo hablando en el medio y hay que elegir cual: guardar
+ * la clase entera daria una referencia con diez segundos de silencio adentro,
+ * contra la que es imposible practicar. */
+async function elegirQueImportar(archivo) {
   limpiarTramos();
-  avisarFrase("Buscando d\u00f3nde hay arm\u00f3nica en " + archivo.name + "...");
+  avisarFrase("Buscando dónde hay armónica en " + archivo.name + "...");
 
-  const respuesta = await subir("/api/frases/tramos", nombre, archivo, {});
+  const respuesta = await subir("/api/frases/tramos", archivo, {});
 
   if (!respuesta.ok) {
     avisarFrase(respuesta.motivo || "no pude leer ese audio");
@@ -185,40 +176,40 @@ async function elegirQueImportar(nombre, archivo) {
 
   if (!tramos.length) {
     avisarFrase(respuesta.sirve
-      ? "No encontr\u00e9 ning\u00fan tramo con arm\u00f3nica en ese audio."
+      ? "No encontré ningún tramo con armónica en ese audio."
       : respuesta.motivo);
     return;
   }
 
   if (tramos.length === 1) {
-    return importar(nombre, archivo, false, tramos[0]);
+    return importar(archivo, tramos[0]);
   }
 
   avisarFrase("");
-  mostrarTramos(respuesta, nombre, archivo);
+  mostrarTramos(respuesta, archivo);
 }
 
 
-function mostrarTramos(respuesta, nombre, archivo) {
+function mostrarTramos(respuesta, archivo) {
   const contenedor = document.getElementById("tramos");
   const tocando = respuesta.tramos
     .reduce((suma, tramo) => suma + tramo.duracion_seg, 0);
 
   contenedor.innerHTML =
-    "<h3>" + respuesta.tramos.length + " tramos con arm\u00f3nica</h3>" +
+    "<h3>" + respuesta.tramos.length + " tramos con armónica</h3>" +
     "<p>De los " + respuesta.duracion_seg.toFixed(0) + " segundos del audio, " +
-    tocando.toFixed(0) + " tienen arm\u00f3nica. El resto es silencio, alguien " +
-    "hablando, o la base sola. Eleg\u00ed qu\u00e9 tramo guardar como frase: " +
-    "la grabaci\u00f3n entera no sirve de referencia porque los silencios " +
-    "tambi\u00e9n contar\u00edan.</p>" +
+    tocando.toFixed(0) + " tienen armónica. El resto es silencio, alguien " +
+    "hablando, o la base sola. Elegí qué tramo importar: la " +
+    "grabación entera no sirve de referencia porque los silencios " +
+    "también contarían.</p>" +
     respuesta.tramos.map((tramo) =>
       '<div class="tramo">' +
         '<span class="cuando">' + reloj(tramo.desde_seg) + " a " +
           reloj(tramo.hasta_seg) + "</span>" +
         '<span class="notas">' + tramo.tab.join(" ") +
-          (tramo.hay_mas ? " \u2026" : "") + "</span>" +
+          (tramo.hay_mas ? " …" : "") + "</span>" +
         '<span class="cuando">' + tramo.notas + " notas</span>" +
-        '<button data-tramo="' + tramo.numero + '">Guardar este</button>' +
+        '<button data-tramo="' + tramo.numero + '">Este</button>' +
       "</div>"
     ).join("");
 
@@ -229,7 +220,7 @@ function mostrarTramos(respuesta, nombre, archivo) {
       contenedor.querySelectorAll("button").forEach((otro) => {
         otro.disabled = true;
       });
-      importar(nombre, archivo, false, tramo);
+      importar(archivo, tramo);
     });
   });
 }
@@ -247,49 +238,41 @@ function limpiarTramos() {
 }
 
 
-/* Manda el audio y muestra el resultado. `igual` en true saltea el control de
- * monofonia: es lo que pasa cuando ya viste la tablatura y dijiste que sirve. */
-async function importar(nombre, archivo, igual, tramo) {
-  const campo = document.getElementById("nombre-frase");
-  limpiarDudoso();
+/* Importar: transcribe el audio (o el tramo elegido) y lo deja pendiente.
+ * No guarda nada. Lo que salio aparece en la misma vista previa que una
+ * frase grabada con el microfono, y ahi le pones nombre. */
+async function importar(archivo, tramo) {
+  limpiarTramos();
   avisarFrase("Analizando " + archivo.name + "...");
 
-  const extra = { igual: igual ? "1" : "0" };
+  const extra = {};
   if (tramo) {
     extra.desde = tramo.desde_seg;
     extra.hasta = tramo.hasta_seg;
   }
 
-  const respuesta = await subir("/api/frases/importar", nombre, archivo, extra);
+  const respuesta = await subir("/api/frases/importar", archivo, extra);
 
   if (!respuesta.ok) {
     avisarFrase(respuesta.motivo || "no pude importar ese audio");
-    if (respuesta.se_puede_igual) mostrarDudoso(respuesta, nombre, archivo, tramo);
     return;
   }
 
-  limpiarTramos();
-
-  const frase = respuesta.frase;
-  avisarFrase("Importada \u00ab" + frase.nombre + "\u00bb: " + frase.notas +
-              " notas en " + frase.duracion_seg.toFixed(1) +
-              " s, arm\u00f3nica en " + frase.tonalidad + ".");
-  (respuesta.avisos || []).forEach(mostrarAviso);
-  campo.value = "";
-  cargarFrases();
+  avisarFrase("");
+  mostrarPendiente(respuesta.pendiente);
 }
 
 
-/* Sube un archivo. El nombre y las opciones van en la URL y los bytes crudos
- * en el cuerpo: es lo mismo que hace multipart pero sin nada que parsear del
- * otro lado. */
-async function subir(ruta, nombre, archivo, extra) {
-  const partes = ["nombre=" + encodeURIComponent(nombre),
-                  "archivo=" + encodeURIComponent(archivo.name || ""),
-                  "comentario=" + encodeURIComponent(
-                    document.getElementById("descripcion-frase").value),
-                  "bolsa=" + encodeURIComponent(
-                    document.getElementById("bolsa-frase").value)];
+/* Sube un archivo. Las opciones van en la URL y los bytes crudos en el
+ * cuerpo: es lo mismo que hace multipart pero sin nada que parsear del otro
+ * lado. Va tambien el nombre del archivo: ffmpeg necesita la extension para
+ * convertirlo, y el servidor lo usa como nombre sugerido de la frase.
+ *
+ * `nombre` se usa solo para comparar un intento contra una frase guardada:
+ * al importar va vacio, porque el nombre se pone despues. */
+async function subir(ruta, archivo, extra, nombre) {
+  const partes = ["nombre=" + encodeURIComponent(nombre || ""),
+                  "archivo=" + encodeURIComponent(archivo.name || "")];
 
   const tonalidad = document.getElementById("tonalidad-frase").value;
   if (tonalidad) partes.push("tonalidad=" + encodeURIComponent(tonalidad));
@@ -314,62 +297,6 @@ function llenarTonalidades() {
 }
 
 
-/* Cuando el audio no pasa el control, no se guarda nada: se muestra lo que
- * HABRIA salido y decidis vos. El umbral es una heuristica; el que reconoce
- * la frase de Leandro en esa tablatura sos vos. */
-function mostrarDudoso(respuesta, nombre, archivo, tramo) {
-  const caja = document.createElement("div");
-  caja.className = "dudoso";
-  caja.id = "caja-dudosa";
-
-  const previa = (respuesta.vista_previa || []);
-  caja.innerHTML =
-    "<p>Esto es lo que habr\u00eda transcrito. Si reconoc\u00e9s la frase, " +
-    "guardala igual; si es un choclo de notas sueltas, no sirve como " +
-    "referencia y vas a estar practicando contra ruido.</p>" +
-    '<div class="tab-corta">' + (previa.join(" ") || "(nada)") +
-    (previa.length >= 24 ? " \u2026" : "") + "</div>";
-
-  const guardar = document.createElement("button");
-  guardar.className = "principal";
-  guardar.textContent = "Guardar igual";
-  guardar.addEventListener("click", () => importar(nombre, archivo, true, tramo));
-
-  const descartar = document.createElement("button");
-  descartar.className = "secundario";
-  descartar.textContent = "Descartar";
-  descartar.addEventListener("click", limpiarDudoso);
-
-  caja.appendChild(guardar);
-  caja.appendChild(descartar);
-  document.getElementById("lista-frases").before(caja);
-}
-
-
-function limpiarDudoso() {
-  const caja = document.getElementById("caja-dudosa");
-  if (caja) caja.remove();
-}
-
-
-function sinExtension(nombre) {
-  return nombre.replace(/\.[^.]+$/, "");
-}
-
-
-/* Un aviso no es un error: la frase se guardo igual. Se muestra aparte para
- * que no se confunda con los mensajes de "no pude". */
-function mostrarAviso(texto) {
-  const caja = document.createElement("div");
-  caja.className = "aviso";
-  caja.textContent = texto;
-  document.getElementById("lista-frases").before(caja);
-  setTimeout(() => caja.remove(), 20000);
-}
-
-
-/* Empezar a escuchar. Los tres modos usan la misma ruta: lo unico que cambia
- * es que hace el servidor cuando termina. */
 async function comenzar(cuerpo) {
   const respuesta = await pedir("/api/comenzar", {
     method: "POST",
@@ -841,7 +768,6 @@ function sincronizarBotones(estado) {
 
   document.getElementById("boton-grabar-frase").disabled = grabando;
   document.getElementById("boton-terminar-frase").hidden = !enFrase;
-  document.getElementById("nombre-frase").disabled = grabando;
   document.getElementById("tonalidad-frase").disabled = grabando;
 
   document.querySelectorAll("#lista-frases button")
@@ -888,9 +814,10 @@ function dibujarCartelDeFrase(estado, enFrase) {
   cartel.hidden = !enFrase;
   if (!enFrase) return;
 
-  const que = estado.modo === "frase" ? "Grabando" : "Practicando";
   document.getElementById("que-se-graba").textContent =
-    que + " \u00ab" + estado.nombre_frase + "\u00bb";
+    estado.modo === "frase"
+      ? "Grabando una frase"
+      : "Practicando «" + estado.nombre_frase + "»";
 
   const minutos = Math.floor(estado.segundos / 60);
   const segundos = String(Math.floor(estado.segundos % 60)).padStart(2, "0");
@@ -904,65 +831,247 @@ function dibujarCartelDeFrase(estado, enFrase) {
 }
 
 
-/* La bolsa que estás mirando. "" es todas. */
-let bolsaElegida = "";
+/* ==========================================================================
+   La frase pendiente: lo que salio, y la decision
+
+   Aparece al terminar de grabar o de importar. Lo grabado queda en memoria
+   del servidor hasta que elijas guardarlo o tirarlo; si recargas la pagina,
+   se vuelve a pedir y sigue ahi.
+   ========================================================================== */
+
+const LISTA_NUEVA = "nueva";     // un valor que ningun nombre real va a tener
+
+function mostrarPendiente(pendiente) {
+  const panel = document.getElementById("pendiente");
+  if (!pendiente) {
+    panel.hidden = true;
+    return;
+  }
+
+  document.getElementById("pendiente-titulo").textContent =
+    pendiente.origen === "archivo" ? "Esto es lo que se importó" : "Esto es lo que salió";
+
+  document.getElementById("pendiente-tab").innerHTML =
+    pendiente.tab.map((t) => escapar(t)).join(" ");
+
+  document.getElementById("pendiente-datos").textContent =
+    pendiente.notas + " notas · " + pendiente.duracion_seg.toFixed(1) +
+    " s · armónica en " + pendiente.tonalidad +
+    (pendiente.posicion ? " · " + pendiente.posicion + "ª posición" : "");
+
+  // El control de monofonia, si dudo, se muestra pero no manda: la tablatura
+  // esta a la vista y el que reconoce la frase sos vos.
+  const aviso = document.getElementById("pendiente-aviso");
+  const textos = [];
+  if (!pendiente.sirve && pendiente.motivo) textos.push(pendiente.motivo);
+  (pendiente.avisos || []).forEach((a) => textos.push(a));
+  aviso.hidden = !textos.length;
+  aviso.textContent = textos.join(" ");
+
+  const nombre = document.getElementById("pendiente-nombre");
+  nombre.value = pendiente.nombre_sugerido || "";
+  document.getElementById("pendiente-descripcion").value = "";
+  document.getElementById("pendiente-estado").textContent = "";
+  document.getElementById("pendiente-lista-nueva").hidden = true;
+  document.getElementById("pendiente-lista-nueva").value = "";
+
+  llenarSelectorDeListas("pendiente-lista", listaElegida, true);
+
+  panel.hidden = false;
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  nombre.focus();
+  nombre.select();
+}
+
+
+function ocultarPendiente() {
+  document.getElementById("pendiente").hidden = true;
+}
+
+
+/* Al arrancar la pagina: si habia una frase sin guardar, se vuelve a
+ * mostrar. Lo grabado no se pierde por recargar. */
+async function recuperarPendiente() {
+  const datos = await pedir("/api/frases/pendiente");
+  if (datos.pendiente) {
+    await cargarFrases();          // para tener las listas en el selector
+    mostrarPendiente(datos.pendiente);
+  }
+}
+
+
+/* Un <select> de listas. Con `conNueva`, la ultima opcion es "nueva lista…"
+ * y al elegirla aparece un campo para escribir el nombre. */
+function llenarSelectorDeListas(id, elegida, conNueva) {
+  const selector = document.getElementById(id);
+  const opciones = ['<option value="">ninguna</option>']
+    .concat(ultimasListas.map((l) =>
+      '<option value="' + escapar(l.nombre) + '"' +
+      (l.nombre === elegida ? " selected" : "") + ">" +
+      escapar(l.nombre) + "</option>"));
+  if (conNueva) opciones.push('<option value="' + LISTA_NUEVA + '">nueva lista…</option>');
+  selector.innerHTML = opciones.join("");
+}
+
+
+function listaElegidaEn(idSelector, idCampoNuevo) {
+  const valor = document.getElementById(idSelector).value;
+  if (valor === LISTA_NUEVA) {
+    return document.getElementById(idCampoNuevo).value.trim();
+  }
+  return valor;
+}
+
+
+function configurarPendiente() {
+  const selector = document.getElementById("pendiente-lista");
+  const campoNuevo = document.getElementById("pendiente-lista-nueva");
+
+  selector.addEventListener("change", () => {
+    campoNuevo.hidden = selector.value !== LISTA_NUEVA;
+    if (!campoNuevo.hidden) campoNuevo.focus();
+  });
+
+  document.getElementById("pendiente-descartar").addEventListener("click", async () => {
+    await pedir("/api/frases/descartar", { method: "POST" });
+    ocultarPendiente();
+    avisarFrase("Descartada. Grabá otra cuando quieras.");
+  });
+
+  document.getElementById("pendiente-guardar").addEventListener("click", () => guardarPendiente(false));
+
+  // Enter en el nombre guarda: es lo que uno espera de un formulario de una linea.
+  document.getElementById("pendiente-nombre").addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") guardarPendiente(false);
+  });
+}
+
+
+async function guardarPendiente(reemplazar) {
+  const estado = document.getElementById("pendiente-estado");
+  const nombre = document.getElementById("pendiente-nombre").value.trim();
+  if (!nombre) {
+    estado.textContent = "Ponele un nombre.";
+    document.getElementById("pendiente-nombre").focus();
+    return;
+  }
+
+  estado.textContent = "Guardando...";
+  const respuesta = await pedir("/api/frases/guardar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      nombre: nombre,
+      comentario: document.getElementById("pendiente-descripcion").value,
+      lista: listaElegidaEn("pendiente-lista", "pendiente-lista-nueva"),
+      reemplazar: reemplazar,
+    }),
+  });
+
+  if (!respuesta.ok) {
+    if (respuesta.repetida && confirm("Ya hay una frase que se llama «" + nombre +
+                                      "». ¿La reemplazo?")) {
+      return guardarPendiente(true);
+    }
+    estado.textContent = respuesta.motivo || "no se pudo guardar";
+    return;
+  }
+
+  ocultarPendiente();
+  const frase = respuesta.frase;
+  avisarFrase("Guardada «" + frase.nombre + "»: " + frase.notas + " notas en " +
+              frase.duracion_seg.toFixed(1) + " s" +
+              (frase.lista ? ", en la lista «" + frase.lista + "»." : "."));
+  (respuesta.avisos || []).forEach((a) => avisarFrase(
+    document.getElementById("estado-frase").textContent + " " + a));
+
+  // La frase recien guardada aparece en su lista, ya visible.
+  if (frase.lista) listaElegida = frase.lista;
+  await cargarFrases();
+  const fila = document.querySelector('[data-frase="' + CSS.escape(frase.nombre) + '"]');
+  if (fila) fila.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+
+/* Que hacer al apretar Terminar en la solapa Frases. */
+function terminarFrase(respuesta) {
+  if (!respuesta.ok) {
+    avisarFrase(respuesta.motivo || "algo salió mal");
+    return;
+  }
+
+  if (respuesta.modo === "frase") {
+    avisarFrase("");
+    mostrarPendiente(respuesta.pendiente);
+    return;
+  }
+
+  avisarFrase("");
+  mostrarComparacion(respuesta.comparacion);
+  cargarFrases();
+}
+
+
+/* ==========================================================================
+   Las listas de reproduccion y las frases
+   ========================================================================== */
+
+let listaElegida = "";            // "" es todas; " " es "sin lista"
 let frasesMarcadas = new Set();
 let ultimasFrases = [];
+let ultimasListas = [];
 
 
 async function cargarFrases() {
   const datos = await pedir("/api/frases");
   ultimasFrases = datos.frases || [];
-
-  llenarBolsasConocidas(datos.bolsas || []);
-  dibujarFiltrosDeBolsa(datos.bolsas || []);
+  ultimasListas = datos.listas || [];
+  dibujarFiltrosDeLista();
   dibujarListaDeFrases();
 }
 
 
-/* Las bolsas que ya usaste, para que el campo las ofrezca solo. Es un
- * <datalist>: te sugiere las que hay, pero podés escribir una nueva. */
-function llenarBolsasConocidas(bolsas) {
-  const lista = document.getElementById("bolsas-conocidas");
-  if (lista) {
-    lista.innerHTML = bolsas
-      .map((b) => '<option value="' + escapar(b) + '">').join("");
+function dibujarFiltrosDeLista() {
+  const donde = document.getElementById("filtros-lista");
+  const sinLista = ultimasFrases.some((f) => !f.lista);
+
+  const opciones = [{ clave: "", texto: "todas (" + ultimasFrases.length + ")" }]
+    .concat(ultimasListas.map((l) => ({ clave: l.nombre, texto: l.nombre + " (" + l.frases + ")" })));
+  if (sinLista) {
+    const cuantas = ultimasFrases.filter((f) => !f.lista).length;
+    opciones.push({ clave: " ", texto: "sin lista (" + cuantas + ")" });
   }
-}
 
-
-function dibujarFiltrosDeBolsa(bolsas) {
-  const donde = document.getElementById("filtros-bolsa");
-  const sinBolsa = ultimasFrases.some((f) => !f.bolsa);
-
-  const opciones = [{ clave: "", texto: "todas" }]
-    .concat(bolsas.map((b) => ({ clave: b, texto: b })));
-  if (sinBolsa) opciones.push({ clave: " ", texto: "sin bolsa" });
-
-  // Si la bolsa que estabas mirando ya no existe, volvemos a todas.
-  if (bolsaElegida && !opciones.some((o) => o.clave === bolsaElegida)) {
-    bolsaElegida = "";
+  // Si la lista que estabas mirando ya no existe, volvemos a todas.
+  if (listaElegida && !opciones.some((o) => o.clave === listaElegida)) {
+    listaElegida = "";
   }
 
   donde.innerHTML = opciones.map((opcion) =>
-    '<button class="bolsa' + (opcion.clave === bolsaElegida ? " activa" : "") +
-    '" data-bolsa="' + escapar(opcion.clave) + '">' +
-    escapar(opcion.texto) + "</button>").join("");
+    '<button class="bolsa' + (opcion.clave === listaElegida ? " activa" : "") +
+    '" data-lista="' + escapar(opcion.clave) + '">' + escapar(opcion.texto) +
+    "</button>").join("");
 
-  donde.querySelectorAll("[data-bolsa]").forEach((boton) => {
+  donde.querySelectorAll("[data-lista]").forEach((boton) => {
     boton.addEventListener("click", () => {
-      bolsaElegida = boton.dataset.bolsa;
-      dibujarFiltrosDeBolsa(bolsas);
+      listaElegida = boton.dataset.lista;
+      cerrarEdicionDeLista();
+      dibujarFiltrosDeLista();
       dibujarListaDeFrases();
     });
   });
+
+  // Renombrar y borrar solo tienen sentido con una lista real elegida.
+  const editando = !document.getElementById("editar-lista").hidden;
+  document.getElementById("boton-nueva-lista").textContent =
+    listaElegida && listaElegida !== " " && !editando ? "editar esta lista" : "+ nueva lista";
 }
 
 
 function frasesVisibles() {
-  if (bolsaElegida === "") return ultimasFrases;
-  if (bolsaElegida === " ") return ultimasFrases.filter((f) => !f.bolsa);
-  return ultimasFrases.filter((f) => f.bolsa === bolsaElegida);
+  if (listaElegida === "") return ultimasFrases;
+  if (listaElegida === " ") return ultimasFrases.filter((f) => !f.lista);
+  return ultimasFrases.filter((f) => f.lista === listaElegida);
 }
 
 
@@ -972,26 +1081,26 @@ function dibujarListaDeFrases() {
 
   if (!ultimasFrases.length) {
     contenedor.innerHTML = '<div class="aviso">Todavía no guardaste ninguna ' +
-      "frase. Escribí un nombre arriba, dale Grabar y tocá la frase como " +
-      "querrías tocarla.</div>";
+      "frase. Dale a Grabar una frase, tocala, y al terminar le ponés nombre.</div>";
     actualizarMovedor();
     return;
   }
 
   if (!visibles.length) {
-    contenedor.innerHTML = '<div class="aviso">No hay frases en esta bolsa.</div>';
+    contenedor.innerHTML = '<div class="aviso">Esta lista está vacía. Marcá ' +
+      "frases en «todas» y mandalas acá, o elegí esta lista al guardar una nueva.</div>";
     actualizarMovedor();
     return;
   }
 
   contenedor.innerHTML = visibles.map((frase) =>
-    '<div class="frase">' +
+    '<div class="frase" data-frase="' + escapar(frase.nombre) + '">' +
       '<input type="checkbox" data-marcar="' + escapar(frase.nombre) + '"' +
         (frasesMarcadas.has(frase.nombre) ? " checked" : "") + ">" +
       '<div class="datos">' +
         "<h3>" + escapar(frase.nombre) +
-          (frase.bolsa
-            ? ' <span class="etiqueta-bolsa">' + escapar(frase.bolsa) + "</span>"
+          (frase.lista && listaElegida === ""
+            ? ' <span class="etiqueta-lista">' + escapar(frase.lista) + "</span>"
             : "") + "</h3>" +
         (frase.comentario
           ? '<div class="descripcion">' + escapar(frase.comentario) + "</div>"
@@ -1026,6 +1135,7 @@ function dibujarListaDeFrases() {
   contenedor.querySelectorAll("[data-practicar]").forEach((boton) => {
     boton.addEventListener("click", async () => {
       document.getElementById("seccion-comparacion").hidden = true;
+      ocultarPendiente();
       await comenzar({ modo: "practicar", nombre: boton.dataset.practicar });
     });
   });
@@ -1040,7 +1150,7 @@ function dibujarListaDeFrases() {
       document.getElementById("seccion-comparacion").hidden = true;
       avisarFrase("Comparando " + archivo.name + " contra «" + nombre + "»...");
 
-      const respuesta = await subir("/api/frases/intento", nombre, archivo, {});
+      const respuesta = await subir("/api/frases/intento", archivo, {}, nombre);
       if (!respuesta.ok) {
         avisarFrase(respuesta.motivo || "no pude comparar ese audio");
         return;
@@ -1053,7 +1163,7 @@ function dibujarListaDeFrases() {
   contenedor.querySelectorAll("[data-borrar]").forEach((boton) => {
     boton.addEventListener("click", async () => {
       const nombre = boton.dataset.borrar;
-      if (!confirm("¿Borrar la frase «" + nombre + "»?")) return;
+      if (!confirm("¿Borrar la frase «" + nombre + "»? Se borra también su audio.")) return;
       await pedir("/api/frases/borrar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1068,71 +1178,101 @@ function dibujarListaDeFrases() {
 }
 
 
-/* Los controles para mandar las marcadas a una bolsa. Aparecen recien cuando
+/* Los controles para mandar las marcadas a una lista. Aparecen recien cuando
  * marcaste algo: mostrarlos siempre seria ruido. */
 function actualizarMovedor() {
-  const caja = document.getElementById("mover-a-bolsa");
-  if (!caja) return;
-
+  const caja = document.getElementById("mover-a-lista");
   caja.hidden = frasesMarcadas.size === 0;
+  if (caja.hidden) return;
+
   document.getElementById("cuantas-marcadas").textContent =
     frasesMarcadas.size === 1 ? "1 frase marcada"
                               : frasesMarcadas.size + " frases marcadas";
+  llenarSelectorDeListas("lista-destino", "", false);
 }
 
 
-function configurarBolsas() {
-  const mover = document.getElementById("boton-mover");
-  if (!mover) return;
+function cerrarEdicionDeLista() {
+  document.getElementById("editar-lista").hidden = true;
+}
 
-  mover.addEventListener("click", async () => {
-    const destino = document.getElementById("bolsa-destino").value.trim();
-    const respuesta = await pedir("/api/frases/bolsa", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nombres: Array.from(frasesMarcadas),
-        bolsa: destino,
-      }),
-    });
+
+function configurarListas() {
+  const edicion = document.getElementById("editar-lista");
+  const campo = document.getElementById("lista-nombre-nuevo");
+  const borrar = document.getElementById("boton-borrar-lista");
+
+  // Un solo boton que es "+ nueva lista" o "editar esta lista" segun que
+  // este elegido. Abre el mismo formulario de una linea.
+  document.getElementById("boton-nueva-lista").addEventListener("click", () => {
+    const editando = listaElegida && listaElegida !== " ";
+    edicion.hidden = false;
+    campo.value = editando ? listaElegida : "";
+    campo.placeholder = editando ? "nuevo nombre" : "nombre de la lista";
+    borrar.hidden = !editando;
+    dibujarFiltrosDeLista();
+    campo.focus();
+  });
+
+  document.getElementById("boton-cancelar-lista").addEventListener("click", () => {
+    cerrarEdicionDeLista();
+    dibujarFiltrosDeLista();
+  });
+
+  async function guardarLista() {
+    const nombre = campo.value.trim();
+    if (!nombre) { campo.focus(); return; }
+
+    const editando = listaElegida && listaElegida !== " ";
+    const respuesta = editando
+      ? await pedir("/api/listas/renombrar", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ viejo: listaElegida, nuevo: nombre }) })
+      : await pedir("/api/listas/crear", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nombre: nombre }) });
+
+    if (!respuesta.ok) {
+      avisarFrase(respuesta.motivo || "no pude guardar la lista");
+      return;
+    }
+    listaElegida = respuesta.nombre;
+    cerrarEdicionDeLista();
+    await cargarFrases();
+  }
+
+  document.getElementById("boton-guardar-lista").addEventListener("click", guardarLista);
+  campo.addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") guardarLista();
+  });
+
+  borrar.addEventListener("click", async () => {
+    if (!confirm("¿Borrar la lista «" + listaElegida + "»? Las frases quedan, sin lista.")) return;
+    await pedir("/api/listas/borrar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre: listaElegida }) });
+    listaElegida = "";
+    cerrarEdicionDeLista();
+    await cargarFrases();
+  });
+
+  document.getElementById("boton-mover").addEventListener("click", async () => {
+    const destino = document.getElementById("lista-destino").value;
+    const respuesta = await pedir("/api/frases/lista", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombres: Array.from(frasesMarcadas), lista: destino }) });
 
     avisarFrase(respuesta.ok
-      ? respuesta.movidas + (destino
-          ? " frases a «" + destino + "»."
-          : " frases sacadas de su bolsa.")
+      ? respuesta.movidas + (destino ? " frases a «" + destino + "»." : " frases sacadas de su lista.")
       : "no pude mover nada");
-
     frasesMarcadas.clear();
-    document.getElementById("bolsa-destino").value = "";
-    cargarFrases();
+    await cargarFrases();
   });
 
   document.getElementById("boton-desmarcar").addEventListener("click", () => {
     frasesMarcadas.clear();
     dibujarListaDeFrases();
   });
-}
-
-
-/* Que mostrar al terminar, segun si estabas grabando o practicando. */
-function terminarFrase(respuesta) {
-  if (!respuesta.ok) {
-    avisarFrase(respuesta.motivo || "algo sali\u00f3 mal");
-    return;
-  }
-
-  if (respuesta.modo === "frase") {
-    const frase = respuesta.frase;
-    avisarFrase("Guardada \u00ab" + frase.nombre + "\u00bb: " + frase.notas +
-                " notas en " + frase.duracion_seg.toFixed(1) + " s.");
-    document.getElementById("nombre-frase").value = "";
-    cargarFrases();
-    return;
-  }
-
-  avisarFrase("");
-  mostrarComparacion(respuesta.comparacion);
-  cargarFrases();
 }
 
 

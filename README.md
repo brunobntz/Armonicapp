@@ -352,14 +352,22 @@ nombre va al archivo (`2026-09-08_18-30-00_bloque-t2_tab.txt`, después de la
 fecha para que sigan ordenándose solos) y los dos al encabezado de la tab, del
 resumen y del JSON.
 
-En **Frases** pasa lo mismo, y ahí importa más porque una frase dura cuatro
-segundos: mientras grabás hay un cartel con un punto rojo, el reloj, la barra
-de nivel y la tablatura saliendo en vivo. Antes lo único que aparecía era una
-línea de texto, y para cuando la leías ya habías terminado de tocar.
+En **Frases** el orden es al revés, a propósito: primero grabás, después
+nombrás. Apretás *Grabar una frase*, tocás —con un cartel de punto rojo, reloj,
+barra de nivel y la tablatura saliendo en vivo—, y al terminar aparece **lo
+que salió**: la tablatura, cuántas notas, cuánto duró. Recién ahí le ponés
+nombre, descripción y lista, y la guardás. O la descartás y grabás de nuevo.
+Importar un audio termina en la misma pantalla. Antes el nombre iba antes de
+grabar y la frase se guardaba sola al terminar, con una línea de texto como
+única confirmación: la primera frase grabada se perdió sin que nadie se diera
+cuenta. Si recargás la página con una frase sin guardar, sigue ahí.
 
-Las frases se pueden agrupar en **bolsas** —"turnarounds", "clase de junio",
-"para calentar"—. Marcás varias con su casilla, escribís la bolsa y van todas
-juntas. Después filtrás por bolsa y practicás solo esas.
+Las frases se organizan en **listas de reproducción** —"turnarounds", "clase
+del martes", "para calentar"—. Una lista existe aunque esté vacía: la creás,
+la renombrás (arrastra sus frases) y la borrás (las frases quedan, sin lista:
+ordenar no borra grabaciones). Cada frase está en una lista o en ninguna.
+Marcás varias con su casilla y las mandás juntas. Después elegís una lista y
+practicás solo esas, con sus reproductores en fila.
 
 El diagrama de la armónica tiene **una fila por agujero**, con las notas
 abriéndose hacia los costados: a la izquierda lo aspirado, a la derecha lo
@@ -398,7 +406,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 665 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 676 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

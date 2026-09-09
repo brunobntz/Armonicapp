@@ -118,7 +118,6 @@ class EstadoCompartido:
         # hora y ninguna forma de saber cual era la que valia la pena.
         self.titulo = ""
         self.comentario = ""
-        self.bolsa = ""
 
         # ESCUCHAR Y GRABAR SON DOS COSAS DISTINTAS
         #
@@ -253,7 +252,6 @@ class EstadoCompartido:
             self.modo = "sesion"
             self.titulo = ""
             self.comentario = ""
-            self.bolsa = ""
             self.grabando = False
             self.grabacion_lista = False
             self.inicio_grabacion_seg = 0.0
@@ -763,6 +761,50 @@ def comparacion_como_diccionario(comparacion, frase):
     }
 
 
+class FrasePendiente:
+    """
+    Una frase grabada o importada que todavia no tiene nombre.
+
+    Vive en memoria entre que terminaste de tocar y que decidis guardarla o
+    tirarla. Es UNA sola: grabar otra la reemplaza. No hace falta mas, porque
+    la decision se toma en el momento, mirando lo que salio.
+    """
+
+    def __init__(self, eventos, muestras, frecuencia_muestreo, tonalidad,
+                 posicion, escala, origen, nombre_sugerido="", sirve=True,
+                 motivo="", avisos=None):
+        self.eventos = eventos
+        self.muestras = muestras
+        self.frecuencia_muestreo = frecuencia_muestreo
+        self.tonalidad = tonalidad
+        self.posicion = posicion
+        self.escala = escala
+        self.origen = origen                    # "microfono" o "archivo"
+        self.nombre_sugerido = nombre_sugerido
+        self.sirve = sirve
+        self.motivo = motivo
+        self.avisos = avisos or []
+
+    def como_diccionario(self):
+        reconocidas = [e for e in self.eventos if e.nota is not None]
+        duracion = 0.0
+        if reconocidas:
+            duracion = reconocidas[-1].fin_seg - reconocidas[0].inicio_seg
+        return {
+            "origen": self.origen,
+            "nombre_sugerido": self.nombre_sugerido,
+            "tonalidad": self.tonalidad,
+            "posicion": self.posicion,
+            "notas": len(reconocidas),
+            "duracion_seg": round(duracion, 1),
+            "tab": [e.como_tab() for e in reconocidas],
+            "sirve": self.sirve,
+            "motivo": self.motivo,
+            "avisos": self.avisos,
+            "hay_audio": self.muestras is not None and len(self.muestras) > 0,
+        }
+
+
 class Manejador(SimpleHTTPRequestHandler):
     """
     Atiende al navegador.
@@ -774,6 +816,10 @@ class Manejador(SimpleHTTPRequestHandler):
     estado = None
     hilo_audio = None
     detener = None
+
+    # La frase grabada o importada que todavia no guardaste. Ver
+    # FrasePendiente.
+    pendiente = None
 
     # Si la app puede prender el microfono sola. La pone arrancar(), y los
     # tests la dejan en False: ahi el microfono no se abre nunca, que es lo
@@ -835,6 +881,10 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(historial())
         if self.path == "/api/frases":
             return self._responder_json(self._listar_frases())
+        if self.path == "/api/frases/pendiente":
+            return self._responder_json(self._pendiente_actual())
+        if self.path == "/api/listas":
+            return self._responder_json({"listas": frases.listar_listas()})
         if self.path == "/api/dispositivos":
             return self._responder_json(self._listar_dispositivos())
         if self.path.startswith("/api/frases/audio"):
@@ -865,8 +915,18 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._terminar())
         if self.path == "/api/frases/borrar":
             return self._responder_json(self._borrar_frase(cuerpo))
-        if self.path == "/api/frases/bolsa":
-            return self._responder_json(self._mover_de_bolsa(cuerpo))
+        if self.path == "/api/frases/guardar":
+            return self._responder_json(self._guardar_frase_pendiente(cuerpo))
+        if self.path == "/api/frases/descartar":
+            return self._responder_json(self._descartar_pendiente())
+        if self.path == "/api/frases/lista":
+            return self._responder_json(self._asignar_a_lista(cuerpo))
+        if self.path == "/api/listas/crear":
+            return self._responder_json(self._crear_lista(cuerpo))
+        if self.path == "/api/listas/renombrar":
+            return self._responder_json(self._renombrar_lista(cuerpo))
+        if self.path == "/api/listas/borrar":
+            return self._responder_json(self._borrar_lista(cuerpo))
         if self.path == "/api/configuracion":
             return self._responder_json(self._cambiar_configuracion(cuerpo))
         self.send_error(404)
@@ -906,8 +966,10 @@ class Manejador(SimpleHTTPRequestHandler):
         opciones = {
             "tonalidad": (parametros.get("tonalidad", [""])[0] or "").strip(),
             "igual": parametros.get("igual", ["0"])[0] == "1",
-            "comentario": (parametros.get("comentario", [""])[0] or "").strip(),
-            "bolsa": (parametros.get("bolsa", [""])[0] or "").strip(),
+            # El nombre del archivo, sin extension: es la sugerencia de nombre
+            # cuando importas. "lick_de_lean.ogg" -> "lick_de_lean".
+            "archivo": os.path.splitext(os.path.basename(
+                (parametros.get("archivo", [""])[0] or "").strip()))[0],
             # El pedazo a guardar, en segundos desde el principio del audio.
             # Sin esto se guarda el archivo entero.
             "desde": _numero(parametros.get("desde", [""])[0]),
@@ -931,9 +993,6 @@ class Manejador(SimpleHTTPRequestHandler):
         # lo agarro justo, y de manera intermitente, que es la peor forma de
         # tener un error.
         datos = self.rfile.read(largo)
-
-        if not nombre:
-            return None, None, opciones, "falta el nombre de la frase"
 
         # La extension del temporal la pone el que sube: si mandaste un .m4a,
         # ffmpeg necesita saberlo para poder convertirlo.
@@ -970,7 +1029,9 @@ class Manejador(SimpleHTTPRequestHandler):
         modo = peticion.get("modo", "sesion")
         nombre = (peticion.get("nombre") or "").strip()
 
-        if modo in ("frase", "practicar") and not nombre:
+        # Grabar una frase ya no pide nombre: se lo pones al terminar, cuando
+        # viste lo que salio. Practicar si, porque hay que saber contra cual.
+        if modo == "practicar" and not nombre:
             return {"ok": False, "motivo": "falta el nombre de la frase"}
 
         if modo == "practicar" and frases.buscar(nombre) is None:
@@ -985,7 +1046,6 @@ class Manejador(SimpleHTTPRequestHandler):
         estado.nombre_frase = nombre
         estado.titulo = (peticion.get("titulo") or "").strip()[:80]
         estado.comentario = (peticion.get("comentario") or "").strip()[:400]
-        estado.bolsa = (peticion.get("bolsa") or "").strip()[:40]
         estado.grabando = True
         estado.pedir("arrancar")
         return {"ok": True}
@@ -1034,28 +1094,118 @@ class Manejador(SimpleHTTPRequestHandler):
         }
 
     def _terminar_grabando_frase(self, estado):
-        """Guarda lo tocado como frase de referencia."""
+        """
+        Termina de grabar una frase. NO la guarda: la deja pendiente.
+
+        POR QUE EL NOMBRE VA DESPUES Y NO ANTES
+
+        Antes habia que escribir el nombre antes de grabar, y al terminar la
+        frase se guardaba sola. Dos problemas. El primero es que no sabes que
+        va a salir hasta que lo tocas: capaz te sale mal y la queres tirar, y
+        ya tenia nombre. El segundo es que lo unico que confirmaba el guardado
+        era una linea de texto chiquita: la primera frase de Bruno se perdio
+        sin que se diera cuenta.
+
+        Ahora al terminar aparece lo que se grabo —tablatura, notas, duracion—
+        y ahi decidis: le pones nombre, descripcion y lista, y la guardas. O la
+        descartas. Lo grabado queda en memoria hasta que elijas.
+        """
+        reconocidas = [e for e in estado.eventos if e.nota is not None]
+        if not reconocidas:
+            return {
+                "ok": False,
+                "modo": "frase",
+                "motivo": "No se reconoció ninguna nota. Fijate que la barra "
+                          "de nivel se mueva cuando tocás.",
+            }
+
+        type(self).pendiente = FrasePendiente(
+            eventos=list(estado.eventos),
+            muestras=estado.audio_grabado,
+            frecuencia_muestreo=estado.frecuencia_muestreo,
+            tonalidad=estado.tonalidad,
+            posicion=estado.posicion,
+            escala=estado.escala,
+            origen="microfono",
+        )
+        return {"ok": True, "modo": "frase",
+                "pendiente": type(self).pendiente.como_diccionario()}
+
+    def _guardar_frase_pendiente(self, peticion):
+        """
+        Guarda la frase que quedo pendiente, con el nombre que le pusiste.
+
+        Si ya hay una frase con ese nombre, no la pisa: avisa. Pisar seria
+        perder una grabacion por un nombre repetido, y las frases de Leandro
+        no se pueden volver a grabar.
+        """
+        clase = type(self)
+        pendiente = clase.pendiente
+        if pendiente is None:
+            return {"ok": False, "motivo": "no hay ninguna frase para guardar"}
+
+        peticion = peticion or {}
+        nombre = (peticion.get("nombre") or "").strip()[:60]
+        if not nombre:
+            return {"ok": False, "motivo": "ponele un nombre a la frase"}
+
+        if frases.buscar(nombre) is not None and not peticion.get("reemplazar"):
+            return {"ok": False, "motivo": f"ya hay una frase que se llama {nombre!r}",
+                    "repetida": True}
+
+        lista = frases.limpiar_nombre_de_lista(peticion.get("lista") or "")
+
         try:
             frase = frases.desde_eventos(
-                estado.eventos, estado.nombre_frase, estado.tonalidad,
-                estado.posicion, estado.escala,
-                comentario=estado.comentario, bolsa=estado.bolsa,
+                pendiente.eventos, nombre, pendiente.tonalidad,
+                pendiente.posicion, pendiente.escala,
+                comentario=(peticion.get("comentario") or "").strip()[:400],
+                lista=lista,
             )
         except ValueError as error:
-            return {"ok": False, "modo": "frase", "motivo": str(error)}
+            return {"ok": False, "motivo": str(error)}
 
-        frases.guardar(frase)
+        ruta = frases.guardar(frase)
+        if lista:
+            frases.crear_lista(lista)
 
+        # El audio queda al lado del JSON. Una frase se lee, pero sobre todo
+        # se ESCUCHA: sin el audio, la referencia se convierte en una
+        # tablatura y perdes justo el ritmo, que es lo que venias a buscar.
+        if pendiente.muestras is not None and len(pendiente.muestras):
+            audio.escribir_wav(os.path.splitext(ruta)[0] + "_audio.wav",
+                               pendiente.muestras, pendiente.frecuencia_muestreo)
+
+        # Si el control de monofonia habia dicho que no y la guardaste igual,
+        # queda dicho: fue tu decision, mirando la tablatura.
+        avisos = list(pendiente.avisos)
+        if not pendiente.sirve and pendiente.motivo:
+            avisos.append("Guardada salteando el control: " + pendiente.motivo)
+
+        clase.pendiente = None
         return {
             "ok": True,
-            "modo": "frase",
+            "avisos": avisos,
             "frase": {
                 "nombre": frase.nombre,
                 "notas": frase.cantidad,
                 "duracion_seg": round(frase.duracion_seg, 1),
+                "tonalidad": frase.tonalidad,
+                "lista": frase.lista,
                 "tab": frase.tablatura(),
             },
         }
+
+    def _descartar_pendiente(self):
+        type(self).pendiente = None
+        return {"ok": True}
+
+    def _pendiente_actual(self):
+        """Lo que hay para guardar, si es que hay algo. Para cuando recargas."""
+        pendiente = type(self).pendiente
+        if pendiente is None:
+            return {"ok": True, "pendiente": None}
+        return {"ok": True, "pendiente": pendiente.como_diccionario()}
 
     def _terminar_practicando(self, estado):
         """Compara lo que acabas de tocar contra la frase de referencia."""
@@ -1133,15 +1283,19 @@ class Manejador(SimpleHTTPRequestHandler):
 
     def _importar_frase(self, consulta):
         """
-        Guarda como frase de referencia un .wav que subiste.
+        Transcribe un audio que subiste y lo deja PENDIENTE de guardar.
 
         Es la puerta de entrada de las grabaciones de Leandro y de tus propios
-        audios ya grabados. Antes de guardar nada, revisa que el audio sirva:
-        una frase mal transcrita queda guardada para siempre y arruina todas
-        las practicas que vengan despues.
+        audios ya grabados. No guarda nada: devuelve lo que salio —tablatura,
+        notas, duracion, y si el audio sirve— y la misma pantalla que para
+        una frase grabada con el microfono te deja ponerle nombre y guardarla.
+
+        Antes esta funcion guardaba directo, y tenia un parametro "igual" para
+        saltear el control de monofonia. Ya no hace falta: el control se
+        muestra como aviso en la vista previa, y el que decide sos vos.
         """
         estado = type(self).estado
-        nombre, ruta_temporal, opciones, error = self._leer_audio_subido(consulta)
+        _, ruta_temporal, opciones, error = self._leer_audio_subido(consulta)
         if error:
             return {"ok": False, "motivo": error}
 
@@ -1165,59 +1319,35 @@ class Manejador(SimpleHTTPRequestHandler):
                 resultado = transcripcion.recortar(
                     resultado, opciones["desde"], opciones["hasta"],
                     tonalidad, estado.posicion, estado.escala)
-                if not resultado.reconocidas:
-                    return {"ok": False,
-                            "motivo": "en ese pedazo del audio no hay notas"}
-
-            sirve, motivo, avisos = transcripcion.revisar(resultado, tonalidad)
-
-            # Si no pasa la revision no se guarda nada todavia: se devuelve lo
-            # que HABRIA salido y se ofrece guardarlo igual. El umbral de
-            # monofonia es una heuristica, no una ley; el que sabe si esa
-            # tablatura es la frase que toco Leandro sos vos. Lo unico que la
-            # app se asegura es que lo decidas MIRANDO el resultado.
-            if not sirve and not opciones["igual"]:
-                return {
-                    "ok": False,
-                    "motivo": motivo,
-                    "se_puede_igual": bool(resultado.reconocidas),
-                    "vista_previa": [e.como_tab() for e in resultado.reconocidas][:24],
-                }
-
-            try:
-                frase = frases.desde_eventos(
-                    resultado.eventos, nombre, tonalidad,
-                    estado.posicion, estado.escala,
-                    comentario=opciones["comentario"],
-                    bolsa=opciones["bolsa"])
-            except ValueError as fallo:
-                return {"ok": False, "motivo": str(fallo)}
-
-            if not sirve:
-                avisos = list(avisos) + ["Guardada salteando el control: " + motivo]
         finally:
             os.remove(ruta_temporal)
 
-        ruta = frases.guardar(frase)
+        recortado = opciones["desde"] is not None and opciones["hasta"] is not None
+        if recortado and not resultado.reconocidas:
+            return {"ok": False, "motivo": "en ese pedazo del audio no hay notas"}
 
-        # El audio queda al lado del JSON. Una frase de Leandro se lee, pero
-        # sobre todo se ESCUCHA: sin el audio guardado, la referencia se
-        # convierte en una tablatura y perdes justo el ritmo, que es lo que
-        # habias venido a buscar.
-        audio.escribir_wav(os.path.splitext(ruta)[0] + "_audio.wav",
-                           resultado.muestras, resultado.frecuencia_muestreo)
+        # La revision va antes de contar notas: si el audio tiene una banda
+        # atras, el detector no reconoce nada y el motivo util es ESE, no
+        # "ninguna nota".
+        sirve, motivo, avisos = transcripcion.revisar(resultado, tonalidad)
+        if not resultado.reconocidas:
+            return {"ok": False,
+                    "motivo": motivo or "en ese audio no se reconoció ninguna nota"}
 
-        return {
-            "ok": True,
-            "avisos": avisos,
-            "frase": {
-                "nombre": frase.nombre,
-                "notas": frase.cantidad,
-                "duracion_seg": round(frase.duracion_seg, 1),
-                "tonalidad": frase.tonalidad,
-                "tab": frase.tablatura(),
-            },
-        }
+        type(self).pendiente = FrasePendiente(
+            eventos=list(resultado.eventos),
+            muestras=resultado.muestras,
+            frecuencia_muestreo=resultado.frecuencia_muestreo,
+            tonalidad=tonalidad,
+            posicion=estado.posicion,
+            escala=estado.escala,
+            origen="archivo",
+            nombre_sugerido=opciones["archivo"],
+            sirve=sirve,
+            motivo=motivo,
+            avisos=list(avisos),
+        )
+        return {"ok": True, "pendiente": type(self).pendiente.como_diccionario()}
 
     def _intento_de_archivo(self, consulta):
         """
@@ -1229,6 +1359,9 @@ class Manejador(SimpleHTTPRequestHandler):
         nombre, ruta_temporal, _, error = self._leer_audio_subido(consulta)
         if error:
             return {"ok": False, "motivo": error}
+        if not nombre:
+            os.remove(ruta_temporal)
+            return {"ok": False, "motivo": "contra que frase comparo?"}
 
         try:
             frase = frases.buscar(nombre)
@@ -1269,19 +1402,40 @@ class Manejador(SimpleHTTPRequestHandler):
                 "posicion": frase.posicion,
                 "fecha": (frase.fecha or "")[:10],
                 "comentario": frase.comentario,
-                "bolsa": frase.bolsa,
+                "lista": frase.lista,
                 "tab": frase.tablatura()[:16],
                 "hay_audio": os.path.isfile(
                     os.path.splitext(ruta)[0] + "_audio.wav"),
             })
-        # Las bolsas que existen hoy, para poder ofrecerlas sin que tengas
-        # que acordarte de como las escribiste.
-        bolsas = sorted({f["bolsa"] for f in salida if f["bolsa"]})
-        return {"frases": salida, "bolsas": bolsas}
+        return {"frases": salida, "listas": frases.listar_listas()}
 
-    def _mover_de_bolsa(self, peticion):
+    def _crear_lista(self, peticion):
+        nombre = frases.crear_lista((peticion or {}).get("nombre") or "")
+        if not nombre:
+            return {"ok": False, "motivo": "ponele un nombre a la lista"}
+        return {"ok": True, "nombre": nombre, "listas": frases.listar_listas()}
+
+    def _renombrar_lista(self, peticion):
+        peticion = peticion or {}
+        viejo = (peticion.get("viejo") or "").strip()
+        nuevo = frases.limpiar_nombre_de_lista(peticion.get("nuevo") or "")
+        if not viejo or not nuevo:
+            return {"ok": False, "motivo": "faltan el nombre viejo o el nuevo"}
+        movidas = frases.renombrar_lista(viejo, nuevo)
+        return {"ok": True, "nombre": nuevo, "movidas": movidas,
+                "listas": frases.listar_listas()}
+
+    def _borrar_lista(self, peticion):
+        """Borra la lista. Las frases quedan, sin lista: ordenar no borra."""
+        nombre = ((peticion or {}).get("nombre") or "").strip()
+        if not nombre:
+            return {"ok": False, "motivo": "que lista?"}
+        sacadas = frases.borrar_lista(nombre)
+        return {"ok": True, "sacadas": sacadas, "listas": frases.listar_listas()}
+
+    def _asignar_a_lista(self, peticion):
         """
-        Cambia la bolsa de una o varias frases. Con la bolsa vacia, las saca.
+        Pone una o varias frases en una lista. Con la lista vacia, las saca.
 
         Acepta varios nombres de una porque asi se usa: marcas cinco frases
         que son del mismo tema y las mandas juntas.
@@ -1290,24 +1444,19 @@ class Manejador(SimpleHTTPRequestHandler):
         nombres = peticion.get("nombres") or []
         if isinstance(nombres, str):
             nombres = [nombres]
-        bolsa = (peticion.get("bolsa") or "").strip()[:40]
-
-        movidas = 0
-        for nombre in nombres:
-            frase = frases.buscar(nombre)
-            if frase is None:
-                continue
-            frase.bolsa = bolsa
-            frases.guardar(frase)
-            movidas += 1
-
-        return {"ok": movidas > 0, "movidas": movidas}
+        movidas = frases.asignar_a_lista(nombres, peticion.get("lista") or "")
+        return {"ok": movidas > 0, "movidas": movidas,
+                "listas": frases.listar_listas()}
 
     def _borrar_frase(self, peticion):
         nombre = (peticion or {}).get("nombre", "")
         for guardada, ruta in frases.listar():
             if guardada == nombre:
                 os.remove(ruta)
+                # Y su audio, si lo tenia: sin la frase no sirve para nada.
+                sobrante = os.path.splitext(ruta)[0] + "_audio.wav"
+                if os.path.isfile(sobrante):
+                    os.remove(sobrante)
                 return {"ok": True}
         return {"ok": False, "motivo": "no la encontre"}
 

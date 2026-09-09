@@ -39,6 +39,7 @@ def servidor_andando():
     servidor.Manejador.estado = servidor.EstadoCompartido("C", 12, "blues_mayor")
     servidor.Manejador.hilo_audio = None
     servidor.Manejador.detener = None
+    servidor.Manejador.pendiente = None
 
     instancia = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Manejador)
     puerto = instancia.server_address[1]
@@ -554,14 +555,6 @@ def preparar(modo, nombre, eventos):
     return estado
 
 
-def test_grabar_una_frase_pide_el_nombre(servidor_andando):
-    """Sin nombre no hay archivo donde guardarla. Se rechaza antes de escuchar."""
-    respuesta = mandar(servidor_andando, "/api/comenzar", {"modo": "frase"})
-    assert respuesta["ok"] is False
-    assert "nombre" in respuesta["motivo"]
-    assert servidor.Manejador.estado.escuchando is False
-
-
 def test_practicar_una_frase_que_no_existe_se_rechaza(
         servidor_andando, carpeta_de_frases):
     """
@@ -575,21 +568,6 @@ def test_practicar_una_frase_que_no_existe_se_rechaza(
     assert respuesta["ok"] is False
     assert "no encontre" in respuesta["motivo"]
     assert servidor.Manejador.estado.escuchando is False
-
-
-def test_terminar_grabando_guarda_la_frase(servidor_andando, carpeta_de_frases):
-    preparar("frase", "lick de segunda", eventos_de(["-2", "-3''", "4", "-4"]))
-
-    respuesta = mandar(servidor_andando, "/api/terminar")
-
-    assert respuesta["ok"] is True
-    assert respuesta["modo"] == "frase"
-    assert respuesta["frase"]["notas"] == 4
-    assert respuesta["frase"]["tab"][0] == "-2"
-
-    guardada = frases.buscar("lick de segunda")
-    assert guardada is not None
-    assert guardada.cantidad == 4
 
 
 def test_una_frase_sin_notas_no_se_guarda(servidor_andando, carpeta_de_frases):
@@ -742,61 +720,6 @@ def wav_polifonico():
     ))
 
 
-def test_importar_un_wav_lo_guarda_como_frase(servidor_andando, carpeta_de_frases):
-    respuesta = subir(servidor_andando, "/api/frases/importar",
-                      "lick de lean", wav_de(["-2", "4", "-4", "-5"]))
-
-    assert respuesta["ok"] is True
-    assert respuesta["frase"]["notas"] == 4
-    assert respuesta["frase"]["tab"] == ["-2", "4", "-4", "-5"]
-    assert respuesta["avisos"] == []
-
-    guardada = frases.buscar("lick de lean")
-    assert guardada is not None
-    assert guardada.cantidad == 4
-
-
-def test_el_audio_importado_queda_al_lado_de_la_frase(
-        servidor_andando, carpeta_de_frases):
-    """
-    Una frase de Leandro se lee, pero sobre todo se ESCUCHA.
-
-    Sin el audio guardado, la referencia se degrada a una tablatura y perdes
-    justo el ritmo, que es lo unico que la tablatura no sabe transmitir.
-    """
-    subir(servidor_andando, "/api/frases/importar", "con audio",
-          wav_de(["4", "-4", "-5"]))
-
-    guardados = sorted(os.listdir(carpeta_de_frases))
-    assert "con_audio.json" in guardados
-    assert "con_audio_audio.wav" in guardados
-
-
-def test_importar_sin_nombre_se_rechaza(servidor_andando, carpeta_de_frases):
-    respuesta = subir(servidor_andando, "/api/frases/importar", "  ",
-                      wav_de(["4", "-4"]))
-    assert respuesta["ok"] is False
-    assert "nombre" in respuesta["motivo"]
-    assert frases.listar() == []
-
-
-def test_un_audio_con_banda_no_se_guarda_como_frase(
-        servidor_andando, carpeta_de_frases):
-    """
-    EL CONTROL QUE MAS IMPORTA DE TODA LA SOLAPA.
-
-    Si se guardara una frase transcrita de un audio polifonico, quedaria ahi
-    para siempre y todas las practicas contra ella medirian contra notas
-    inventadas. Mejor no guardar nada y decir por que.
-    """
-    respuesta = subir(servidor_andando, "/api/frases/importar",
-                      "la base entera", wav_polifonico())
-
-    assert respuesta["ok"] is False
-    assert "monofon" in respuesta["motivo"]
-    assert frases.listar() == []
-
-
 def test_un_archivo_que_no_es_wav_da_un_error_claro(
         servidor_andando, carpeta_de_frases):
     """
@@ -813,29 +736,6 @@ def test_un_archivo_que_no_es_wav_da_un_error_claro(
     assert "m4a" in respuesta["motivo"]
     assert "Temp" not in respuesta["motivo"]
     assert frases.listar() == []
-
-
-def test_comparar_un_wav_contra_una_frase_guardada(
-        servidor_andando, carpeta_de_frases):
-    """
-    El intento tambien puede venir de un archivo.
-
-    Sirve cuando ya grabaste con la grabadora de Windows, y para comparar dos
-    audios viejos sin volver a tocar.
-    """
-    subir(servidor_andando, "/api/frases/importar", "escala corta",
-          wav_de(["-2", "4", "-4", "-5"]))
-
-    respuesta = subir(servidor_andando, "/api/frases/intento", "escala corta",
-                      wav_de(["-2", "4", "-4", "-5"], duracion_nota=0.55))
-
-    assert respuesta["ok"] is True
-    comparacion = respuesta["comparacion"]
-    assert comparacion["esperadas"] == 4
-    assert comparacion["porcentaje"] == 100
-    # Mismo audio, 22% mas lento. Eso es una decision y no un error.
-    assert comparacion["velocidad"] > 15
-    assert comparacion["calidad"] == "muy parecida"
 
 
 def test_comparar_contra_una_frase_que_no_existe(servidor_andando, carpeta_de_frases):
@@ -878,36 +778,6 @@ def test_los_datos_iniciales_traen_las_armonicas_disponibles(servidor_andando):
     assert datos["tonalidad"] in datos["tonalidades"]
 
 
-def test_importar_usa_la_armonica_que_le_decis(servidor_andando, carpeta_de_frases):
-    """
-    El mismo audio, importado como armonica en Do y como armonica en La.
-
-    Son dos tablaturas distintas para el mismo sonido, y las dos son correctas
-    segun con que armonica se haya tocado. Este dato lo pone el que sube el
-    archivo porque es el unico que lo sabe.
-    """
-    audio_grabado = wav_de(["4", "-4", "-5"])
-
-    como_do = subir(servidor_andando, "/api/frases/importar", "en do",
-                    audio_grabado, tonalidad="C")
-    como_la = subir(servidor_andando, "/api/frases/importar", "en la",
-                    audio_grabado, tonalidad="A")
-
-    assert como_do["frase"]["tonalidad"] == "C"
-    assert como_la["frase"]["tonalidad"] == "A"
-    assert como_do["frase"]["tab"] != como_la["frase"]["tab"]
-
-    # Y la frase guardada se acuerda, asi que el intento se lee igual que ella.
-    assert frases.buscar("en la").tonalidad == "A"
-
-
-def test_sin_decir_nada_se_usa_la_armonica_de_la_sesion(
-        servidor_andando, carpeta_de_frases):
-    respuesta = subir(servidor_andando, "/api/frases/importar", "por defecto",
-                      wav_de(["4", "-4"]))
-    assert respuesta["frase"]["tonalidad"] == "C"
-
-
 def test_una_armonica_que_no_existe_se_rechaza(servidor_andando, carpeta_de_frases):
     respuesta = subir(servidor_andando, "/api/frases/importar", "rara",
                       wav_de(["4", "-4"]), tonalidad="H")
@@ -938,69 +808,6 @@ def umbral_imposible(monkeypatch):
     rechazar devuelva la tablatura, y que con `igual` la guarde avisando.
     """
     monkeypatch.setattr(servidor.transcripcion, "MONOFONIA_MINIMA", 0.99)
-
-
-def test_cuando_rechaza_muestra_lo_que_habria_transcrito(
-        servidor_andando, carpeta_de_frases, umbral_imposible):
-    """
-    El umbral de monofonia es una heuristica, no una ley.
-
-    Rechazar sin mostrar nada obliga a creerle a la app. Mostrando la
-    tablatura, el que decide es el unico que puede: el que sabe cual era la
-    frase. Lo unico que se garantiza es que la decision se tome MIRANDO.
-    """
-    respuesta = subir(servidor_andando, "/api/frases/importar",
-                      "dudosa", wav_de(["-2", "4", "-4"]))
-
-    assert respuesta["ok"] is False
-    assert respuesta["se_puede_igual"] is True
-    assert respuesta["vista_previa"] == ["-2", "4", "-4"]
-    assert frases.listar() == []
-
-
-def test_con_igual_la_guarda_pero_deja_dicho_que_la_salteo(
-        servidor_andando, carpeta_de_frases, umbral_imposible):
-    respuesta = subir(servidor_andando, "/api/frases/importar",
-                      "la guardo igual", wav_de(["-2", "4", "-4"]), igual="1")
-
-    assert respuesta["ok"] is True
-    assert any("salteando" in aviso for aviso in respuesta["avisos"])
-    assert frases.buscar("la guardo igual") is not None
-
-
-def test_una_base_encima_no_ofrece_guardarla_igual(
-        servidor_andando, carpeta_de_frases):
-    """
-    El caso real: un audio con la base sonando atras.
-
-    No hay nada que ofrecer, y no es por prudencia: para cuando el control
-    falla, el detector ya no reconocio ni una nota. Este test documenta que la
-    salida de emergencia NO sirve para rescatar una grabacion con banda.
-    """
-    respuesta = subir(servidor_andando, "/api/frases/importar",
-                      "con la base", wav_polifonico())
-
-    assert respuesta["ok"] is False
-    assert "monofon" in respuesta["motivo"]
-    assert respuesta["se_puede_igual"] is False
-    assert respuesta["vista_previa"] == []
-
-
-def test_un_audio_mudo_no_ofrece_guardarlo_igual(servidor_andando, carpeta_de_frases):
-    """
-    No hay nada que decidir: no hay ni una nota.
-
-    La salida de emergencia solo tiene sentido cuando hay una tablatura que
-    mirar. Ofrecer "guardala igual" sobre cero notas seria ofrecer guardar
-    una frase vacia.
-    """
-    import numpy
-
-    mudo = bytes_de_wav(numpy.zeros(44100, dtype=numpy.float32))
-    respuesta = subir(servidor_andando, "/api/frases/importar", "silencio", mudo)
-
-    assert respuesta["ok"] is False
-    assert respuesta.get("se_puede_igual") is False
 
 
 # =============================================================================
@@ -1038,68 +845,6 @@ def test_los_tramos_se_listan_sin_guardar_nada(servidor_andando, carpeta_de_fras
 
     # Lo importante: no guardo nada.
     assert frases.listar() == []
-
-
-def test_la_vista_previa_del_tramo_es_lo_que_se_va_a_guardar(
-        servidor_andando, carpeta_de_frases):
-    """
-    El tab que muestra la lista sale del MISMO recorte que se usa al guardar.
-
-    Si mostraramos el tab del analisis del archivo entero, elegirias mirando
-    una cosa y se guardaria otra: la grilla de ventanas arranca en otro lado
-    al recortar y cambia una nota o dos.
-    """
-    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
-
-    lista = subir(servidor_andando, "/api/frases/tramos", "la clase", datos)
-    segundo = lista["tramos"][1]
-
-    guardada = subir(servidor_andando, "/api/frases/importar", "el segundo",
-                     datos, desde=segundo["desde_seg"],
-                     hasta=segundo["hasta_seg"])
-
-    assert guardada["ok"] is True
-    assert guardada["frase"]["tab"] == segundo["tab"]
-
-
-def test_importar_un_tramo_guarda_solo_ese_pedazo(
-        servidor_andando, carpeta_de_frases):
-    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
-    lista = subir(servidor_andando, "/api/frases/tramos", "la clase", datos)
-    segundo = lista["tramos"][1]
-
-    respuesta = subir(servidor_andando, "/api/frases/importar", "solo el segundo",
-                      datos, desde=segundo["desde_seg"],
-                      hasta=segundo["hasta_seg"])
-
-    assert respuesta["ok"] is True
-    assert respuesta["frase"]["tab"] == ["-5", "6", "-6"]
-
-    frase = frases.buscar("solo el segundo")
-    assert frase.cantidad == 3
-    # Y los tiempos arrancan en cero, no en el segundo 4 del archivo original.
-    assert frase.notas[0].inicio_seg < 0.01
-
-
-def test_importar_un_pedazo_sin_notas_avisa(servidor_andando, carpeta_de_frases):
-    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
-
-    respuesta = subir(servidor_andando, "/api/frases/importar", "el silencio",
-                      datos, desde=2.4, hasta=2.9)
-
-    assert respuesta["ok"] is False
-    assert "no hay notas" in respuesta["motivo"]
-    assert frases.listar() == []
-
-
-def test_sin_recorte_se_guarda_el_audio_entero(servidor_andando, carpeta_de_frases):
-    """Sin desde/hasta nada cambia: es el camino de siempre."""
-    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
-
-    respuesta = subir(servidor_andando, "/api/frases/importar", "todo", datos)
-
-    assert respuesta["ok"] is True
-    assert respuesta["frase"]["notas"] == 6
 
 
 # =============================================================================
@@ -1250,31 +995,6 @@ def test_el_pico_baja_despacio_y_sube_de_golpe():
 # =============================================================================
 # Escuchar la frase guardada
 # =============================================================================
-
-def test_el_audio_de_una_frase_se_puede_bajar(servidor_andando, carpeta_de_frases):
-    """
-    Una frase de referencia se lee, pero sobre todo se ESCUCHA: la tablatura
-    no lleva el ritmo, y el ritmo es justo lo que estas tratando de copiar.
-    """
-    subir(servidor_andando, "/api/frases/importar", "para escuchar",
-          wav_de(["-2", "4", "-4"]))
-
-    codigo, cuerpo = traer(
-        servidor_andando, "/api/frases/audio?nombre=para%20escuchar")
-
-    assert codigo == 200
-    assert cuerpo[:4] == b"RIFF"
-    assert len(cuerpo) > 1000
-
-
-def test_la_lista_dice_cuales_frases_tienen_audio(servidor_andando, carpeta_de_frases):
-    subir(servidor_andando, "/api/frases/importar", "con audio",
-          wav_de(["-2", "4", "-4"]))
-
-    datos = traer_json(servidor_andando, "/api/frases")
-
-    assert datos["frases"][0]["hay_audio"] is True
-
 
 def test_pedir_el_audio_de_una_frase_que_no_esta(servidor_andando, carpeta_de_frases):
     try:
@@ -1597,10 +1317,6 @@ def test_si_el_microfono_falla_siempre_se_rinde_y_lo_dice():
     assert estado.escuchando is False
 
 
-# =============================================================================
-# Ponerle nombre y descripcion a lo que grabas, y agrupar frases en bolsas
-# =============================================================================
-
 def test_la_sesion_guarda_titulo_y_descripcion(servidor_andando, tmp_path,
                                                monkeypatch):
     """
@@ -1660,119 +1376,498 @@ def test_una_sesion_sin_titulo_se_guarda_igual(servidor_andando, tmp_path,
     assert any(n.endswith("_tab.txt") for n in os.listdir(str(tmp_path)))
 
 
-def test_una_frase_guarda_su_descripcion_y_su_bolsa(servidor_andando,
-                                                    carpeta_de_frases):
-    mandar(servidor_andando, "/api/comenzar", {
-        "modo": "frase",
-        "nombre": "turnaround de la clase",
-        "comentario": "el que cierra la vuelta, con el bend del 3",
-        "bolsa": "turnarounds",
-    })
+# =============================================================================
+# Grabar o importar deja una frase PENDIENTE; el nombre se pone al guardar
+#
+# Antes habia que escribir el nombre antes de grabar, y al terminar se
+# guardaba sola. No sabias que iba a salir hasta tocarlo, y lo unico que
+# confirmaba el guardado era una linea de texto: la primera frase de Bruno se
+# perdio sin que se diera cuenta. Ahora al terminar ves lo que salio y ahi
+# decidis.
+# =============================================================================
 
-    servidor.Manejador.estado.eventos = [
-        segmentacion.Evento(
-            nota=mapeo.tab_a_nota(tab, "C"), inicio_seg=i * 0.4,
-            duracion_seg=0.3, frecuencia_hz=440.0, cents=0.0,
-            confianza=0.99, ventanas=30,
-        )
-        for i, tab in enumerate(["-2", "-3''", "4"])
-    ]
+def importar_y_guardar(base, nombre, datos, **extras):
+    """El camino completo de importar, en dos pasos, como lo hace la web."""
+    previa = subir(base, "/api/frases/importar", "", datos, **extras)
+    assert previa["ok"] is True, previa
+    guardada = mandar(base, "/api/frases/guardar", {"nombre": nombre})
+    assert guardada["ok"] is True, guardada
+    return previa, guardada
+
+
+def test_grabar_una_frase_ya_no_pide_nombre(servidor_andando):
+    """El nombre va despues, cuando viste lo que salio."""
+    respuesta = mandar(servidor_andando, "/api/comenzar", {"modo": "frase"})
+
+    assert respuesta["ok"] is True
+    assert servidor.Manejador.estado.grabando is True
+    servidor.Manejador.estado.reiniciar()
+
+
+def test_practicar_si_pide_nombre(servidor_andando):
+    """Para practicar hay que saber contra cual: ahi el nombre sigue yendo antes."""
+    respuesta = mandar(servidor_andando, "/api/comenzar", {"modo": "practicar"})
+    assert respuesta["ok"] is False
+    assert "nombre" in respuesta["motivo"]
+
+
+def test_terminar_grabando_no_guarda_deja_pendiente(servidor_andando,
+                                                    carpeta_de_frases):
+    preparar("frase", "", eventos_de(["-2", "-3''", "4", "-4"]))
 
     respuesta = mandar(servidor_andando, "/api/terminar")
+
     assert respuesta["ok"] is True
+    assert respuesta["modo"] == "frase"
+    pendiente = respuesta["pendiente"]
+    assert pendiente["notas"] == 4
+    assert pendiente["tab"] == ["-2", "-3''", "4", "-4"]
+    assert pendiente["origen"] == "microfono"
+    assert frases.listar() == []                     # todavia no hay nada
+
+
+def test_terminar_sin_notas_no_deja_pendiente(servidor_andando, carpeta_de_frases):
+    preparar("frase", "", [])
+
+    respuesta = mandar(servidor_andando, "/api/terminar")
+
+    assert respuesta["ok"] is False
+    assert "ninguna nota" in respuesta["motivo"]
+    assert traer_json(servidor_andando, "/api/frases/pendiente")["pendiente"] is None
+
+
+def test_guardar_la_pendiente_con_nombre_descripcion_y_lista(servidor_andando,
+                                                             carpeta_de_frases):
+    preparar("frase", "", eventos_de(["-2", "-3''", "4"]))
+    mandar(servidor_andando, "/api/terminar")
+
+    respuesta = mandar(servidor_andando, "/api/frases/guardar", {
+        "nombre": "turnaround de la clase",
+        "comentario": "el que cierra la vuelta, con el bend del 3",
+        "lista": "turnarounds",
+    })
+
+    assert respuesta["ok"] is True
+    assert respuesta["frase"]["nombre"] == "turnaround de la clase"
+    assert respuesta["frase"]["lista"] == "turnarounds"
 
     guardada = frases.buscar("turnaround de la clase")
+    assert guardada.cantidad == 3
     assert guardada.comentario == "el que cierra la vuelta, con el bend del 3"
-    assert guardada.bolsa == "turnarounds"
+    assert guardada.lista == "turnarounds"
+
+    # La lista se creo sola: elegirla ya es querer que exista.
+    assert [l["nombre"] for l in frases.listar_listas()] == ["turnarounds"]
+
+    # Y la pendiente se consumio.
+    assert traer_json(servidor_andando, "/api/frases/pendiente")["pendiente"] is None
 
 
-def test_la_lista_de_frases_trae_las_bolsas_que_existen(servidor_andando,
+def test_guardar_sin_nombre_se_rechaza(servidor_andando, carpeta_de_frases):
+    preparar("frase", "", eventos_de(["4", "-4"]))
+    mandar(servidor_andando, "/api/terminar")
+
+    respuesta = mandar(servidor_andando, "/api/frases/guardar", {"nombre": "  "})
+
+    assert respuesta["ok"] is False
+    assert "nombre" in respuesta["motivo"]
+    assert frases.listar() == []
+    # La pendiente sigue ahi: no se pierde por un nombre vacio.
+    assert traer_json(servidor_andando, "/api/frases/pendiente")["pendiente"] is not None
+
+
+def test_guardar_sin_nada_pendiente(servidor_andando, carpeta_de_frases):
+    respuesta = mandar(servidor_andando, "/api/frases/guardar", {"nombre": "x"})
+    assert respuesta["ok"] is False
+
+
+def test_descartar_la_pendiente(servidor_andando, carpeta_de_frases):
+    preparar("frase", "", eventos_de(["4", "-4"]))
+    mandar(servidor_andando, "/api/terminar")
+
+    mandar(servidor_andando, "/api/frases/descartar")
+
+    assert traer_json(servidor_andando, "/api/frases/pendiente")["pendiente"] is None
+    assert frases.listar() == []
+
+
+def test_un_nombre_repetido_no_pisa_la_frase_que_habia(servidor_andando,
+                                                       carpeta_de_frases):
+    """
+    Pisar seria perder una grabacion por un nombre repetido, y las frases de
+    Leandro no se pueden volver a grabar. Se avisa, y si queres pisarla lo
+    decis explicitamente.
+    """
+    frases.guardar(frases.desde_eventos(eventos_de(["4", "-4"]), "la misma"))
+
+    preparar("frase", "", eventos_de(["-2", "-3''", "4"]))
+    mandar(servidor_andando, "/api/terminar")
+
+    respuesta = mandar(servidor_andando, "/api/frases/guardar", {"nombre": "la misma"})
+    assert respuesta["ok"] is False
+    assert respuesta["repetida"] is True
+    assert frases.buscar("la misma").cantidad == 2          # intacta
+
+    respuesta = mandar(servidor_andando, "/api/frases/guardar",
+                       {"nombre": "la misma", "reemplazar": True})
+    assert respuesta["ok"] is True
+    assert frases.buscar("la misma").cantidad == 3
+
+
+def test_la_pendiente_se_puede_volver_a_pedir(servidor_andando, carpeta_de_frases):
+    """Si recargas la pagina antes de guardar, lo grabado no se perdio."""
+    preparar("frase", "", eventos_de(["4", "-4", "-5"]))
+    mandar(servidor_andando, "/api/terminar")
+
+    datos = traer_json(servidor_andando, "/api/frases/pendiente")
+
+    assert datos["pendiente"]["tab"] == ["4", "-4", "-5"]
+
+
+# --- Importar sigue el mismo camino -----------------------------------------
+
+def test_importar_deja_pendiente_y_no_guarda(servidor_andando, carpeta_de_frases):
+    respuesta = subir(servidor_andando, "/api/frases/importar", "",
+                      wav_de(["-2", "4", "-4", "-5"]), archivo="lick_de_lean.wav")
+
+    assert respuesta["ok"] is True
+    pendiente = respuesta["pendiente"]
+    assert pendiente["notas"] == 4
+    assert pendiente["tab"] == ["-2", "4", "-4", "-5"]
+    assert pendiente["origen"] == "archivo"
+    assert pendiente["nombre_sugerido"] == "lick_de_lean"
+    assert pendiente["sirve"] is True
+    assert frases.listar() == []
+
+
+def test_importar_y_guardar_deja_el_audio_al_lado(servidor_andando,
+                                                  carpeta_de_frases):
+    """
+    Una frase de Leandro se lee, pero sobre todo se ESCUCHA.
+
+    Sin el audio guardado, la referencia se degrada a una tablatura y perdes
+    justo el ritmo, que es lo unico que la tablatura no sabe transmitir.
+    """
+    importar_y_guardar(servidor_andando, "con audio", wav_de(["4", "-4", "-5"]))
+
+    guardados = sorted(os.listdir(carpeta_de_frases))
+    assert "con_audio.json" in guardados
+    assert "con_audio_audio.wav" in guardados
+
+
+def test_un_audio_con_banda_no_deja_nada_que_guardar(servidor_andando,
+                                                     carpeta_de_frases):
+    """
+    EL CONTROL QUE MAS IMPORTA DE TODA LA SOLAPA.
+
+    Con una banda atras el detector no reconoce ni una nota: no hay tablatura
+    que mostrar ni nada que decidir. Y el motivo tiene que ser ESE, no un
+    generico "ninguna nota": la revision va antes de contar.
+    """
+    respuesta = subir(servidor_andando, "/api/frases/importar", "",
+                      wav_polifonico())
+
+    assert respuesta["ok"] is False
+    assert "monofon" in respuesta["motivo"]
+    assert traer_json(servidor_andando, "/api/frases/pendiente")["pendiente"] is None
+
+
+def test_un_audio_mudo_no_deja_nada_que_guardar(servidor_andando, carpeta_de_frases):
+    import numpy
+
+    mudo = bytes_de_wav(numpy.zeros(44100, dtype=numpy.float32))
+    respuesta = subir(servidor_andando, "/api/frases/importar", "", mudo)
+
+    assert respuesta["ok"] is False
+    assert traer_json(servidor_andando, "/api/frases/pendiente")["pendiente"] is None
+
+
+def test_cuando_el_control_duda_igual_se_ve_la_tablatura(
+        servidor_andando, carpeta_de_frases, umbral_imposible):
+    """
+    El umbral de monofonia es una heuristica, no una ley.
+
+    Antes se rechazaba y habia un parametro para forzar. Ahora la vista previa
+    muestra la tablatura Y el motivo, y el que decide sos vos, mirando. Si la
+    guardas, queda dicho que fue saltando el control.
+    """
+    respuesta = subir(servidor_andando, "/api/frases/importar", "",
+                      wav_de(["-2", "4", "-4"]))
+
+    assert respuesta["ok"] is True
+    pendiente = respuesta["pendiente"]
+    assert pendiente["sirve"] is False
+    assert pendiente["motivo"]
+    assert pendiente["tab"] == ["-2", "4", "-4"]
+    assert frases.listar() == []
+
+    guardada = mandar(servidor_andando, "/api/frases/guardar", {"nombre": "dudosa"})
+    assert guardada["ok"] is True
+    assert any("salteando" in aviso for aviso in guardada["avisos"])
+    assert frases.buscar("dudosa") is not None
+
+
+def test_importar_usa_la_armonica_que_le_decis(servidor_andando, carpeta_de_frases):
+    """
+    El mismo audio, importado como armonica en Do y como armonica en La.
+
+    Son dos tablaturas distintas para el mismo sonido, y las dos son correctas
+    segun con que armonica se haya tocado. Este dato lo pone el que sube el
+    archivo porque es el unico que lo sabe.
+    """
+    audio_grabado = wav_de(["4", "-4", "-5"])
+
+    como_do, _ = importar_y_guardar(servidor_andando, "en do", audio_grabado,
+                                    tonalidad="C")
+    como_la, _ = importar_y_guardar(servidor_andando, "en la", audio_grabado,
+                                    tonalidad="A")
+
+    assert como_do["pendiente"]["tonalidad"] == "C"
+    assert como_la["pendiente"]["tonalidad"] == "A"
+    assert como_do["pendiente"]["tab"] != como_la["pendiente"]["tab"]
+    assert frases.buscar("en la").tonalidad == "A"
+
+
+def test_sin_decir_nada_se_usa_la_armonica_de_la_sesion(servidor_andando,
                                                         carpeta_de_frases):
+    respuesta = subir(servidor_andando, "/api/frases/importar", "",
+                      wav_de(["4", "-4"]))
+    assert respuesta["pendiente"]["tonalidad"] == "C"
+
+
+def test_comparar_un_wav_contra_una_frase_guardada(servidor_andando,
+                                                   carpeta_de_frases):
     """
-    Para poder ofrecerlas sin que tengas que acordarte de como las escribiste.
+    El intento tambien puede venir de un archivo.
+
+    Sirve cuando ya grabaste con la grabadora de Windows, y para comparar dos
+    audios viejos sin volver a tocar.
     """
-    for nombre, bolsa in (("una", "turnarounds"), ("dos", "turnarounds"),
-                          ("tres", "para calentar"), ("cuatro", "")):
-        frase = frases.desde_eventos(
-            [segmentacion.Evento(
-                nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0,
-                duracion_seg=0.3, frecuencia_hz=440.0, cents=0.0,
-                confianza=0.9, ventanas=20)],
-            nombre, bolsa=bolsa)
-        frases.guardar(frase)
+    importar_y_guardar(servidor_andando, "escala corta",
+                       wav_de(["-2", "4", "-4", "-5"]))
+
+    respuesta = subir(servidor_andando, "/api/frases/intento", "escala corta",
+                      wav_de(["-2", "4", "-4", "-5"], duracion_nota=0.55))
+
+    assert respuesta["ok"] is True
+    comparacion = respuesta["comparacion"]
+    assert comparacion["esperadas"] == 4
+    assert comparacion["porcentaje"] == 100
+    # Mismo audio, 22% mas lento. Eso es una decision y no un error.
+    assert comparacion["velocidad"] > 15
+    assert comparacion["calidad"] == "muy parecida"
+
+
+def test_un_intento_sin_decir_contra_que_frase(servidor_andando, carpeta_de_frases):
+    respuesta = subir(servidor_andando, "/api/frases/intento", "",
+                      wav_de(["4", "-4"]))
+    assert respuesta["ok"] is False
+
+
+def test_la_vista_previa_del_tramo_es_lo_que_se_va_a_guardar(
+        servidor_andando, carpeta_de_frases):
+    """
+    El tab que muestra la lista de tramos sale del MISMO recorte que se usa
+    al importar. Si mostraramos el tab del analisis del archivo entero,
+    elegirias mirando una cosa y se guardaria otra: la grilla de ventanas
+    arranca en otro lado al recortar y cambia una nota o dos.
+    """
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
+
+    lista = subir(servidor_andando, "/api/frases/tramos", "", datos)
+    segundo = lista["tramos"][1]
+
+    previa = subir(servidor_andando, "/api/frases/importar", "", datos,
+                   desde=segundo["desde_seg"], hasta=segundo["hasta_seg"])
+    assert previa["pendiente"]["tab"] == segundo["tab"]
+
+    guardada = mandar(servidor_andando, "/api/frases/guardar", {"nombre": "el segundo"})
+    assert guardada["frase"]["tab"] == segundo["tab"]
+
+
+def test_importar_un_tramo_guarda_solo_ese_pedazo(servidor_andando,
+                                                  carpeta_de_frases):
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
+    lista = subir(servidor_andando, "/api/frases/tramos", "", datos)
+    segundo = lista["tramos"][1]
+
+    subir(servidor_andando, "/api/frases/importar", "", datos,
+          desde=segundo["desde_seg"], hasta=segundo["hasta_seg"])
+    mandar(servidor_andando, "/api/frases/guardar", {"nombre": "solo el segundo"})
+
+    frase = frases.buscar("solo el segundo")
+    assert frase.tablatura() == ["-5", "6", "-6"]
+    # Y los tiempos arrancan en cero, no en el segundo 4 del archivo original.
+    assert frase.notas[0].inicio_seg < 0.01
+
+
+def test_importar_un_pedazo_sin_notas_avisa(servidor_andando, carpeta_de_frases):
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
+
+    respuesta = subir(servidor_andando, "/api/frases/importar", "", datos,
+                      desde=2.4, hasta=2.9)
+
+    assert respuesta["ok"] is False
+    assert "no hay notas" in respuesta["motivo"]
+
+
+def test_sin_recorte_se_importa_el_audio_entero(servidor_andando, carpeta_de_frases):
+    datos = clase_de_prueba([["-2", "4", "-4"], ["-5", "6", "-6"]])
+    respuesta = subir(servidor_andando, "/api/frases/importar", "", datos)
+    assert respuesta["pendiente"]["notas"] == 6
+
+
+def test_el_audio_de_una_frase_se_puede_bajar(servidor_andando, carpeta_de_frases):
+    importar_y_guardar(servidor_andando, "para escuchar", wav_de(["-2", "4", "-4"]))
+
+    codigo, cuerpo = traer(servidor_andando, "/api/frases/audio?nombre=para%20escuchar")
+
+    assert codigo == 200
+    assert cuerpo[:4] == b"RIFF"
+    assert len(cuerpo) > 1000
+
+
+def test_la_lista_dice_cuales_frases_tienen_audio(servidor_andando, carpeta_de_frases):
+    importar_y_guardar(servidor_andando, "con audio", wav_de(["-2", "4", "-4"]))
+    datos = traer_json(servidor_andando, "/api/frases")
+    assert datos["frases"][0]["hay_audio"] is True
+
+
+def test_borrar_una_frase_borra_tambien_su_audio(servidor_andando, carpeta_de_frases):
+    importar_y_guardar(servidor_andando, "efimera", wav_de(["4", "-4"]))
+    assert "efimera_audio.wav" in os.listdir(carpeta_de_frases)
+
+    mandar(servidor_andando, "/api/frases/borrar", {"nombre": "efimera"})
+
+    assert "efimera_audio.wav" not in os.listdir(carpeta_de_frases)
+
+
+# =============================================================================
+# Las listas de reproduccion
+# =============================================================================
+
+def frase_de_prueba(nombre, lista=""):
+    return frases.guardar(frases.desde_eventos(
+        eventos_de(["4", "-4"]), nombre, lista=lista))
+
+
+def test_una_lista_se_puede_crear_vacia(servidor_andando, carpeta_de_frases):
+    """
+    Es la diferencia con las "bolsas" que hubo un dia: una lista existe
+    aunque no tenga frases. Podes crear "clase del martes" antes de grabar la
+    primera.
+    """
+    respuesta = mandar(servidor_andando, "/api/listas/crear",
+                       {"nombre": "  clase del   martes "})
+
+    assert respuesta["ok"] is True
+    assert respuesta["nombre"] == "clase del martes"
+    assert respuesta["listas"] == [{"nombre": "clase del martes", "frases": 0}]
+
+
+def test_la_lista_de_frases_trae_las_listas_con_su_cuenta(servidor_andando,
+                                                          carpeta_de_frases):
+    frase_de_prueba("una", "turnarounds")
+    frase_de_prueba("dos", "turnarounds")
+    frase_de_prueba("tres", "para calentar")
+    frase_de_prueba("cuatro")
 
     datos = traer_json(servidor_andando, "/api/frases")
 
-    assert datos["bolsas"] == ["para calentar", "turnarounds"]
     assert len(datos["frases"]) == 4
-    sin_bolsa = [f for f in datos["frases"] if not f["bolsa"]]
-    assert len(sin_bolsa) == 1
+    # Ordenadas por nombre cuando no estan en el archivo de listas.
+    assert datos["listas"] == [{"nombre": "para calentar", "frases": 1},
+                               {"nombre": "turnarounds", "frases": 2}]
+    assert [f for f in datos["frases"] if not f["lista"]][0]["nombre"] == "cuatro"
 
 
-def test_mover_varias_frases_a_una_bolsa_de_una_vez(servidor_andando,
-                                                    carpeta_de_frases):
-    """
-    Acepta varios nombres porque asi se usa: marcas cinco frases del mismo
-    tema y las mandas juntas.
-    """
+def test_las_listas_del_archivo_van_primero_en_su_orden(servidor_andando,
+                                                        carpeta_de_frases):
+    mandar(servidor_andando, "/api/listas/crear", {"nombre": "zeta"})
+    mandar(servidor_andando, "/api/listas/crear", {"nombre": "alfa"})
+    frase_de_prueba("suelta", "por la terminal")
+
+    listas = traer_json(servidor_andando, "/api/listas")["listas"]
+
+    assert [l["nombre"] for l in listas] == ["zeta", "alfa", "por la terminal"]
+
+
+def test_mandar_varias_frases_a_una_lista_de_una_vez(servidor_andando,
+                                                     carpeta_de_frases):
+    """Marcas cinco frases del mismo tema y las mandas juntas."""
     for nombre in ("una", "dos", "tres"):
-        frases.guardar(frases.desde_eventos(
-            [segmentacion.Evento(
-                nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0,
-                duracion_seg=0.3, frecuencia_hz=440.0, cents=0.0,
-                confianza=0.9, ventanas=20)],
-            nombre))
+        frase_de_prueba(nombre)
 
-    respuesta = mandar(servidor_andando, "/api/frases/bolsa",
-                       {"nombres": ["una", "tres"], "bolsa": "turnarounds"})
+    respuesta = mandar(servidor_andando, "/api/frases/lista",
+                       {"nombres": ["una", "tres"], "lista": "turnarounds"})
 
     assert respuesta["ok"] is True
     assert respuesta["movidas"] == 2
-    assert frases.buscar("una").bolsa == "turnarounds"
-    assert frases.buscar("dos").bolsa == ""
-    assert frases.buscar("tres").bolsa == "turnarounds"
+    assert frases.buscar("una").lista == "turnarounds"
+    assert frases.buscar("dos").lista == ""
+    assert frases.buscar("tres").lista == "turnarounds"
 
 
-def test_sacar_una_frase_de_su_bolsa(servidor_andando, carpeta_de_frases):
-    """Con la bolsa vacia se saca, que es lo natural: es el mismo gesto."""
-    frases.guardar(frases.desde_eventos(
-        [segmentacion.Evento(
-            nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0, duracion_seg=0.3,
-            frecuencia_hz=440.0, cents=0.0, confianza=0.9, ventanas=20)],
-        "una", bolsa="turnarounds"))
-
-    mandar(servidor_andando, "/api/frases/bolsa",
-           {"nombres": ["una"], "bolsa": ""})
-
-    assert frases.buscar("una").bolsa == ""
+def test_sacar_una_frase_de_su_lista(servidor_andando, carpeta_de_frases):
+    frase_de_prueba("una", "turnarounds")
+    mandar(servidor_andando, "/api/frases/lista", {"nombres": ["una"], "lista": ""})
+    assert frases.buscar("una").lista == ""
 
 
-def test_la_bolsa_sobrevive_a_guardar_y_volver_a_leer(tmp_path):
-    """Es un campo nuevo del archivo: si no se persiste, no sirve de nada."""
-    frase = frases.desde_eventos(
-        [segmentacion.Evento(
-            nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0, duracion_seg=0.3,
-            frecuencia_hz=440.0, cents=0.0, confianza=0.9, ventanas=20)],
-        "una", comentario="algo", bolsa="turnarounds")
+def test_renombrar_una_lista_arrastra_sus_frases(servidor_andando,
+                                                 carpeta_de_frases):
+    frase_de_prueba("una", "turnaround")
+    frase_de_prueba("dos", "turnaround")
+    frase_de_prueba("tres", "otra")
 
-    ruta = frases.guardar(frase, str(tmp_path))
-    leida = frases.cargar(ruta)
+    respuesta = mandar(servidor_andando, "/api/listas/renombrar",
+                       {"viejo": "turnaround", "nuevo": "turnarounds"})
 
-    assert leida.bolsa == "turnarounds"
+    assert respuesta["ok"] is True
+    assert respuesta["movidas"] == 2
+    assert frases.buscar("una").lista == "turnarounds"
+    assert frases.buscar("tres").lista == "otra"
+    assert "turnaround" not in [l["nombre"] for l in frases.listar_listas()]
+
+
+def test_borrar_una_lista_no_borra_sus_frases(servidor_andando, carpeta_de_frases):
+    """Borrar una lista es ordenar, y ordenar no puede hacer desaparecer una grabacion."""
+    frase_de_prueba("una", "efimera")
+    frase_de_prueba("dos", "efimera")
+
+    respuesta = mandar(servidor_andando, "/api/listas/borrar", {"nombre": "efimera"})
+
+    assert respuesta["ok"] is True
+    assert respuesta["sacadas"] == 2
+    assert frases.buscar("una") is not None
+    assert frases.buscar("una").lista == ""
+    assert frases.listar_listas() == []
+
+
+def test_la_lista_sobrevive_a_guardar_y_volver_a_leer(tmp_path):
+    frase = frases.desde_eventos(eventos_de(["4"]), "una", comentario="algo",
+                                 lista="turnarounds")
+    leida = frases.cargar(frases.guardar(frase, str(tmp_path)))
+    assert leida.lista == "turnarounds"
     assert leida.comentario == "algo"
 
 
-def test_una_frase_vieja_sin_bolsa_se_lee_igual(tmp_path):
-    """Los archivos que ya tenias no tienen el campo, y no pueden romperse."""
+def test_una_frase_guardada_con_bolsa_se_lee_como_lista(tmp_path):
+    """"bolsa" fue el nombre del campo durante un dia. Lo que se guardo asi no se pierde."""
     import json as modulo_json
 
     ruta = tmp_path / "vieja.json"
     ruta.write_text(modulo_json.dumps({
-        "version": 1, "nombre": "vieja", "tonalidad": "C",
+        "version": 1, "nombre": "vieja", "tonalidad": "C", "bolsa": "turnarounds",
         "notas": [{"tab": "4", "inicio_seg": 0.0, "duracion_seg": 0.3}],
     }), encoding="utf-8")
 
-    leida = frases.cargar(str(ruta))
+    assert frases.cargar(str(ruta)).lista == "turnarounds"
 
-    assert leida.bolsa == ""
-    assert leida.cantidad == 1
+
+def test_el_archivo_de_listas_no_se_confunde_con_una_frase(carpeta_de_frases):
+    """_listas.json vive en la misma carpeta y NO es una frase."""
+    frases.crear_lista("turnarounds")
+    frase_de_prueba("una")
+
+    assert [nombre for nombre, _ in frases.listar()] == ["una"]

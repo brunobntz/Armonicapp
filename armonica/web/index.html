@@ -123,26 +123,21 @@
   <section>
     <h2>Grabar una frase de referencia</h2>
     <p class="ayuda">
-      Tocá una frase como querrías tocarla y queda guardada. Después practicás
-      contra ella y la app te dice qué notas erraste y dónde te desviaste.
+      Tocá una frase como querrías tocarla. Al terminar vas a ver lo que salió,
+      y ahí le ponés nombre y la guardás — o la tirás y la grabás de nuevo.
       La referencia es una <strong>grabación</strong> y no una tablatura escrita,
       porque la tablatura no lleva ritmo.
     </p>
     <div class="controles">
-      <input id="nombre-frase" type="text" placeholder="nombre de la frase"
-             maxlength="60">
-      <button id="boton-grabar-frase" class="principal">Grabar</button>
-      <button id="boton-terminar-frase" class="secundario" hidden>
-        Terminar
-      </button>
-    </div>
-
-    <div class="controles fila-rotulos">
-      <input id="descripcion-frase" type="text" maxlength="400"
-             placeholder="qué es esta frase (opcional)">
-      <input id="bolsa-frase" type="text" maxlength="40" list="bolsas-conocidas"
-             placeholder="bolsa (opcional)">
-      <datalist id="bolsas-conocidas"></datalist>
+      <button id="boton-grabar-frase" class="principal">Grabar una frase</button>
+      <button id="boton-terminar-frase" class="secundario" hidden>Terminar</button>
+      <label class="como-boton" id="etiqueta-importar">
+        Importar un audio
+        <input id="archivo-frase" type="file" accept="audio/*,.wav,.m4a,.mp3,.ogg,.opus,.aac,.flac">
+      </label>
+      <label class="con-titulo">grabado con armónica en
+        <select id="tonalidad-frase"></select>
+      </label>
     </div>
 
     <!-- Mientras grabás una frase pasa lo mismo que en la solapa En vivo,
@@ -160,48 +155,77 @@
       <div id="tab-frase" class="tab-corta">Tocá la frase…</div>
     </div>
 
-    <p id="estado-frase" class="ayuda"></p>
+    <!-- Lo que salió, y la decisión. Aparece al terminar de grabar o de
+         importar. Lo grabado queda en memoria hasta que elijas: guardar o
+         descartar. Antes el nombre iba antes de grabar y la frase se guardaba
+         sola al terminar, con una línea de texto como única confirmación —
+         la primera frase de Bruno se perdió sin que se diera cuenta. -->
+    <div id="pendiente" class="pendiente" hidden>
+      <h3 id="pendiente-titulo">Esto es lo que salió</h3>
+      <div id="pendiente-tab" class="tab"></div>
+      <p id="pendiente-datos" class="ayuda"></p>
+      <div id="pendiente-aviso" class="aviso" hidden></div>
 
-    <!-- El selector de armónica va en esta línea y no arriba a propósito:
-         solo afecta a lo que importás. Lo que grabás con el micrófono usa la
-         armónica con la que arrancó la app, y no habría con qué discutirle. -->
-    <div class="controles fila-importar">
-      <label class="como-boton" id="etiqueta-importar">
-        Importar un audio
-        <input id="archivo-frase" type="file" accept="audio/*,.wav,.m4a,.mp3,.ogg,.opus,.aac,.flac">
-      </label>
-      <label for="tonalidad-frase" class="ayuda">grabado con armónica en</label>
-      <select id="tonalidad-frase"></select>
+      <div class="controles fila-rotulos">
+        <input id="pendiente-nombre" type="text" maxlength="60"
+               placeholder="nombre de la frase">
+        <input id="pendiente-descripcion" type="text" maxlength="400"
+               placeholder="qué es (opcional)">
+      </div>
+      <div class="controles fila-rotulos">
+        <label class="con-titulo">lista
+          <select id="pendiente-lista"></select>
+        </label>
+        <input id="pendiente-lista-nueva" type="text" maxlength="40"
+               placeholder="nombre de la lista nueva" hidden>
+      </div>
+      <div class="controles">
+        <button id="pendiente-guardar" class="principal">Guardar</button>
+        <button id="pendiente-descartar" class="secundario">Descartar</button>
+        <span id="pendiente-estado" class="ayuda"></span>
+      </div>
     </div>
+
     <div id="tramos"></div>
+    <p id="estado-frase" class="ayuda"></p>
 
     <p class="ayuda">
       El audio puede ser tuyo o de Leandro. <strong>Decile con qué armónica se
       grabó</strong>: eso la app no lo puede deducir, y con la armónica
       equivocada la tablatura sale mal sin dar ningún error.
       Si no es un <code>.wav</code> lo convierte sola, siempre que tengas
-      ffmpeg instalado.
-    </p>
-    <p class="ayuda">
-      Conviene que sea la armónica sola. Si atrás hay una base sonando, el
-      detector no puede separarlas: te lo va a decir y te va a mostrar qué
-      habría transcrito, para que decidas vos si sirve.
+      ffmpeg instalado. Si atrás hay una base sonando, el detector no puede
+      separarlas: te lo va a decir y te va a mostrar qué habría transcrito,
+      para que decidas vos si sirve.
     </p>
   </section>
 
   <section>
     <h2>Tus frases</h2>
-    <div class="controles" id="controles-bolsas">
-      <span class="ayuda">Bolsa:</span>
-      <span id="filtros-bolsa"></span>
+
+    <!-- Las listas de reproducción: cosa con nombre propio, no una etiqueta.
+         Existen aunque estén vacías, se renombran y se borran. -->
+    <div class="controles" id="controles-listas">
+      <span id="filtros-lista"></span>
+      <button id="boton-nueva-lista" class="bolsa">+ nueva lista</button>
     </div>
-    <div class="controles" id="mover-a-bolsa" hidden>
+    <div class="controles" id="editar-lista" hidden>
+      <input id="lista-nombre-nuevo" type="text" maxlength="40"
+             placeholder="nombre de la lista">
+      <button id="boton-guardar-lista" class="principal">Guardar</button>
+      <button id="boton-borrar-lista" class="secundario">Borrar la lista</button>
+      <button id="boton-cancelar-lista" class="secundario">Cancelar</button>
+    </div>
+
+    <div class="controles" id="mover-a-lista" hidden>
       <span id="cuantas-marcadas" class="ayuda"></span>
-      <input id="bolsa-destino" type="text" maxlength="40"
-             list="bolsas-conocidas" placeholder="mandarlas a la bolsa...">
+      <label class="con-titulo">mandarlas a
+        <select id="lista-destino"></select>
+      </label>
       <button id="boton-mover" class="principal">Mover</button>
       <button id="boton-desmarcar" class="secundario">Desmarcar</button>
     </div>
+
     <div id="lista-frases"></div>
   </section>
 
