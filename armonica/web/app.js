@@ -16,8 +16,6 @@ let TOLERANCIA = 10;
 
 let inicio = null;
 let fuente = null;      // la conexión de eventos
-let celdasPorClave = {};
-let filasPorAgujero = {};
 
 
 /* ==========================================================================
@@ -405,61 +403,89 @@ function ajustarZonaBuena() {
    El diagrama de la armónica
    ========================================================================== */
 
-/* Una fila por agujero, con las notas abriéndose hacia los costados.
+/* La armónica, agujeros 1→10 de izquierda a derecha, como el instrumento.
  *
- * Los huecos se dibujan igual, vacíos: sin ellos la grilla se desarma y el
- * agujero 1 no queda alineado con el 3, que es justo lo que hace legible que
- * un bend sea un movimiento hacia afuera. */
-function dibujarDiagrama(filas) {
-  const contenedor = document.getElementById("diagrama");
-  contenedor.innerHTML = "";
-  celdasPorClave = {};
-  filasPorAgujero = {};
+ * Cada agujero es una columna: arriba lo soplado, abajo lo aspirado, el
+ * número en el medio, y los bends apilados HACIA AFUERA. Los huecos se
+ * dibujan igual, vacíos: sin ellos las columnas no quedarían alineadas y un
+ * bend dejaría de leerse como un movimiento vertical.
+ *
+ * Hay dos diagramas con los mismos datos: el grande de En vivo y la
+ * miniatura del cartel de grabar una frase. Se dibujan con la misma función y
+ * se iluminan los dos a la vez. */
+let diagramas = [];
 
-  const encabezado = document.createElement("div");
-  encabezado.className = "encabezado-atril";
-  ["", "", "bend", "aspirado", "", "soplado", "bend", ""].forEach((texto) => {
-    const rotulo = document.createElement("span");
-    rotulo.textContent = texto;
-    encabezado.appendChild(rotulo);
-  });
-  contenedor.appendChild(encabezado);
+function dibujarDiagrama(filas) {
+  diagramas = [];
+  const grande = document.getElementById("diagrama");
+  if (grande) diagramas.push(armarDiagrama(grande, filas, false));
+  const mini = document.getElementById("diagrama-mini");
+  if (mini) diagramas.push(armarDiagrama(mini, filas, true));
+}
+
+
+function armarDiagrama(contenedor, filas, compacto) {
+  contenedor.innerHTML = "";
+  contenedor.classList.toggle("diagrama-mini", compacto);
+  const registro = { celdas: {}, columnas: {}, celdaResaltada: null, columnaResaltada: null };
+
+  if (!compacto) {
+    const rotulos = document.createElement("div");
+    rotulos.className = "columna rotulos";
+    ["bend", "bend", "soplado", "", "aspirado", "bend", "bend", "bend"].forEach((texto) => {
+      const rotulo = document.createElement("div");
+      rotulo.className = "rotulo";
+      rotulo.textContent = texto;
+      rotulos.appendChild(rotulo);
+    });
+    contenedor.appendChild(rotulos);
+  }
 
   filas.forEach((fila) => {
-    const elemento = document.createElement("div");
-    elemento.className = "fila-diagrama";
+    const columna = document.createElement("div");
+    columna.className = "columna";
 
-    fila.aspirado.forEach((celda) => elemento.appendChild(dibujarCelda(celda)));
+    // De arriba hacia abajo: los bends soplados (afuera), el soplado, el
+    // número, el aspirado, los bends aspirados (afuera). El servidor manda
+    // el lado soplado de adentro hacia afuera y el aspirado de afuera hacia
+    // adentro, así que uno se da vuelta y el otro también.
+    fila.soplado.slice().reverse().forEach((celda) =>
+      columna.appendChild(dibujarCelda(celda, registro, compacto)));
 
     const numero = document.createElement("div");
     numero.className = "numero-agujero";
     numero.textContent = fila.agujero;
-    elemento.appendChild(numero);
+    columna.appendChild(numero);
 
-    fila.soplado.forEach((celda) => elemento.appendChild(dibujarCelda(celda)));
+    fila.aspirado.slice().reverse().forEach((celda) =>
+      columna.appendChild(dibujarCelda(celda, registro, compacto)));
 
-    // La aguja del bend vive dentro de la fila y se mueve dentro de ella.
+    // La aguja del bend vive dentro de la columna y se mueve dentro de ella.
     const aguja = document.createElement("div");
     aguja.className = "aguja-bend";
     aguja.hidden = true;
-    elemento.appendChild(aguja);
+    columna.appendChild(aguja);
 
-    filasPorAgujero[fila.agujero] = { elemento: elemento, aguja: aguja };
-    contenedor.appendChild(elemento);
+    registro.columnas[fila.agujero] = { elemento: columna, aguja: aguja };
+    contenedor.appendChild(columna);
   });
+
+  return registro;
 }
 
 
-function dibujarCelda(celda) {
+function dibujarCelda(celda, registro, compacto) {
   const caja = document.createElement("div");
   if (!celda) {
     caja.className = "celda vacia";
     caja.innerHTML = "&nbsp;";
     return caja;
   }
-  caja.className = "celda" + (celda.en_escala ? " en-escala" : "");
-  caja.innerHTML = celda.tab + '<span class="nombre">' + celda.nombre + "</span>";
-  celdasPorClave[clave(celda)] = caja;
+  caja.className = "celda " + celda.direccion +
+    (celda.bend ? " bend" : "") + (celda.en_escala ? " en-escala" : "");
+  caja.innerHTML = celda.tab +
+    (compacto ? "" : '<span class="nombre">' + celda.nombre + "</span>");
+  registro.celdas[clave(celda)] = caja;
   return caja;
 }
 
@@ -469,65 +495,61 @@ function clave(nota) {
 }
 
 
-let celdaResaltada = null;
-let filaResaltada = null;
-
 function resaltarAgujero(nota, cents) {
-  const nueva = nota ? celdasPorClave[clave(nota)] : null;
+  diagramas.forEach((diagrama) => resaltarEn(diagrama, nota, cents));
+}
 
-  if (nueva !== celdaResaltada) {
-    if (celdaResaltada) celdaResaltada.classList.remove("actual");
+
+function resaltarEn(diagrama, nota, cents) {
+  const nueva = nota ? diagrama.celdas[clave(nota)] : null;
+  if (nueva !== diagrama.celdaResaltada) {
+    if (diagrama.celdaResaltada) diagrama.celdaResaltada.classList.remove("actual");
     if (nueva) nueva.classList.add("actual");
-    celdaResaltada = nueva;
+    diagrama.celdaResaltada = nueva;
   }
 
-  const fila = nota ? filasPorAgujero[nota.agujero] : null;
-  if (fila !== filaResaltada) {
-    if (filaResaltada) {
-      filaResaltada.elemento.classList.remove("sonando");
-      filaResaltada.aguja.hidden = true;
+  const columna = nota ? diagrama.columnas[nota.agujero] : null;
+  if (columna !== diagrama.columnaResaltada) {
+    if (diagrama.columnaResaltada) {
+      diagrama.columnaResaltada.elemento.classList.remove("sonando", "soplado", "aspirado");
+      diagrama.columnaResaltada.aguja.hidden = true;
     }
-    if (fila) fila.elemento.classList.add("sonando");
-    filaResaltada = fila;
+    if (columna) columna.elemento.classList.add("sonando", nota.direccion);
+    diagrama.columnaResaltada = columna;
   }
 
-  moverAguja(nota, cents, nueva, fila);
+  moverAguja(nota, cents, nueva, columna);
 }
 
 
 /* Dónde poner la línea que marca tu afinación.
  *
- * Dos celdas vecinas del mismo lado están exactamente a un semitono, o sea a
- * cien cents. Entonces la línea se corre desde el centro de la celda actual
- * una fracción de columna igual a los cents de desvío.
+ * Dos celdas vecinas de la misma columna están exactamente a un semitono, o
+ * sea a cien cents. La línea se corre desde el centro de la celda actual una
+ * fracción de celda igual a los cents de desvío.
  *
- * EL SIGNO DEPENDE DEL LADO, Y ES LA PARTE QUE IMPORTA
- *
- * Del lado aspirado los bends van hacia la IZQUIERDA, así que estar bajo de
- * afinación es correrse a la izquierda. Del lado soplado los bends van hacia
- * la DERECHA, así que estar bajo es correrse a la derecha. Sin esta distinción
- * la aguja se movería para el lado contrario en los agujeros 8, 9 y 10, que
- * son justamente donde más cuesta el bend. */
-function moverAguja(nota, cents, celda, fila) {
-  if (!nota || !celda || !fila) {
-    if (fila) fila.aguja.hidden = true;
+ * EL SIGNO ES EL MISMO PARA LOS DOS LADOS, Y ESA ES LA GRACIA DE ESTA
+ * DISPOSICIÓN: un bend es bajar de tono, y bajar de tono es alejarse del
+ * número, hacia afuera. Del lado aspirado, afuera es abajo; del lado soplado,
+ * afuera es arriba. Estar bajo de afinación siempre corre la línea hacia el
+ * bend siguiente. */
+function moverAguja(nota, cents, celda, columna) {
+  if (!nota || !celda || !columna) {
+    if (columna) columna.aguja.hidden = true;
     return;
   }
 
-  const anchoFila = fila.elemento.getBoundingClientRect().width;
-  if (!anchoFila) return;
-
+  const base = columna.elemento.getBoundingClientRect();
+  if (!base.height) return;
   const caja = celda.getBoundingClientRect();
-  const base = fila.elemento.getBoundingClientRect();
-  const centro = caja.left - base.left + caja.width / 2;
+  const centro = caja.top - base.top + caja.height / 2;
 
-  const haciaLaIzquierda = nota.direccion === "aspirado";
-  const corrimiento = (cents / 100) * (caja.width + 4) *
-                      (haciaLaIzquierda ? 1 : -1);
+  const haciaAbajo = nota.direccion === "aspirado";
+  const corrimiento = (cents / 100) * (caja.height + 4) * (haciaAbajo ? -1 : 1);
 
-  fila.aguja.hidden = false;
-  fila.aguja.style.left = (centro + corrimiento) / anchoFila * 100 + "%";
-  fila.aguja.classList.toggle("afinada", Math.abs(cents) <= TOLERANCIA);
+  columna.aguja.hidden = false;
+  columna.aguja.style.top = (centro + corrimiento) / base.height * 100 + "%";
+  columna.aguja.classList.toggle("afinada", Math.abs(cents) <= TOLERANCIA);
 }
 
 

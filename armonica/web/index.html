@@ -122,11 +122,13 @@
     <h2>La armónica</h2>
     <div id="diagrama"></div>
     <p class="ayuda">
-      Cada fila es un agujero. A la <strong>izquierda</strong>, lo aspirado:
-      cuanto más lejos del número, más profundo el bend. A la
-      <strong>derecha</strong>, lo soplado. En verde, la escala de referencia.
-      La <strong>línea rosa</strong> marca dónde está tu afinación entre una
-      nota y la de al lado: en un bend a medio hacer, la vas a ver en el medio.
+      Como el instrumento: agujeros 1 a 10 de izquierda a derecha. Arriba lo
+      <span class="soplado-texto">soplado</span>, abajo lo
+      <span class="aspirado-texto">aspirado</span>, y los bends apilados hacia
+      afuera. El punto verde marca la escala de referencia. La
+      <strong>línea rosa</strong> es tu afinación entre una nota y la de al
+      lado: en un bend a medio hacer la vas a ver en el medio, y en verde
+      cuando llegaste.
     </p>
   </section>
 
@@ -179,6 +181,9 @@
       <div class="barra-nivel"><div id="barra-nivel-frases"></div>
         <div id="marca-umbral-frases"></div>
       </div>
+      <!-- La armónica en miniatura: se ilumina igual que la grande mientras
+           tocás, para no tener que cambiar de solapa para ver dónde estás. -->
+      <div id="diagrama-mini"></div>
       <div id="tab-frase" class="tab-corta">Tocá la frase…</div>
     </div>
 

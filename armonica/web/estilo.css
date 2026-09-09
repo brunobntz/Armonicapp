@@ -15,6 +15,13 @@
   --amarillo: #e8c14a;
   --rojo: #e8654a;
   --azul: #5aa9f0;
+
+  /* La dirección del aire. Soplado en cobre —las placas de lengüetas son de
+   * latón—, aspirado en azul hielo. La aguja del bend en magenta, que no se
+   * confunde con ninguno de los dos. */
+  --soplado: #e0a458;
+  --aspirado: #6fb3ff;
+  --aguja: #ff5fa2;
 }
 
 * { box-sizing: border-box; }
@@ -124,19 +131,40 @@ button:disabled { opacity: 0.4; cursor: default; }
 .lejos { color: var(--rojo); }
 .fuera-de-escala { color: var(--amarillo); }
 
-/* --- El atril: una fila por agujero --- */
+/* --- La armónica: agujeros 1→10 de izquierda a derecha ---
+ *
+ * Como el instrumento. Cada agujero es una columna: arriba lo soplado, abajo
+ * lo aspirado, el número en el medio. Los bends se apilan HACIA AFUERA: los
+ * soplados (8, 9, 10) suben por encima del soplado, los aspirados bajan por
+ * debajo del aspirado. Es la disposición de todas las tablas de armónica, y
+ * la del modo horizontal de Bending Trainer.
+ *
+ * EL COLOR DICE LA DIRECCIÓN
+ *
+ * Soplado en cobre, aspirado en azul hielo. Un bend es el mismo color con el
+ * borde punteado. Lo que está en la escala de referencia lleva un punto
+ * verde. Antes el color decía "en escala" y el azul "esta": nada decía de un
+ * vistazo si había que soplar o aspirar, que es lo primero que uno mira. */
 
-#diagrama { display: grid; gap: 4px; }
+#diagrama {
+  display: grid;
+  grid-template-columns: 58px repeat(10, 1fr);
+  gap: 5px;
+}
 
-/* Tres columnas de bend aspirado, el aspirado, el número, el soplado y dos
- * columnas de bend soplado. Los huecos quedan vacíos a propósito: así las
- * diez filas se alinean y un bend se lee como un movimiento horizontal. */
-.fila-diagrama {
+.columna {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(4, 1fr) 46px repeat(3, 1fr);
+  grid-template-rows: repeat(8, 1fr);
   gap: 4px;
-  align-items: stretch;
+}
+.columna.rotulos .rotulo {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--tenue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .numero-agujero {
@@ -150,30 +178,16 @@ button:disabled { opacity: 0.4; cursor: default; }
   border: 1px solid var(--borde);
   border-radius: 6px;
 }
-.fila-diagrama.sonando .numero-agujero {
-  border-color: var(--azul);
-  color: var(--azul);
-}
-
-.encabezado-atril {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr) 46px repeat(3, 1fr);
-  gap: 4px;
-  margin-bottom: 6px;
-}
-.encabezado-atril span {
-  font-size: 11px;
-  color: var(--tenue);
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+.columna.sonando .numero-agujero { border-color: currentColor; }
+.columna.sonando.soplado .numero-agujero { color: var(--soplado); }
+.columna.sonando.aspirado .numero-agujero { color: var(--aspirado); }
 
 .celda {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--borde);
   border-radius: 6px;
-  padding: 6px 2px;
+  padding: 5px 2px;
   text-align: center;
   font-size: 13px;
   color: var(--tenue);
@@ -181,26 +195,64 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 .celda .nombre { display: block; font-size: 10px; opacity: 0.55; }
 .celda.vacia { background: transparent; border-color: transparent; }
-.celda.en-escala { color: var(--verde); border-color: rgba(78, 201, 122, 0.35); }
-.celda.actual { background: var(--azul); color: #0d1117; border-color: var(--azul); font-weight: 700; }
+
+.celda.soplado { color: var(--soplado); border-color: rgba(224, 164, 88, 0.35); }
+.celda.aspirado { color: var(--aspirado); border-color: rgba(111, 179, 255, 0.35); }
+.celda.bend { border-style: dashed; }
+
+/* El punto verde: esta nota está en la escala de referencia. Es un punto y no
+ * un color de texto porque el color ya lo usa la dirección. */
+.celda.en-escala::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--verde);
+}
+
+.celda.actual { color: #0d1117; font-weight: 700; border-style: solid; }
+.celda.actual.soplado { background: var(--soplado); border-color: var(--soplado);
+                        box-shadow: 0 0 12px rgba(224, 164, 88, 0.55); }
+.celda.actual.aspirado { background: var(--aspirado); border-color: var(--aspirado);
+                         box-shadow: 0 0 12px rgba(111, 179, 255, 0.55); }
 .celda.actual .nombre { opacity: 0.75; }
+.celda.actual.en-escala::after { background: #0d1117; }
 
 /* La línea que marca dónde está tu afinación entre una nota y la de al lado.
- * Es lo que convierte el diagrama en un medidor de bends: en un bend a medio
- * hacer se queda en el medio, y se ve. */
+ * Ahora corre en VERTICAL dentro de la columna: un bend es bajar de tono, y
+ * bajar de tono es alejarse del número, hacia afuera. Del lado aspirado eso es
+ * hacia abajo; del lado soplado, hacia arriba. */
 .aguja-bend {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 3px;
+  left: -3px;
+  right: -3px;
+  height: 3px;
   border-radius: 2px;
-  background: #ff5fa2;
+  background: var(--aguja);
   box-shadow: 0 0 6px rgba(255, 95, 162, 0.8);
-  transform: translateX(-50%);
-  transition: left 90ms linear;
+  transform: translateY(-50%);
+  transition: top 90ms linear;
   pointer-events: none;
 }
-.aguja-bend.afinada { background: var(--verde); box-shadow: 0 0 6px rgba(78,201,122,0.8); }
+.aguja-bend.afinada { background: var(--verde); box-shadow: 0 0 6px rgba(78, 201, 122, 0.8); }
+
+/* La miniatura, para el cartel de grabar una frase: lo mismo, más chico y sin
+ * nombres de nota. Se ilumina igual que la grande mientras tocás. */
+.diagrama-mini {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  margin: 12px 0 6px;
+}
+.diagrama-mini .columna { gap: 2px; }
+.diagrama-mini .celda { padding: 2px 1px; font-size: 11px; border-radius: 4px; }
+.diagrama-mini .celda .nombre { display: none; }
+.diagrama-mini .celda.en-escala::after { width: 4px; height: 4px; top: 2px; right: 2px; }
+.diagrama-mini .numero-agujero { font-size: 12px; border-radius: 4px; }
+.diagrama-mini .aguja-bend { height: 2px; }
 
 /* --- La tablatura --- */
 
@@ -613,3 +665,6 @@ table.ritmo td.numero { width: 90px; }
 /* Cuando la grilla no explica lo tocado, los numeros se muestran igual pero
  * apagados: estan ahi para que veas por que no sirven, no como diagnostico. */
 table.ritmo.tenue td { opacity: 0.5; }
+
+.soplado-texto { color: var(--soplado); font-weight: 600; }
+.aspirado-texto { color: var(--aspirado); font-weight: 600; }

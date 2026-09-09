@@ -383,16 +383,28 @@ ordenar no borra grabaciones). Cada frase está en una lista o en ninguna.
 Marcás varias con su casilla y las mandás juntas. Después elegís una lista y
 practicás solo esas, con sus reproductores en fila.
 
-El diagrama de la armónica tiene **una fila por agujero**, con las notas
-abriéndose hacia los costados: a la izquierda lo aspirado, a la derecha lo
-soplado, y cuanto más lejos del número, más profundo el bend. Es la
-disposición de Bending Trainer, y no es capricho: puesta así, un bend es un
-movimiento **horizontal** y se puede seguir con el ojo mientras lo hacés.
+El diagrama de la armónica es **como el instrumento**: agujeros 1 a 10 de
+izquierda a derecha, cada uno una columna. Arriba lo soplado, abajo lo
+aspirado, el número en el medio, y los bends apilados **hacia afuera**: los
+soplados (8, 9, 10) suben por encima del soplado, los aspirados bajan por
+debajo del aspirado. Es la disposición de todas las tablas de armónica y la
+del modo horizontal de Bending Trainer.
+
+**El color dice la dirección.** Soplado en cobre, aspirado en azul hielo; un
+bend es el mismo color con el borde punteado; lo que está en la escala de
+referencia lleva un punto verde. Antes el color decía "en escala" y nada
+decía de un vistazo si había que soplar o aspirar, que es lo primero que se
+mira.
 
 Una **línea rosa** marca dónde está tu afinación entre una nota y la de al
-lado. En un bend a medio hacer la ves en el medio, y se pone verde cuando
-llegaste. El signo depende del lado: del lado aspirado los bends bajan hacia
-la izquierda, del lado soplado hacia la derecha.
+lado. Corre en vertical dentro de la columna, y el signo es el mismo para los
+dos lados, que es la gracia de esta disposición: un bend es bajar de tono, y
+bajar de tono es alejarse del número, hacia afuera. En un bend a medio hacer
+la ves en el medio, y se pone verde cuando llegaste.
+
+En el cartel de grabar una frase hay una **miniatura** del mismo diagrama,
+que se ilumina igual mientras tocás: no hace falta cambiar de solapa para
+ver dónde estás.
 
 Arriba de todo, en **En vivo**, hay una **barra de nivel de entrada**. Es lo
 primero que hay que mirar cuando parece que no anda nada: sin ella, un
