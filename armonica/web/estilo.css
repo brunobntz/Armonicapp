@@ -592,3 +592,24 @@ select:disabled { opacity: 0.4; }
 .pendiente .aviso { margin-top: 10px; }
 .pendiente .fila-rotulos { margin-top: 12px; }
 #pendiente-estado { color: var(--amarillo); }
+
+/* --- El ritmo, en el resumen --- */
+
+input[type="number"] {
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  color: var(--texto);
+  padding: 9px 12px;
+  font-size: 15px;
+  width: 92px;
+  font-variant-numeric: tabular-nums;
+}
+input[type="number"]:focus { outline: none; border-color: var(--azul); }
+
+table.ritmo { max-width: 560px; margin-bottom: 10px; }
+table.ritmo td:first-child { color: var(--tenue); width: 110px; }
+table.ritmo td.numero { width: 90px; }
+/* Cuando la grilla no explica lo tocado, los numeros se muestran igual pero
+ * apagados: estan ahi para que veas por que no sirven, no como diagnostico. */
+table.ritmo.tenue td { opacity: 0.5; }

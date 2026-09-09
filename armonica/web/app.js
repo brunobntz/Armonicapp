@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarBotones();
   configurarListas();
   configurarPendiente();
+  configurarSesionPendiente();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -41,6 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   conectarEnVivo();
   recuperarPendiente();
+  recuperarSesionPendiente();
 });
 
 
@@ -102,19 +104,21 @@ function configurarBotones() {
       // La bandera frena a sincronizarBotones, que si no pisaria el texto
       // quince veces por segundo mientras se guarda.
       grabar.dataset.guardando = "si";
-      grabar.textContent = "Guardando...";
+      grabar.textContent = "Terminando...";
       const respuesta = await pedir("/api/terminar", { method: "POST" });
       delete grabar.dataset.guardando;
-      mostrarResumen(respuesta);
-      avisarQueSeGuardo(respuesta);
+      // Terminar ya no guarda: muestra lo que grabaste y ahi decidis. El
+      // nombre, la descripcion y el BPM van en ese paso.
+      if (respuesta.ok) {
+        mostrarSesionPendiente(respuesta.pendiente);
+      } else {
+        avisarQueSeGuardo(respuesta);
+      }
     } else {
       document.getElementById("seccion-resumen").hidden = true;
       document.getElementById("aviso-guardado").textContent = "";
-      await comenzar({
-        modo: "sesion",
-        titulo: document.getElementById("titulo-sesion").value,
-        comentario: document.getElementById("descripcion-sesion").value,
-      });
+      ocultarSesionPendiente();
+      await comenzar({ modo: "sesion" });
     }
 
     grabar.disabled = false;
@@ -541,6 +545,137 @@ function dibujarTab(tabs) {
 
 
 /* ==========================================================================
+   La sesion pendiente: lo que grabaste, y la decision
+
+   Es la misma idea que la frase pendiente. Al terminar ves lo que salio y
+   recien ahi le pones nombre y descripcion. Y aca va la pregunta que solo
+   tiene sentido despues de tocar: sobre que base estabas, a cuantos BPM.
+   ========================================================================== */
+
+function mostrarSesionPendiente(pendiente) {
+  const panel = document.getElementById("sesion-pendiente");
+  if (!pendiente) {
+    panel.hidden = true;
+    return;
+  }
+
+  document.getElementById("sesion-tab").innerHTML =
+    pendiente.tab.map((t) => escapar(t)).join(" ") + (pendiente.hay_mas ? " …" : "");
+  document.getElementById("sesion-datos").textContent =
+    pendiente.notas + " notas · " + pendiente.duracion_seg.toFixed(0) +
+    " s · armónica en " + pendiente.tonalidad +
+    (pendiente.posicion ? " · " + pendiente.posicion + "ª posición" : "");
+
+  document.getElementById("sesion-titulo").value = "";
+  document.getElementById("sesion-descripcion").value = "";
+  document.getElementById("sesion-estado").textContent = "";
+  // El BPM se deja como estaba: si venis tocando sobre la misma base, no
+  // tenes que escribirlo cada vez.
+  document.getElementById("sesion-subdivision").value =
+    String(inicio.subdivision_ritmo || 2);
+
+  panel.hidden = false;
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  document.getElementById("sesion-titulo").focus();
+}
+
+
+function ocultarSesionPendiente() {
+  document.getElementById("sesion-pendiente").hidden = true;
+}
+
+
+/* Al arrancar: si habia una sesion sin guardar, se vuelve a mostrar. */
+async function recuperarSesionPendiente() {
+  const datos = await pedir("/api/sesiones/pendiente");
+  if (datos.pendiente) mostrarSesionPendiente(datos.pendiente);
+}
+
+
+function configurarSesionPendiente() {
+  document.getElementById("sesion-guardar").addEventListener("click", guardarSesion);
+  document.getElementById("sesion-descartar").addEventListener("click", async () => {
+    await pedir("/api/sesiones/descartar", { method: "POST" });
+    ocultarSesionPendiente();
+    const aviso = document.getElementById("aviso-guardado");
+    aviso.className = "problema";
+    aviso.textContent = "Descartada.";
+    setTimeout(() => { aviso.textContent = ""; }, 6000);
+  });
+  ["sesion-titulo", "sesion-bpm"].forEach((id) => {
+    document.getElementById(id).addEventListener("keydown", (evento) => {
+      if (evento.key === "Enter") guardarSesion();
+    });
+  });
+}
+
+
+async function guardarSesion() {
+  const estado = document.getElementById("sesion-estado");
+  const bpm = document.getElementById("sesion-bpm").value.trim();
+  estado.textContent = "Guardando...";
+
+  const respuesta = await pedir("/api/sesiones/guardar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      titulo: document.getElementById("sesion-titulo").value,
+      comentario: document.getElementById("sesion-descripcion").value,
+      bpm: bpm ? Number(bpm) : null,
+      subdivision: Number(document.getElementById("sesion-subdivision").value),
+    }),
+  });
+
+  if (!respuesta.ok) {
+    estado.textContent = respuesta.motivo || "no se pudo guardar";
+    return;
+  }
+
+  ocultarSesionPendiente();
+  mostrarResumen(respuesta);
+  avisarQueSeGuardo(respuesta);
+}
+
+
+/* El bloque de ritmo del resumen. Solo existe si diste un BPM.
+ *
+ * `confiable` es lo que decide como se lee: si la grilla no explica lo
+ * tocado, los numeros se muestran tachados de sentido, no de diagnostico.
+ * Preferimos decir cuando no sabemos. */
+function htmlDeRitmo(r) {
+  let html = "<h2>Ritmo</h2>";
+  html += "<p class='ayuda'>Base a " + r.bpm + " BPM, midiendo contra " +
+          escapar(r.figura) + ". " + r.notas_medidas + " notas medidas.</p>";
+
+  if (!r.confiable) {
+    html += '<div class="aviso"><strong>La grilla no explica lo que tocaste</strong>' +
+      (r.ajuste_vs_azar !== null
+        ? " (ajuste " + r.ajuste_vs_azar.toFixed(2) + ", donde 1.00 es azar puro)."
+        : ".") +
+      " Los números de abajo NO son un diagnóstico: puede ser que el BPM o la " +
+      "figura estén mal, o que lo que tocaste no sea métrico (un solo con " +
+      "fraseo libre, por ejemplo). Para medir ritmo de verdad sirve una escala " +
+      "en negras o corcheas parejas sobre la base.</div>";
+  }
+
+  const clase = r.confiable ? "" : " tenue";
+  html += '<table class="ritmo' + clase + '"><tbody>' +
+    "<tr><td>Dispersión</td><td class='numero'><strong>" + r.dispersion_ms +
+      " ms</strong></td><td class='ayuda'>el número a bajar: cuánto varía nota a nota</td></tr>" +
+    "<tr><td>Promedio</td><td class='numero'>" + (r.sesgo_ms > 0 ? "+" : "") + r.sesgo_ms +
+      " ms</td><td class='ayuda'>" + (r.sesgo_ms < 0 ? "te adelantás" : "llegás tarde") + "</td></tr>" +
+    "<tr><td>A tiempo</td><td class='numero'>" + r.a_tiempo_pct +
+      " %</td><td class='ayuda'>dentro de " + r.tolerancia_ms + " ms</td></tr>" +
+    "</tbody></table>";
+
+  (r.diagnostico || []).forEach((frase) => {
+    html += '<div class="hallazgo"><p class="accion">' + escapar(frase) + "</p></div>";
+  });
+  return html;
+}
+
+
+/* ==========================================================================
    El resumen al terminar
    ========================================================================== */
 
@@ -613,6 +748,8 @@ function mostrarResumen(respuesta) {
   (datos.sin_medir || []).forEach((texto) => {
     html += '<div class="aviso">' + texto + "</div>";
   });
+
+  if (respuesta.ritmo) html += htmlDeRitmo(respuesta.ritmo);
 
   if (respuesta.guardado && Object.keys(respuesta.guardado).length) {
     html += "<p class='ayuda'>Guardado en sesiones/: " +
@@ -719,7 +856,7 @@ function dibujarSesiones(sesiones) {
     return;
   }
 
-  let html = "<table><thead><tr><th>Fecha</th><th>Armónica</th>" +
+  let html = "<table><thead><tr><th>Fecha</th><th>Qué</th><th>Armónica</th>" +
              "<th>Posición</th><th class='numero'>Notas</th>" +
              "<th class='numero'>Minutos</th><th class='numero'>Afinación</th>" +
              "</tr></thead><tbody>";
@@ -729,6 +866,7 @@ function dibujarSesiones(sesiones) {
       ? "—"
       : (sesion.afinacion > 0 ? "+" : "") + sesion.afinacion.toFixed(0);
     html += "<tr><td>" + (sesion.fecha || "—") + "</td>" +
+            "<td>" + escapar(sesion.titulo || "") + "</td>" +
             "<td>" + (sesion.tonalidad || "—") + "</td>" +
             "<td>" + (sesion.posicion ? sesion.posicion + "ª" : "—") + "</td>" +
             '<td class="numero">' + sesion.notas + "</td>" +
@@ -763,7 +901,7 @@ function sincronizarBotones(estado) {
   grabar.disabled = grabando && !enSesion;
   grabar.className = enSesion ? "secundario" : "principal";
   if (grabar.dataset.guardando !== "si") {
-    grabar.textContent = enSesion ? "Terminar y guardar" : "Grabar esta sesión";
+    grabar.textContent = enSesion ? "Terminar" : "Grabar esta sesión";
   }
 
   document.getElementById("boton-grabar-frase").disabled = grabando;

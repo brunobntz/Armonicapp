@@ -344,13 +344,27 @@ mientras no grabás, el audio se tira y la historia se recorta a
 megas de audio por minuto sin que hayas tocado nada que quisieras guardar. Al
 apretar Grabar se tira todo lo anterior y ahí sí se guarda hasta el final.
 
-Antes de grabar podés ponerle un **nombre** y una **descripción** a lo que
-estás por tocar. Los dos son opcionales y van debajo del botón, para no
-frenarte cuando querés grabar y ya. Pero dentro de un mes son la diferencia
-entre doce carpetas con fecha y hora y saber cuál era la que valía la pena: el
-nombre va al archivo (`2026-09-08_18-30-00_bloque-t2_tab.txt`, después de la
-fecha para que sigan ordenándose solos) y los dos al encabezado de la tab, del
-resumen y del JSON.
+Al terminar de grabar aparece **lo que grabaste** —la tablatura, cuántas
+notas, cuánto duró— y ahí le ponés **nombre** y **descripción**, los dos
+opcionales. Dentro de un mes son la diferencia entre doce carpetas con fecha y
+hora y saber cuál era la que valía la pena: el nombre va al archivo
+(`2026-09-08_18-30-00_bloque-t2_tab.txt`, después de la fecha para que sigan
+ordenándose solos) y los dos al encabezado de la tab, del resumen y del JSON.
+En el Historial cada sesión aparece con su nombre.
+
+Y en ese mismo paso está la pregunta que solo tiene sentido después de tocar:
+**¿sobre qué base estabas, a cuántos BPM?** Si lo contestás, al guardar se
+mide el **ritmo** —dispersión, promedio, porcentaje a tiempo, y el
+diagnóstico— y queda en el resumen y en el JSON. Si lo dejás vacío, no se
+inventa nada. Es la tercera medición del proyecto, y hasta acá solo existía en
+la terminal con `--bpm`: la pantalla nunca la había podido usar. Con esto el
+"Bloque T2" deja de ser un ejercicio especial: ponés el BPM de tu base de
+Band-in-a-Box, tocás la escala en corcheas, y listo.
+
+Vale lo mismo que en la terminal: si la grilla no explica lo que tocaste
+(`ajuste_vs_azar` cerca de 1), los números se muestran apagados y **sin
+diagnóstico**. Un solo con fraseo libre no es material para medir ritmo, y la
+app lo dice en vez de reportar "dispersión 63 ms" con cara de verdad.
 
 En **Frases** el orden es al revés, a propósito: primero grabás, después
 nombrás. Apretás *Grabar una frase*, tocás —con un cartel de punto rojo, reloj,
@@ -406,7 +420,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 676 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 684 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

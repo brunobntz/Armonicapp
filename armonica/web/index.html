@@ -30,15 +30,42 @@
       <span id="aviso-guardado"></span>
     </div>
 
-    <!-- Los dos campos son opcionales, y por eso van DEBAJO del botón: no
-         tienen que frenarte cuando querés grabar y ya. Pero dentro de un mes
-         son la diferencia entre doce carpetas con fecha y hora y saber cuál
-         era la que valía la pena. -->
-    <div class="controles fila-rotulos">
-      <input id="titulo-sesion" type="text" maxlength="80"
-             placeholder="nombre de la sesión (opcional)">
-      <input id="descripcion-sesion" type="text" maxlength="400"
-             placeholder="qué estás practicando (opcional)">
+    <!-- Lo que grabaste, y la decisión. Aparece al terminar. El nombre y la
+         descripción van acá, DESPUÉS de tocar, igual que en Frases. Y acá se
+         hace la pregunta que solo tiene sentido después: sobre qué base
+         estabas, a cuántos BPM. Con eso se mide el ritmo. -->
+    <div id="sesion-pendiente" class="pendiente" hidden>
+      <h3>Esto es lo que grabaste</h3>
+      <div id="sesion-tab" class="tab"></div>
+      <p id="sesion-datos" class="ayuda"></p>
+
+      <div class="controles fila-rotulos">
+        <input id="sesion-titulo" type="text" maxlength="80"
+               placeholder="nombre de la sesión (opcional)">
+        <input id="sesion-descripcion" type="text" maxlength="400"
+               placeholder="qué estuviste practicando (opcional)">
+      </div>
+      <div class="controles fila-rotulos">
+        <label class="con-titulo">base a
+          <input id="sesion-bpm" type="number" min="30" max="300" step="1"
+                 placeholder="BPM" inputmode="numeric">
+        </label>
+        <label class="con-titulo">midiendo contra
+          <select id="sesion-subdivision">
+            <option value="1">negras</option>
+            <option value="2">corcheas</option>
+            <option value="3">tresillos (swing)</option>
+            <option value="4">semicorcheas</option>
+          </select>
+        </label>
+        <span class="ayuda">Si tocaste sobre una base, poné su BPM y se mide el ritmo.
+          Si no, dejalo vacío.</span>
+      </div>
+      <div class="controles">
+        <button id="sesion-guardar" class="principal">Guardar</button>
+        <button id="sesion-descartar" class="secundario">Descartar</button>
+        <span id="sesion-estado" class="ayuda"></span>
+      </div>
     </div>
   </section>
 

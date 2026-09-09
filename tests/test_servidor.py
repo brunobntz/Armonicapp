@@ -40,6 +40,7 @@ def servidor_andando():
     servidor.Manejador.hilo_audio = None
     servidor.Manejador.detener = None
     servidor.Manejador.pendiente = None
+    servidor.Manejador.sesion_pendiente = None
 
     instancia = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Manejador)
     puerto = instancia.server_address[1]
@@ -1317,65 +1318,6 @@ def test_si_el_microfono_falla_siempre_se_rinde_y_lo_dice():
     assert estado.escuchando is False
 
 
-def test_la_sesion_guarda_titulo_y_descripcion(servidor_andando, tmp_path,
-                                               monkeypatch):
-    """
-    Sin esto, dentro de un mes tenes doce carpetas con fecha y hora y ninguna
-    forma de saber cual era la que valia la pena.
-    """
-    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
-
-    mandar(servidor_andando, "/api/comenzar", {
-        "modo": "sesion",
-        "titulo": "Escala 12a ida y vuelta",
-        "comentario": "probando el bend del 3 sobre la base de Sol",
-    })
-
-    estado = servidor.Manejador.estado
-    estado.eventos = [
-        segmentacion.Evento(
-            nota=mapeo.tab_a_nota(tab, "C"), inicio_seg=i * 0.5,
-            duracion_seg=0.4, frecuencia_hz=440.0, cents=0.0,
-            confianza=0.99, ventanas=30,
-        )
-        for i, tab in enumerate(["-2", "4", "-4", "-5"])
-    ]
-
-    respuesta = mandar(servidor_andando, "/api/terminar")
-
-    assert respuesta["ok"] is True
-    guardados = sorted(os.listdir(str(tmp_path)))
-
-    # El titulo va DESPUES de la fecha: los archivos se siguen ordenando solos
-    # por fecha, que es como se buscan.
-    assert any("_escala-12a-ida-y-vuelta_tab.txt" in n for n in guardados)
-
-    tab = next(n for n in guardados if n.endswith("_tab.txt"))
-    with open(os.path.join(str(tmp_path), tab), encoding="utf-8") as archivo:
-        texto = archivo.read()
-    assert "Escala 12a ida y vuelta" in texto
-    assert "probando el bend del 3" in texto
-
-
-def test_una_sesion_sin_titulo_se_guarda_igual(servidor_andando, tmp_path,
-                                               monkeypatch):
-    """Los dos campos son opcionales: no pueden frenarte cuando querés tocar."""
-    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
-
-    mandar(servidor_andando, "/api/comenzar", {"modo": "sesion"})
-    servidor.Manejador.estado.eventos = [
-        segmentacion.Evento(
-            nota=mapeo.tab_a_nota("4", "C"), inicio_seg=0.0, duracion_seg=0.4,
-            frecuencia_hz=440.0, cents=0.0, confianza=0.99, ventanas=30,
-        )
-    ]
-
-    respuesta = mandar(servidor_andando, "/api/terminar")
-
-    assert respuesta["ok"] is True
-    assert any(n.endswith("_tab.txt") for n in os.listdir(str(tmp_path)))
-
-
 # =============================================================================
 # Grabar o importar deja una frase PENDIENTE; el nombre se pone al guardar
 #
@@ -1871,3 +1813,200 @@ def test_el_archivo_de_listas_no_se_confunde_con_una_frase(carpeta_de_frases):
     frase_de_prueba("una")
 
     assert [nombre for nombre, _ in frases.listar()] == ["una"]
+
+
+# =============================================================================
+# Fase 2: la sesion tambien queda pendiente, y el BPM enciende el ritmo
+#
+# ritmo.py existe desde el paso 6 y la pantalla nunca lo pudo usar: solo la
+# terminal, con --bpm. La pregunta "sobre que base estabas" se hace donde tiene
+# sentido, despues de tocar. Si contestas, se mide; si no, no se inventa nada.
+# =============================================================================
+
+def eventos_metricos(tabs, bpm, subdivision=2, desvio_ms=0.0):
+    """Notas que caen EXACTAMENTE sobre la grilla de un BPM, mas un desvio fijo."""
+    paso = 60.0 / bpm / subdivision
+    return [
+        segmentacion.Evento(
+            nota=mapeo.tab_a_nota(tab, "C"),
+            inicio_seg=0.5 + i * paso + desvio_ms / 1000.0,
+            duracion_seg=paso * 0.8, frecuencia_hz=440.0, cents=0.0,
+            confianza=0.95, ventanas=20,
+        )
+        for i, tab in enumerate(tabs)
+    ]
+
+
+def terminar_sesion_con(base, eventos):
+    """Deja una sesion pendiente con esas notas, como si las hubieras tocado."""
+    preparar("sesion", "", eventos)
+    return mandar(base, "/api/terminar")
+
+
+def test_terminar_una_sesion_no_guarda_deja_pendiente(servidor_andando, tmp_path,
+                                                      monkeypatch):
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+
+    respuesta = terminar_sesion_con(servidor_andando, eventos_de(["-2", "4", "-4"]))
+
+    assert respuesta["ok"] is True
+    assert respuesta["modo"] == "sesion"
+    assert respuesta["pendiente"]["notas"] == 3
+    assert respuesta["pendiente"]["tab"] == ["-2", "4", "-4"]
+    assert os.listdir(str(tmp_path)) == []                   # nada en el disco
+
+
+def test_terminar_una_sesion_sin_notas_no_deja_pendiente(servidor_andando):
+    respuesta = terminar_sesion_con(servidor_andando, [])
+    assert respuesta["ok"] is False
+    assert traer_json(servidor_andando, "/api/sesiones/pendiente")["pendiente"] is None
+
+
+def test_guardar_la_sesion_con_titulo_y_descripcion(servidor_andando, tmp_path,
+                                                    monkeypatch):
+    """
+    Sin esto, dentro de un mes tenes doce carpetas con fecha y hora y ninguna
+    forma de saber cual era la que valia la pena. El titulo va DESPUES de la
+    fecha en el nombre del archivo: los archivos se siguen ordenando solos.
+    """
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+    terminar_sesion_con(servidor_andando, eventos_de(["-2", "4", "-4", "-5"]))
+
+    respuesta = mandar(servidor_andando, "/api/sesiones/guardar", {
+        "titulo": "Escala 12a ida y vuelta",
+        "comentario": "probando el bend del 3 sobre la base de Sol",
+    })
+
+    assert respuesta["ok"] is True
+    assert respuesta["ritmo"] is None                        # sin BPM no se inventa
+    assert respuesta["resumen"]["notas"] == 4
+
+    guardados = sorted(os.listdir(str(tmp_path)))
+    assert any("_escala-12a-ida-y-vuelta_tab.txt" in n for n in guardados)
+    tab = next(n for n in guardados if n.endswith("_tab.txt"))
+    with open(os.path.join(str(tmp_path), tab), encoding="utf-8") as archivo:
+        texto = archivo.read()
+    assert "Escala 12a ida y vuelta" in texto
+    assert "probando el bend del 3" in texto
+
+    # Y la pendiente se consumio.
+    assert traer_json(servidor_andando, "/api/sesiones/pendiente")["pendiente"] is None
+
+
+def test_una_sesion_sin_titulo_se_guarda_igual(servidor_andando, tmp_path,
+                                               monkeypatch):
+    """Los campos son opcionales: no pueden frenarte cuando queres guardar y ya."""
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+    terminar_sesion_con(servidor_andando, eventos_de(["4", "-4"]))
+
+    respuesta = mandar(servidor_andando, "/api/sesiones/guardar", {})
+
+    assert respuesta["ok"] is True
+    assert any(n.endswith("_tab.txt") for n in os.listdir(str(tmp_path)))
+
+
+def test_guardar_sin_nada_pendiente(servidor_andando):
+    respuesta = mandar(servidor_andando, "/api/sesiones/guardar", {"titulo": "x"})
+    assert respuesta["ok"] is False
+
+
+def test_descartar_la_sesion(servidor_andando, tmp_path, monkeypatch):
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+    terminar_sesion_con(servidor_andando, eventos_de(["4", "-4"]))
+
+    mandar(servidor_andando, "/api/sesiones/descartar")
+
+    assert traer_json(servidor_andando, "/api/sesiones/pendiente")["pendiente"] is None
+    assert os.listdir(str(tmp_path)) == []
+
+
+def test_con_bpm_se_mide_el_ritmo(servidor_andando, tmp_path, monkeypatch):
+    """
+    LO QUE ENCIENDE ESTA FASE.
+
+    Notas que caen exactamente sobre la grilla de 80 BPM en corcheas, todas
+    12 ms tarde. Dispersion cero y la grilla explica lo tocado.
+
+    Y el promedio da CERO, no 12, a proposito: el analisis busca la grilla
+    que mejor explica lo que tocaste, asi que un atraso constante no es un
+    desvio, es donde esta tu grilla. Lo que se mide es cuanto te moves
+    respecto de vos mismo. Fue una premisa equivocada del primer test.
+    """
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+    terminar_sesion_con(servidor_andando, eventos_metricos(
+        ["-2", "4", "-4", "-5", "6", "-6", "6", "-5"], bpm=80, desvio_ms=12))
+
+    respuesta = mandar(servidor_andando, "/api/sesiones/guardar",
+                       {"bpm": 80, "subdivision": 2})
+
+    assert respuesta["ok"] is True
+    ritmo_web = respuesta["ritmo"]
+    assert ritmo_web["bpm"] == 80
+    assert ritmo_web["figura"] == "corcheas"
+    assert ritmo_web["notas_medidas"] == 8
+    assert ritmo_web["dispersion_ms"] == 0
+    assert ritmo_web["sesgo_ms"] == 0
+    assert ritmo_web["confiable"] is True
+    assert ritmo_web["a_tiempo_pct"] == 100
+
+    # Y el analisis quedo en el JSON de la sesion, para comparar despues.
+    import json as modulo_json
+    eventos_json = next(n for n in os.listdir(str(tmp_path)) if n.endswith("_eventos.json"))
+    with open(os.path.join(str(tmp_path), eventos_json), encoding="utf-8") as archivo:
+        datos = modulo_json.load(archivo)
+    assert datos["ritmo"] is not None
+
+
+def test_si_la_grilla_no_explica_lo_tocado_no_hay_diagnostico(servidor_andando,
+                                                              tmp_path, monkeypatch):
+    """
+    EL CONTROL DE HONESTIDAD DEL RITMO, EN LA PANTALLA.
+
+    Las mismas notas medidas contra un BPM que no tiene nada que ver: la
+    dispersion da un numero, pero `confiable` dice que no explica nada y el
+    diagnostico va vacio. Sin esto la pantalla mostraria "dispersion 63 ms"
+    con toda seriedad sobre una medicion sin sentido.
+    """
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+    import random
+    azar = random.Random(7)
+    sueltos = [
+        segmentacion.Evento(
+            nota=mapeo.tab_a_nota(tab, "C"), inicio_seg=0.5 + i * 0.4 + azar.uniform(-0.2, 0.2),
+            duracion_seg=0.2, frecuencia_hz=440.0, cents=0.0, confianza=0.9, ventanas=15)
+        for i, tab in enumerate(["-2", "4", "-4", "-5", "6", "-6", "6", "-5", "4", "-4", "-2", "4"])
+    ]
+    terminar_sesion_con(servidor_andando, sueltos)
+
+    respuesta = mandar(servidor_andando, "/api/sesiones/guardar",
+                       {"bpm": 173, "subdivision": 4})
+
+    ritmo_web = respuesta["ritmo"]
+    assert ritmo_web["confiable"] is False
+    assert ritmo_web["diagnostico"] == []
+    assert ritmo_web["ajuste_vs_azar"] is not None
+
+
+def test_sin_bpm_no_hay_bloque_de_ritmo(servidor_andando, tmp_path, monkeypatch):
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+    terminar_sesion_con(servidor_andando, eventos_metricos(["-2", "4", "-4", "-5"], bpm=80))
+
+    respuesta = mandar(servidor_andando, "/api/sesiones/guardar", {"bpm": None})
+
+    assert respuesta["ok"] is True
+    assert respuesta["ritmo"] is None
+
+
+def test_la_subdivision_por_defecto_viaja_al_navegador(servidor_andando):
+    datos = traer_json(servidor_andando, "/api/inicio")
+    assert datos["subdivision_ritmo"] == config.SUBDIVISION_RITMO
+
+
+def test_el_historial_trae_el_titulo_de_cada_sesion(tmp_path):
+    exportacion.guardar_sesion(eventos_de(["4", "-4"]), carpeta=str(tmp_path),
+                               titulo="Bloque T2")
+    exportacion.guardar_sesion(eventos_de(["4", "-4"]), carpeta=str(tmp_path))
+
+    sesiones = servidor.historial(str(tmp_path))["sesiones"]
+
+    assert sorted(s["titulo"] for s in sesiones) == ["", "Bloque T2"]

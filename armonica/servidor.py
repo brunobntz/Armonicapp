@@ -50,8 +50,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
 from armonica import (audio, exportacion, frases, mapeo, posiciones,
-                      prioridades, resumen as modulo_resumen, segmentacion,
-                      tablas, teoria, tono, transcripcion)
+                      prioridades, resumen as modulo_resumen, ritmo,
+                      segmentacion, tablas, teoria, tono, transcripcion)
 
 
 CARPETA_WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -599,26 +599,6 @@ def apagar_microfono(clase):
     clase.estado.escuchando = False
 
 
-def guardar(estado):
-    """Cierra la sesión y escribe los archivos. Devuelve las rutas."""
-    if not estado.eventos:
-        return {}
-
-    rutas = exportacion.guardar_sesion(
-        estado.eventos,
-        tonalidad=estado.tonalidad,
-        posicion=estado.posicion,
-        escala=estado.escala,
-        muestras=estado.audio_grabado,
-        frecuencia_muestreo=estado.frecuencia_muestreo,
-        titulo=estado.titulo,
-        comentario=estado.comentario,
-    )
-    estado.ultimo_guardado = {que: os.path.basename(ruta)
-                              for que, ruta in rutas.items()}
-    return rutas
-
-
 # =============================================================================
 # El histórico
 # =============================================================================
@@ -645,6 +625,7 @@ def historial(carpeta=None):
         sesiones.append({
             "archivo": os.path.basename(ruta),
             "fecha": fecha,
+            "titulo": datos.get("titulo", ""),
             "notas": resumen.get("cantidad_notas", 0),
             "duracion_min": round(resumen.get("duracion_seg", 0) / 60.0, 1),
             "afinacion": resumen.get("afinacion_armonica_cents"),
@@ -805,6 +786,76 @@ class FrasePendiente:
         }
 
 
+class SesionPendiente:
+    """
+    Una sesion grabada que todavia no tiene nombre ni se escribio al disco.
+
+    Es la misma idea que FrasePendiente, y por el mismo motivo: primero ves lo
+    que grabaste, despues decidis. Y aca se agrega la pregunta que solo tiene
+    sentido DESPUES de tocar: sobre que base estabas, a cuantos BPM. Con eso
+    la app puede medir el ritmo, que es lo unico de los tres controles del
+    proyecto que la pantalla nunca habia podido hacer.
+    """
+
+    def __init__(self, eventos, muestras, frecuencia_muestreo, mediciones,
+                 tonalidad, posicion, escala):
+        self.eventos = eventos
+        self.muestras = muestras
+        self.frecuencia_muestreo = frecuencia_muestreo
+        self.mediciones = mediciones
+        self.tonalidad = tonalidad
+        self.posicion = posicion
+        self.escala = escala
+
+    def como_diccionario(self):
+        reconocidas = [e for e in self.eventos if e.nota is not None]
+        duracion = 0.0
+        if reconocidas:
+            duracion = reconocidas[-1].fin_seg - reconocidas[0].inicio_seg
+        tabs = [e.como_tab() for e in reconocidas]
+        return {
+            "tonalidad": self.tonalidad,
+            "posicion": self.posicion,
+            "notas": len(reconocidas),
+            "duracion_seg": round(duracion, 1),
+            "tab": tabs[:48],
+            "hay_mas": len(tabs) > 48,
+            "hay_audio": self.muestras is not None and len(self.muestras) > 0,
+        }
+
+
+def ritmo_como_diccionario(analisis):
+    """
+    El analisis ritmico listo para la pantalla.
+
+    Lleva `confiable`, que es lo que decide si los numeros se muestran como
+    diagnostico o como "esto no significa nada": ver ritmo.ajuste_vs_azar.
+    Sin ese campo la pantalla podria mostrar "dispersion 63 ms" con toda
+    seriedad sobre una medicion que no explica lo tocado.
+    """
+    figura = {1: "negras", 2: "corcheas", 3: "tresillos",
+              4: "semicorcheas"}.get(analisis.subdivision,
+                                     f"1/{analisis.subdivision}")
+    ajuste = analisis.ajuste_vs_azar()
+    confiable = analisis.la_grilla_explica_algo()
+    return {
+        "bpm": analisis.bpm,
+        "subdivision": analisis.subdivision,
+        "figura": figura,
+        "notas_medidas": len(analisis.desvios),
+        "dispersion_ms": round(analisis.dispersion_ms()),
+        "sesgo_ms": round(analisis.sesgo_ms()),
+        "mediana_ms": round(analisis.mediana_ms()),
+        "a_tiempo_pct": round(analisis.porcentaje_a_tiempo()),
+        "tolerancia_ms": round(config.TOLERANCIA_RITMO_MS),
+        "ajuste_vs_azar": round(ajuste, 2) if ajuste is not None else None,
+        "confiable": bool(confiable),
+        # Las frases de diagnostico SOLO si la grilla explica algo. Si no,
+        # seria afirmar cosas sobre una medicion que no significa nada.
+        "diagnostico": list(ritmo.diagnostico(analisis)) if confiable else [],
+    }
+
+
 class Manejador(SimpleHTTPRequestHandler):
     """
     Atiende al navegador.
@@ -820,6 +871,7 @@ class Manejador(SimpleHTTPRequestHandler):
     # La frase grabada o importada que todavia no guardaste. Ver
     # FrasePendiente.
     pendiente = None
+    sesion_pendiente = None
 
     # Si la app puede prender el microfono sola. La pone arrancar(), y los
     # tests la dejan en False: ahi el microfono no se abre nunca, que es lo
@@ -883,6 +935,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._listar_frases())
         if self.path == "/api/frases/pendiente":
             return self._responder_json(self._pendiente_actual())
+        if self.path == "/api/sesiones/pendiente":
+            return self._responder_json(self._sesion_pendiente_actual())
         if self.path == "/api/listas":
             return self._responder_json({"listas": frases.listar_listas()})
         if self.path == "/api/dispositivos":
@@ -915,6 +969,10 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._terminar())
         if self.path == "/api/frases/borrar":
             return self._responder_json(self._borrar_frase(cuerpo))
+        if self.path == "/api/sesiones/guardar":
+            return self._responder_json(self._guardar_sesion_pendiente(cuerpo))
+        if self.path == "/api/sesiones/descartar":
+            return self._responder_json(self._descartar_sesion())
         if self.path == "/api/frases/guardar":
             return self._responder_json(self._guardar_frase_pendiente(cuerpo))
         if self.path == "/api/frases/descartar":
@@ -1044,8 +1102,6 @@ class Manejador(SimpleHTTPRequestHandler):
         estado.reiniciar()
         estado.modo = modo
         estado.nombre_frase = nombre
-        estado.titulo = (peticion.get("titulo") or "").strip()[:80]
-        estado.comentario = (peticion.get("comentario") or "").strip()[:400]
         estado.grabando = True
         estado.pedir("arrancar")
         return {"ok": True}
@@ -1085,13 +1141,98 @@ class Manejador(SimpleHTTPRequestHandler):
         if estado.modo == "practicar":
             return self._terminar_practicando(estado)
 
-        rutas = guardar(estado)
+        return self._terminar_sesion(estado)
+
+    def _terminar_sesion(self, estado):
+        """
+        Termina la sesion. NO la guarda: la deja pendiente, como las frases.
+
+        Al terminar ves lo que grabaste y recien ahi le pones nombre,
+        descripcion y —esto es lo nuevo— el BPM de la base sobre la que
+        tocaste. Con el BPM, al guardar se mide el ritmo.
+        """
+        if not [e for e in estado.eventos if e.nota is not None]:
+            return {
+                "ok": False,
+                "modo": "sesion",
+                "motivo": "No se reconoció ninguna nota. Fijate que la barra "
+                          "de nivel se mueva cuando tocás.",
+            }
+
+        type(self).sesion_pendiente = SesionPendiente(
+            eventos=list(estado.eventos),
+            muestras=estado.audio_grabado,
+            frecuencia_muestreo=estado.frecuencia_muestreo,
+            mediciones=list(estado.mediciones),
+            tonalidad=estado.tonalidad,
+            posicion=estado.posicion,
+            escala=estado.escala,
+        )
+        return {"ok": True, "modo": "sesion",
+                "pendiente": type(self).sesion_pendiente.como_diccionario()}
+
+    def _guardar_sesion_pendiente(self, peticion):
+        """
+        Escribe la sesion pendiente al disco, con nombre, descripcion y BPM.
+
+        EL BPM ES LO QUE ENCIENDE EL RITMO
+
+        ritmo.py existe desde el paso 6 y la pantalla nunca lo pudo usar:
+        solo la terminal, con --bpm. Ahora la pregunta se hace donde tiene
+        sentido, despues de tocar: "¿sobre que base estabas?". Si contestas,
+        se mide; si no, no se inventa nada.
+        """
+        clase = type(self)
+        pendiente = clase.sesion_pendiente
+        if pendiente is None:
+            return {"ok": False, "motivo": "no hay ninguna sesion para guardar"}
+
+        peticion = peticion or {}
+        titulo = (peticion.get("titulo") or "").strip()[:80]
+        comentario = (peticion.get("comentario") or "").strip()[:400]
+
+        analisis = None
+        bpm = _numero(peticion.get("bpm"))
+        if bpm is not None and bpm > 0:
+            subdivision = int(_numero(peticion.get("subdivision"))
+                              or config.SUBDIVISION_RITMO)
+            analisis = ritmo.analizar(pendiente.eventos, bpm, compas=4,
+                                      subdivision=subdivision)
+
+        rutas = exportacion.guardar_sesion(
+            pendiente.eventos,
+            tonalidad=pendiente.tonalidad,
+            posicion=pendiente.posicion,
+            escala=pendiente.escala,
+            muestras=pendiente.muestras,
+            frecuencia_muestreo=pendiente.frecuencia_muestreo,
+            analisis_ritmico=analisis,
+            titulo=titulo,
+            comentario=comentario,
+        )
+
+        resumen = self._resumen_de(pendiente.eventos, pendiente.tonalidad,
+                                   pendiente.posicion, pendiente.escala,
+                                   analisis)
+        clase.sesion_pendiente = None
+        clase.estado.ultimo_guardado = {q: os.path.basename(r)
+                                        for q, r in rutas.items()}
         return {
             "ok": True,
-            "modo": "sesion",
-            "guardado": {q: os.path.basename(r) for q, r in rutas.items()},
-            "resumen": self._resumen_actual(),
+            "guardado": clase.estado.ultimo_guardado,
+            "resumen": resumen,
+            "ritmo": ritmo_como_diccionario(analisis) if analisis else None,
         }
+
+    def _descartar_sesion(self):
+        type(self).sesion_pendiente = None
+        return {"ok": True}
+
+    def _sesion_pendiente_actual(self):
+        pendiente = type(self).sesion_pendiente
+        if pendiente is None:
+            return {"ok": True, "pendiente": None}
+        return {"ok": True, "pendiente": pendiente.como_diccionario()}
 
     def _terminar_grabando_frase(self, estado):
         """
@@ -1591,14 +1732,20 @@ class Manejador(SimpleHTTPRequestHandler):
 
     def _resumen_actual(self):
         estado = type(self).estado
-        eventos = estado.eventos
+        return self._resumen_de(estado.eventos, estado.tonalidad,
+                                estado.posicion, estado.escala, None)
+
+    def _resumen_de(self, eventos, tonalidad, posicion, escala, analisis):
+        """
+        El resumen de una tanda de eventos. Con `analisis` (el ritmico), las
+        prioridades tambien pueden hablar del tiempo.
+        """
         if not eventos:
             return {"hay": False}
 
-        datos = modulo_resumen.resumir(eventos, estado.tonalidad,
-                                       estado.posicion, estado.escala)
+        datos = modulo_resumen.resumir(eventos, tonalidad, posicion, escala)
         hallazgos, sin_medir = prioridades.analizar(
-            eventos, None, estado.tonalidad, estado.posicion, estado.escala
+            eventos, analisis, tonalidad, posicion, escala
         )
 
         return {
@@ -1650,6 +1797,7 @@ class Manejador(SimpleHTTPRequestHandler):
                 for clave in tablas.ESCALAS_INTERVALOS
             ],
             "umbral_volumen": config.UMBRAL_VOLUMEN_RMS,
+            "subdivision_ritmo": config.SUBDIVISION_RITMO,
             "diagrama": diagrama_de_la_armonica(
                 estado.tonalidad, estado.posicion, estado.escala
             ),
