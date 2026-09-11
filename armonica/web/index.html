@@ -180,6 +180,19 @@
       </label>
     </div>
 
+    <!-- Mientras la app analiza un audio que subiste. Una clase entera tarda
+         un minuto, y antes lo único que lo decía era una línea de texto
+         chica: parecía colgado y daba para tocar cualquier cosa. -->
+    <div id="esperando" class="esperando" hidden>
+      <div class="anillo"></div>
+      <div>
+        <strong id="esperando-que"></strong>
+        <span id="esperando-reloj"></span>
+        <p class="ayuda">Con una clase entera puede tardar un minuto. No toques
+          nada: cuando termine, el resultado aparece acá abajo.</p>
+      </div>
+    </div>
+
     <!-- Mientras grabás una frase pasa lo mismo que en la solapa En vivo,
          pero acá no se veía nada: solo una línea de texto. Una frase dura
          cuatro segundos, así que necesitás saber YA que te está escuchando. -->

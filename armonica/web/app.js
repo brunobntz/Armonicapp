@@ -167,9 +167,10 @@ function configurarBotones() {
  * contra la que es imposible practicar. */
 async function elegirQueImportar(archivo) {
   limpiarTramos();
-  avisarFrase("Buscando dónde hay armónica en " + archivo.name + "...");
+  avisarFrase("");
 
-  const respuesta = await subir("/api/frases/tramos", archivo, {});
+  const respuesta = await subir("/api/frases/tramos", archivo, {}, "",
+                                "Buscando dónde hay armónica en " + archivo.name);
 
   if (!respuesta.ok) {
     avisarFrase(respuesta.motivo || "no pude leer ese audio");
@@ -476,7 +477,7 @@ function apagarReproductor() {
  * frase grabada con el microfono, y ahi le pones nombre. */
 async function importar(archivo, tramo) {
   limpiarTramos();
-  avisarFrase("Analizando " + archivo.name + "...");
+  avisarFrase("");
 
   const extra = {};
   if (tramo) {
@@ -484,7 +485,10 @@ async function importar(archivo, tramo) {
     extra.hasta = tramo.hasta_seg;
   }
 
-  const respuesta = await subir("/api/frases/importar", archivo, extra);
+  const respuesta = await subir("/api/frases/importar", archivo, extra, "",
+                                "Transcribiendo " + archivo.name +
+                                (tramo ? " (" + reloj(tramo.desde_seg) + " a " +
+                                         reloj(tramo.hasta_seg) + ")" : ""));
 
   if (!respuesta.ok) {
     avisarFrase(respuesta.motivo || "no pude importar ese audio");
@@ -502,8 +506,13 @@ async function importar(archivo, tramo) {
  * convertirlo, y el servidor lo usa como nombre sugerido de la frase.
  *
  * `nombre` se usa solo para comparar un intento contra una frase guardada:
- * al importar va vacio, porque el nombre se pone despues. */
-async function subir(ruta, archivo, extra, nombre) {
+ * al importar va vacio, porque el nombre se pone despues.
+ *
+ * `queHace` es lo que dice el cartel de espera mientras el servidor trabaja.
+ * El cartel vive aca y no en cada llamada para que ninguna subida nueva
+ * pueda olvidarselo: una clase entera tarda un minuto y sin cartel parece
+ * que la app se colgo. */
+async function subir(ruta, archivo, extra, nombre, queHace) {
   const partes = ["nombre=" + encodeURIComponent(nombre || ""),
                   "archivo=" + encodeURIComponent(archivo.name || "")];
 
@@ -513,9 +522,79 @@ async function subir(ruta, archivo, extra, nombre) {
   Object.entries(extra || {}).forEach(([clave, valor]) =>
     partes.push(clave + "=" + encodeURIComponent(valor)));
 
-  const respuesta = await fetch(ruta + "?" + partes.join("&"),
-                                { method: "POST", body: archivo });
-  return respuesta.json();
+  mostrarEspera(queHace || ("Analizando " + archivo.name));
+  try {
+    const respuesta = await fetch(ruta + "?" + partes.join("&"),
+                                  { method: "POST", body: archivo });
+    return await respuesta.json();
+  } catch (error) {
+    return { ok: false, motivo: "se corto la conexion con el servidor: " + error.message };
+  } finally {
+    ocultarEspera();
+  }
+}
+
+
+/* ==========================================================================
+   El cartel de espera
+
+   Mientras esta puesto, los botones que podrian pisar lo que se esta
+   analizando quedan apagados. `esperando` lo lee sincronizarBotones, que
+   corre con cada latido del estado en vivo: si no lo supiera, volveria a
+   prenderlos al segundo.
+   ========================================================================== */
+
+let esperando = false;
+let relojDeEspera = null;
+
+function mostrarEspera(queHace) {
+  esperando = true;
+  const cartel = document.getElementById("esperando");
+  document.getElementById("esperando-que").textContent = queHace;
+
+  const arranque = Date.now();
+  const reloj = document.getElementById("esperando-reloj");
+  const marcar = () => {
+    const segundos = Math.floor((Date.now() - arranque) / 1000);
+    reloj.textContent = Math.floor(segundos / 60) + ":" +
+      String(segundos % 60).padStart(2, "0");
+  };
+  marcar();
+  clearInterval(relojDeEspera);
+  relojDeEspera = setInterval(marcar, 1000);
+
+  cartel.hidden = false;
+  cartel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  apagarLoQueSePuedeApretar(true);
+}
+
+
+function ocultarEspera() {
+  esperando = false;
+  clearInterval(relojDeEspera);
+  relojDeEspera = null;
+  document.getElementById("esperando").hidden = true;
+  apagarLoQueSePuedeApretar(false);
+}
+
+
+/* Los controles de la solapa Frases que no tiene sentido tocar mientras se
+ * graba o se analiza algo. Lo usan el cartel de espera y sincronizarBotones. */
+function apagarLoQueSePuedeApretar(ocupado) {
+  document.getElementById("boton-grabar-frase").disabled = ocupado;
+  document.getElementById("tonalidad-frase").disabled = ocupado;
+
+  document.querySelectorAll("#lista-frases button, #tramos button")
+    .forEach((boton) => { boton.disabled = ocupado; });
+
+  // Un <label> no se puede deshabilitar: se apaga el <input> que tiene adentro
+  // y se lo pinta de apagado para que se note.
+  document.querySelectorAll(".como-boton, .frase label.audio")
+    .forEach((etiqueta) => {
+      etiqueta.classList.toggle("apagado", ocupado);
+      const entrada = etiqueta.querySelector("input");
+      if (entrada) entrada.disabled = ocupado;
+    });
 }
 
 
@@ -1168,21 +1247,8 @@ function sincronizarBotones(estado) {
     grabar.textContent = enSesion ? "Terminar" : "Grabar esta sesión";
   }
 
-  document.getElementById("boton-grabar-frase").disabled = grabando;
   document.getElementById("boton-terminar-frase").hidden = !enFrase;
-  document.getElementById("tonalidad-frase").disabled = grabando;
-
-  document.querySelectorAll("#lista-frases button")
-    .forEach((boton) => { boton.disabled = grabando; });
-
-  // Un <label> no se puede deshabilitar: se apaga el <input> que tiene adentro
-  // y se lo pinta de apagado para que se note.
-  document.querySelectorAll(".como-boton, .frase label.audio")
-    .forEach((etiqueta) => {
-      etiqueta.classList.toggle("apagado", grabando);
-      const entrada = etiqueta.querySelector("input");
-      if (entrada) entrada.disabled = grabando;
-    });
+  apagarLoQueSePuedeApretar(grabando || esperando);
 
   dibujarCartelDeFrase(estado, enFrase);
 
@@ -1550,9 +1616,10 @@ function dibujarListaDeFrases() {
 
       const nombre = entrada.dataset.intento;
       document.getElementById("seccion-comparacion").hidden = true;
-      avisarFrase("Comparando " + archivo.name + " contra «" + nombre + "»...");
+      avisarFrase("");
 
-      const respuesta = await subir("/api/frases/intento", archivo, {}, nombre);
+      const respuesta = await subir("/api/frases/intento", archivo, {}, nombre,
+                                    "Comparando " + archivo.name + " contra «" + nombre + "»");
       if (!respuesta.ok) {
         avisarFrase(respuesta.motivo || "no pude comparar ese audio");
         return;

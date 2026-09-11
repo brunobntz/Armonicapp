@@ -863,6 +863,43 @@ label.con-titulo {
 .fila-rotulos { margin-top: 10px; }
 .fila-rotulos input[type="text"] { flex: 1; min-width: 180px; }
 
+/* --- El cartel de "analizando, no toques nada" ---
+ *
+ * Un anillo que gira, qué está haciendo, y un reloj. El reloj es lo que te
+ * dice que no está colgado: si avanza, está trabajando. */
+
+.esperando {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid rgba(224, 164, 88, 0.45);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 14px;
+  box-shadow: 0 12px 40px -24px rgba(224, 164, 88, 0.5);
+}
+.esperando strong { font-size: 15px; }
+.esperando #esperando-reloj {
+  margin-left: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--cobre);
+}
+.esperando .ayuda { margin-top: 4px; }
+
+.anillo {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 3px solid var(--borde);
+  border-top-color: var(--cobre);
+  animation: girar 0.9s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+
 /* --- El cartel de "estoy grabando una frase" ---
  *
  * Una frase dura cuatro segundos. Con solo una linea de texto no llegabas a
