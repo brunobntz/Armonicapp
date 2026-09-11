@@ -51,12 +51,14 @@ async function pedir(ruta, opciones) {
 
 
 function mostrarEncabezado() {
-  let texto = "Armónica en " + inicio.tonalidad;
+  // Va al lado del nombre de la app, en una línea: con qué armónica, en qué
+  // posición, y qué escala se marca en verde.
+  let texto = "armónica en " + inicio.tonalidad;
   if (inicio.posicion) {
-    texto += ", " + inicio.nombre_posicion + " → tocás en " + inicio.tono_resultante;
+    texto += " · " + inicio.nombre_posicion + " → tocás en " + inicio.tono_resultante;
   }
   if (inicio.nombre_escala) {
-    texto += ". " + inicio.nombre_escala;
+    texto += " · " + inicio.nombre_escala.toLowerCase();
   }
   document.getElementById("encabezado").textContent = texto;
 }
@@ -350,11 +352,14 @@ function dibujarMedidor(estado) {
   const cents = document.getElementById("cents");
   const punto = document.getElementById("punto");
   const pista = document.getElementById("pista");
+  const direccion = document.getElementById("direccion-nota");
 
   if (!estado.nota) {
     grande.textContent = "—";
     grande.className = "";
     nombre.textContent = "";
+    direccion.textContent = "";
+    direccion.className = "";
     cents.textContent = estado.escuchando ? "esperando una nota" : "sin nota";
     cents.className = "";
     punto.setAttribute("cx", 200);
@@ -369,7 +374,12 @@ function dibujarMedidor(estado) {
   // Fuera de escala NO es un error: la tercera mayor sobre un acorde
   // dominante está afuera y es lo que suena a blues. Se marca distinto, no
   // se reprocha.
-  grande.className = estado.nota.en_escala === false ? "fuera-de-escala" : "";
+  // El color dice la dirección, igual que en la armónica de abajo. Fuera
+  // de escala gana: es lo que hay que notar.
+  grande.className = estado.nota.en_escala === false
+    ? "fuera-de-escala" : (estado.nota.direccion || "");
+  direccion.textContent = estado.nota.direccion || "";
+  direccion.className = estado.nota.direccion || "";
   pista.textContent = estado.nota.en_escala === false
     ? "fuera de la escala de referencia (no es un error)" : "";
 
@@ -560,8 +570,12 @@ function dibujarTab(tabs) {
     return;
   }
   contenedor.innerHTML = tabs
-    .map((tab, indice) =>
-      indice === tabs.length - 1 ? '<span class="ultima">' + tab + "</span>" : tab)
+    .map((tab, indice) => {
+      // La tab viene con flecha (↓2) o con guion (-2), según la notación.
+      const clase = (/^[↓-]/.test(tab) ? "aspirado" : "soplado") +
+                    (indice === tabs.length - 1 ? " ultima" : "");
+      return '<span class="' + clase + '">' + tab + "</span>";
+    })
     .join(" ");
 }
 
@@ -921,7 +935,6 @@ function sincronizarBotones(estado) {
   const grabar = document.getElementById("boton-grabar");
   grabar.dataset.grabando = enSesion ? "si" : "no";
   grabar.disabled = grabando && !enSesion;
-  grabar.className = enSesion ? "secundario" : "principal";
   if (grabar.dataset.guardando !== "si") {
     grabar.textContent = enSesion ? "Terminar" : "Grabar esta sesión";
   }

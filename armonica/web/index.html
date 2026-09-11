@@ -9,7 +9,11 @@
 <body>
 
 <header>
-  <h1 id="encabezado">Armónica</h1>
+  <!-- El nombre, y al lado con qué estás tocando (lo escribe app.js). -->
+  <div class="marca">
+    <h1>Armónica</h1>
+    <span id="encabezado"></span>
+  </div>
   <nav>
     <button class="solapa activa" data-panel="vivo">En vivo</button>
     <button class="solapa" data-panel="frases">Frases</button>
@@ -24,10 +28,25 @@
   <!-- Un solo botón. La app ya está escuchando: esto decide si lo que tocás
        se guarda o no. -->
   <section>
-    <div class="controles">
-      <button id="boton-grabar" class="principal">Grabar esta sesión</button>
-      <span id="contadores"></span>
-      <span id="aviso-guardado"></span>
+    <div class="fila-arriba">
+      <div class="controles">
+        <button id="boton-grabar" class="principal">Grabar esta sesión</button>
+        <span id="contadores"></span>
+        <span id="aviso-guardado"></span>
+      </div>
+
+      <!-- La barra de nivel. Es lo primero que hay que mirar cuando "no anda
+           nada": si no se mueve al soplar, el problema es el micrófono y no
+           tu forma de tocar. -->
+      <div class="nivel">
+        <div class="barra-nivel"><div id="barra-nivel"></div>
+          <div id="marca-umbral" title="por debajo de esta marca, la app no escucha"></div>
+        </div>
+        <div id="texto-nivel" class="ayuda">
+          Soplá: esta barra se tiene que mover. Si no se mueve, andá a
+          <strong>Ajustes</strong> y elegí otro micrófono.
+        </div>
+      </div>
     </div>
 
     <!-- Lo que grabaste, y la decisión. Aparece al terminar. El nombre y la
@@ -69,25 +88,16 @@
     </div>
   </section>
 
-  <!-- La barra de nivel. Es lo primero que hay que mirar cuando "no anda
-       nada": si no se mueve al soplar, el problema es el micrófono y no
-       tu forma de tocar. -->
-  <section class="nivel">
-    <div class="barra-nivel"><div id="barra-nivel"></div>
-      <div id="marca-umbral" title="por debajo de esta marca, la app no escucha"></div>
-    </div>
-    <div id="texto-nivel" class="ayuda">
-      Soplá: esta barra se tiene que mover. Si no se mueve, andá a
-      <strong>Ajustes</strong> y elegí otro micrófono.
-    </div>
-  </section>
-
   <!-- El medidor de afinación. Es lo más importante de la pantalla: es lo
        único que no podés saber de oído mientras tocás. -->
   <section class="medidor">
-    <div id="nota-grande">—</div>
-    <div id="nombre-nota"></div>
+    <div class="nota">
+      <div id="nota-grande">—</div>
+      <div id="nombre-nota"></div>
+      <div id="direccion-nota"></div>
+    </div>
 
+    <div class="escala">
     <svg id="aguja" viewBox="0 0 400 110" preserveAspectRatio="xMidYMid meet">
       <!-- La zona verde: dentro de estos cents la nota está afinada -->
       <rect id="zona-buena" x="180" y="30" width="40" height="40" rx="4"></rect>
@@ -115,6 +125,7 @@
 
     <div id="cents">sin nota</div>
     <div id="pista" class="ayuda"></div>
+    </div>
   </section>
 
   <!-- El diagrama de la armónica -->

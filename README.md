@@ -406,6 +406,20 @@ En el cartel de grabar una frase hay una **miniatura** del mismo diagrama,
 que se ilumina igual mientras tocás: no hace falta cambiar de solapa para
 ver dónde estás.
 
+**La apariencia.** Fondo carbón cálido, con un resplandor cobre y un grano
+casi invisible: es una pantalla para mirar de noche, de reojo, con la
+armónica en la boca. Hay un solo color protagonista, el cobre de las placas
+de lengüetas, y lo llevan el botón de grabar, la solapa activa y las
+etiquetas. Los demás colores tienen un significado cada uno y no se usan
+para otra cosa: azul aspirado, lavanda la aguja, verde afinada o en escala,
+amarillo cerca o aviso, rojo lejos o grabando. La nota grande del medidor y
+la tablatura también van en cobre o azul según la dirección.
+
+Tres tipografías con un trabajo cada una: **Fraunces** para los títulos y
+la nota grande, **Instrument Sans** para el texto, **IBM Plex Mono** para la
+tablatura y los números. Están en `armonica/web/fuentes/`, así que la app se
+ve igual sin internet.
+
 Arriba de todo, en **En vivo**, hay una **barra de nivel de entrada**. Es lo
 primero que hay que mirar cuando parece que no anda nada: sin ella, un
 micrófono equivocado y una armónica tocada bajito se ven exactamente igual

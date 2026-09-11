@@ -878,6 +878,11 @@ class Manejador(SimpleHTTPRequestHandler):
     # que permite probar todo el servidor sin una placa de sonido.
     audio_automatico = False
 
+    # Windows no conoce .woff2 y lo serviria como "octet-stream". El
+    # navegador igual lo usa, pero avisando en la consola cada vez.
+    extensions_map = {**SimpleHTTPRequestHandler.extensions_map,
+                      ".woff2": "font/woff2"}
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=CARPETA_WEB, **kwargs)
 
