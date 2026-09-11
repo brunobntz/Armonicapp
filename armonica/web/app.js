@@ -1747,30 +1747,71 @@ function configurarListas() {
 function mostrarComparacion(c) {
   const seccion = document.getElementById("seccion-comparacion");
   const contenedor = document.getElementById("comparacion");
+  const d = c.devolucion || null;
 
-  let html = "<p class='ayuda'>\u00ab" + escapar(c.nombre) + "\u00bb \u00b7 " +
-    c.aciertos + " de " + c.esperadas + " notas (" + c.porcentaje + "%)</p>" +
-    '<div class="barra-aciertos"><div style="width:' + c.porcentaje + '%"></div></div>';
+  let html = "<p class='ayuda'>Contra «" + escapar(c.nombre) + "»</p>";
 
-  // La velocidad va aparte de los desvios: tocar mas lento no es un error,
-  // es una decision. Lo que se mide es si el ritmo INTERNO se mantuvo.
-  const masLento = c.velocidad > 0;
-  html += "<p>Tocaste un " + Math.abs(c.velocidad) + "% m\u00e1s " +
-          (masLento ? "lento" : "r\u00e1pido") + " que la referencia";
-  html += (c.relativa === null)
-    ? ". La frase tiene una sola nota: no hay ritmo que medir.</p>"
-    : ". Sacada la velocidad, tu ritmo qued\u00f3 <strong>" + c.calidad +
-      "</strong> (dispersi\u00f3n " + c.dispersion_ms + " ms, " +
-      c.relativa.toFixed(2) + " de una nota).</p>";
+  // Los tres numeros. Cada uno dice si esta medido o no: preferimos un
+  // "sin datos" honesto a un numero con cara de diagnostico.
+  if (d) {
+    html += '<div class="tarjetas">' +
+      tarjeta(d.notas.porcentaje + "%", "notas",
+              d.notas.aciertos + " de " + d.notas.esperadas, true,
+              d.notas.porcentaje >= 90 ? "bien" : d.notas.porcentaje >= 70 ? "regular" : "mal") +
+      tarjeta(d.afinacion.medida ? "±" + d.afinacion.desvio_tipico_cents + " c" : "—",
+              "afinación",
+              d.afinacion.medida
+                ? (d.afinacion.bends_fuera.length
+                    ? d.afinacion.bends_fuera.length + (d.afinacion.bends_fuera.length === 1 ? " bend fuera" : " bends fuera")
+                    : "bends en su lugar")
+                : "pocas notas para medir",
+              d.afinacion.medida,
+              !d.afinacion.medida ? "" : d.afinacion.bends_fuera.length ? "regular" : "bien") +
+      tarjeta(d.tiempo.medido ? d.tiempo.a_tiempo + "/" + d.tiempo.medidas : "—",
+              "a tiempo",
+              d.tiempo.medido
+                ? d.tiempo.calidad + (d.tiempo.velocidad_pct !== 0
+                    ? " · " + Math.abs(d.tiempo.velocidad_pct) + "% más " +
+                      (d.tiempo.velocidad_pct > 0 ? "lento" : "rápido")
+                    : "")
+                : "pocas notas para medir",
+              d.tiempo.medido,
+              !d.tiempo.medido ? "" :
+                (d.tiempo.calidad === "muy parecida" || d.tiempo.calidad === "parecida") ? "bien" : "regular") +
+      "</div>";
+
+    html += "<h2>Qué hacer con esto</h2>";
+    d.consejos.forEach((consejo, indice) => {
+      html += '<div class="hallazgo' + (indice === 0 ? " primero" : "") +
+              '"><p class="accion">' + escapar(consejo) + "</p></div>";
+    });
+  }
+
+  // Escuchar las dos, una debajo de la otra. La tablatura no lleva el
+  // ritmo, y el ritmo es lo que estas tratando de copiar.
+  if (c.referencia_con_audio || c.intento_con_audio) {
+    html += "<h2>Escuchalas seguidas</h2><div class='escuchar-par'>";
+    if (c.referencia_con_audio) {
+      html += '<label>la referencia<audio controls preload="none" src="/api/frases/audio?nombre=' +
+              encodeURIComponent(c.nombre) + '"></audio></label>';
+    }
+    if (c.intento_con_audio) {
+      html += '<label>tu intento<audio controls preload="none" src="/api/frases/intento/audio?t=' +
+              Date.now() + '"></audio></label>';
+    }
+    html += "</div>";
+  }
 
   if (c.notas.length) {
-    html += "<h2>Nota por nota</h2><div class='notas-comparadas'>";
+    html += "<h2>Nota por nota</h2><p class='ayuda'>Desvío de tiempo con la " +
+            "velocidad descontada, y afinación respecto de la referencia.</p>" +
+            "<div class='notas-comparadas'>";
     c.notas.forEach((nota) => {
       const aTiempo = Math.abs(nota.desvio_ms) <= 40;
       const afinada = Math.abs(nota.cents) <= TOLERANCIA;
       html += '<span class="' + (aTiempo && afinada ? "bien" : "mal") + '">' +
         nota.tab + " <em>" + (nota.desvio_ms > 0 ? "+" : "") + nota.desvio_ms +
-        " ms \u00b7 " + (nota.cents > 0 ? "+" : "") + nota.cents + " c</em></span>";
+        " ms · " + (nota.cents > 0 ? "+" : "") + nota.cents + " c</em></span>";
     });
     html += "</div>";
   }
@@ -1779,16 +1820,27 @@ function mostrarComparacion(c) {
     html += "<p class='ayuda'>Te faltaron: " + c.faltantes.join(" ") + "</p>";
   }
   if (c.sobrantes.length) {
-    html += "<p class='ayuda'>De m\u00e1s: " + c.sobrantes.join(" ") + "</p>";
+    html += "<p class='ayuda'>De más: " + c.sobrantes.join(" ") + "</p>";
   }
   if (c.cambiadas.length) {
     html += "<p class='ayuda'>Cambiadas: " + c.cambiadas
-      .map((par) => (par.esperada || "\u2014") + " \u2192 " + (par.tocada || "\u2014"))
+      .map((par) => (par.esperada || "—") + " → " + (par.tocada || "—"))
       .join(", ") + "</p>";
   }
 
   contenedor.innerHTML = html;
   seccion.hidden = false;
+  seccion.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+
+/* Una de las tres tarjetas de arriba: el numero grande, que es, y un
+ * detalle. `medida` en falso la pinta apagada. */
+function tarjeta(numero, rotulo, detalle, medida, tono) {
+  return '<div class="tarjeta' + (medida ? "" : " apagada") + (tono ? " " + tono : "") + '">' +
+    '<div class="numero">' + escapar(numero) + "</div>" +
+    '<div class="rotulo">' + escapar(rotulo) + "</div>" +
+    '<div class="detalle">' + escapar(detalle) + "</div></div>";
 }
 
 

@@ -168,7 +168,11 @@ def escribir_wav(ruta, muestras, frecuencia_muestreo=None):
     # que el negativo más chico.
     enteros = (muestras * (ESCALA_16_BITS - 1)).astype(np.int16)
 
-    with wave.open(str(ruta), "wb") as archivo:
+    # `ruta` puede ser un nombre de archivo o algo abierto (un BytesIO, para
+    # mandar el audio por la red sin pasar por el disco). wave.open acepta
+    # los dos; lo unico que no acepta es un Path, y por eso el str().
+    destino = ruta if hasattr(ruta, "write") else str(ruta)
+    with wave.open(destino, "wb") as archivo:
         archivo.setnchannels(1)
         archivo.setsampwidth(2)
         archivo.setframerate(frecuencia_muestreo)

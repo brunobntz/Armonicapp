@@ -382,3 +382,125 @@ def test_buscar_una_frase_por_su_nombre(tmp_path):
 
 def test_buscar_una_frase_que_no_existe_devuelve_none(tmp_path):
     assert frases.buscar("no existe", str(tmp_path)) is None
+
+
+# =============================================================================
+# La devolución: qué hacer con lo que salió
+# =============================================================================
+
+def test_tocarla_igual_da_una_devolucion_sin_reproches():
+    frase = frase_de(["-2", "-3''", "4", "-4", "-5", "6"])
+    devolucion = frases.devolucion(frases.comparar(frase, eventos_de(
+        ["-2", "-3''", "4", "-4", "-5", "6"])))
+
+    assert devolucion["notas"] == {"aciertos": 6, "esperadas": 6, "porcentaje": 100}
+    assert devolucion["afinacion"]["medida"] is True
+    assert devolucion["afinacion"]["bends_fuera"] == []
+    assert devolucion["tiempo"]["medido"] is True
+    assert devolucion["tiempo"]["a_tiempo"] == 6
+    assert len(devolucion["consejos"]) == 1
+    assert "muy parecida" in devolucion["consejos"][0]
+
+
+def test_un_bend_corto_se_dice_con_esas_palabras():
+    """
+    El -3'' tocado 35 cents ALTO es un bend que se quedó corto: no bajaste
+    lo suficiente. Es el error más común de los bends, y la devolución lo
+    tiene que llamar por su nombre y decir cuánto.
+    """
+    frase = frase_de(["-2", "-3''", "4", "-3''", "-4"])
+    intento = eventos_de(["-2", "-3''", "4", "-3''", "-4"])
+    for evento in intento:
+        if evento.como_tab() == "-3''":
+            evento.cents = 35.0
+
+    devolucion = frases.devolucion(frases.comparar(frase, intento))
+
+    assert devolucion["afinacion"]["bends_fuera"] == [
+        {"tab": "-3''", "cents": 35, "veces": 2}]
+    consejo = devolucion["consejos"][0]
+    assert "-3''" in consejo and "35 cents" in consejo and "corto" in consejo
+
+
+def test_un_bend_pasado_se_distingue_del_corto():
+    frase = frase_de(["-2", "-3'", "4", "-4"])
+    intento = eventos_de(["-2", "-3'", "4", "-4"])
+    intento[1].cents = -30.0
+
+    consejo = frases.devolucion(frases.comparar(frase, intento))["consejos"][0]
+    assert "-3'" in consejo and "pas" in consejo
+
+
+def test_una_nota_natural_desafinada_no_es_culpa_tuya():
+    """Solo los bends cuentan: una nota natural desafinada es la lengüeta."""
+    frase = frase_de(["-2", "4", "-4", "5"])
+    intento = eventos_de(["-2", "4", "-4", "5"])
+    intento[1].cents = 40.0
+
+    devolucion = frases.devolucion(frases.comparar(frase, intento))
+    assert devolucion["afinacion"]["bends_fuera"] == []
+
+
+def test_con_pocas_notas_coincidentes_no_se_opina():
+    """
+    Dos notas de ocho no son una muestra. La devolución dice eso y qué
+    faltó, y NO habla de ritmo ni de afinación.
+    """
+    frase = frase_de(["-2", "-3''", "4", "-4", "-5", "6", "-6", "6"])
+    devolucion = frases.devolucion(frases.comparar(frase, eventos_de(["-2", "-3''"])))
+
+    assert devolucion["afinacion"]["medida"] is False
+    assert devolucion["tiempo"]["medido"] is False
+    assert len(devolucion["consejos"]) == 1
+    assert "muy pocas" in devolucion["consejos"][0]
+    assert "Te faltaron" in devolucion["consejos"][0]
+
+
+def test_el_bend_cambiado_de_profundidad_se_explica_como_bend_corto():
+    """Tocar -3' donde iba -3'' no es "otra nota": es el mismo bend, corto."""
+    frase = frase_de(["-2", "-3''", "4", "-4", "-5", "6"])
+    intento = eventos_de(["-2", "-3'", "4", "-4", "5", "7"])   # 3 de 6 bien
+
+    consejo = frases.devolucion(frases.comparar(frase, intento))["consejos"][0]
+    assert consejo.startswith("Primero las notas")
+    assert "Bends cortos: -3'' te salió -3'" in consejo
+
+
+def test_el_ritmo_que_cambio_senala_la_nota_mas_corrida():
+    frase = frase_de(["-4", "-5", "6", "-6", "7", "-8", "9"], paso=0.5)
+    intento = eventos_de(["-4", "-5", "6", "-6", "7", "-8", "9"], paso=0.5,
+                         desvios_ms=[0, 0, 0, 200, 0, 0, 0])
+
+    devolucion = frases.devolucion(frases.comparar(frase, intento))
+
+    assert devolucion["tiempo"]["peor"]["tab"] == "-6"
+    assert any("-6" in c and "ms" in c for c in devolucion["consejos"])
+
+
+def test_la_velocidad_va_ultima_y_avisa_que_no_es_un_error():
+    frase = frase_de(["-2", "-3''", "4", "-4", "-5", "6"], paso=0.5)
+    intento = eventos_de(["-2", "-3''", "4", "-4", "-5", "6"], paso=0.6)   # 20% mas lento
+
+    devolucion = frases.devolucion(frases.comparar(frase, intento))
+
+    assert devolucion["tiempo"]["velocidad_pct"] == 20
+    ultimo = devolucion["consejos"][-1]
+    assert "20% más lento" in ultimo and "No es un error" in ultimo
+
+
+def test_nunca_mas_de_tres_consejos():
+    """
+    Todo mal a la vez: pocas notas bien, dos bends desafinados, ritmo
+    distinto y mucho mas lento. Aun asi, tres consejos: mas no se leen.
+    """
+    frase = frase_de(["-2", "-3''", "-3'", "4", "-4", "-3''", "-3'", "5", "6", "-6"], paso=0.5)
+    intento = eventos_de(["-2", "-3''", "-3'", "4", "-4", "-3''", "-3'", "5", "7", "-7"], paso=0.7,
+                         desvios_ms=[0, 150, -150, 0, 200, -150, 150, 0, 0, 0])
+    for evento in intento:
+        if evento.como_tab() == "-3''":
+            evento.cents = 40.0
+        if evento.como_tab() == "-3'":
+            evento.cents = -35.0
+
+    devolucion = frases.devolucion(frases.comparar(frase, intento))
+    assert 1 <= len(devolucion["consejos"]) <= 3

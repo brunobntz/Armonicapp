@@ -640,6 +640,61 @@ label.con-titulo {
 }
 .barra-aciertos div { height: 100%; background: linear-gradient(90deg, rgba(95, 207, 138, 0.6), var(--verde)); }
 
+
+/* --- La devolucion de una practica: tres numeros y consejos --- */
+
+.tarjetas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 10px 0 22px;
+}
+@media (max-width: 640px) { .tarjetas { grid-template-columns: 1fr; } }
+
+.tarjeta {
+  background: linear-gradient(180deg, var(--panel-alto), var(--panel));
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 14px 16px 12px;
+}
+.tarjeta .numero {
+  font-family: var(--display);
+  font-weight: 300;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variation-settings: "SOFT" 50, "opsz" 72;
+  font-variant-numeric: tabular-nums;
+}
+.tarjeta .rotulo {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tenue);
+}
+.tarjeta .detalle { margin-top: 4px; font-size: 13px; color: var(--tenue); }
+.tarjeta.bien .numero { color: var(--verde); }
+.tarjeta.regular .numero { color: var(--amarillo); }
+.tarjeta.mal .numero { color: var(--rojo); }
+.tarjeta.apagada { opacity: 0.55; }
+.tarjeta.apagada .numero { color: var(--tenue); }
+
+.hallazgo.primero { border-left-color: var(--cobre); }
+.hallazgo.primero .accion { font-size: 15px; color: var(--texto); }
+
+.escuchar-par { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 8px; }
+.escuchar-par label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tenue);
+}
+.escuchar-par audio { height: 34px; width: 280px; max-width: 100%; }
+
 .notas-comparadas { display: flex; flex-wrap: wrap; gap: 5px; }
 .notas-comparadas span {
   font-family: var(--mono);

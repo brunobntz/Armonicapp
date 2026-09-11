@@ -331,8 +331,14 @@ mueve suave (en la terminal parpadea quince veces por segundo y no se puede
 leer mientras soplás), el diagrama de la armónica con la escala en verde, y la
 tablatura que vas tocando. **Frases** es el modo "repetí esta frase": grabás
 una frase de referencia con un nombre —o importás un `.wav`, tuyo o del
-profe—, y después le das Practicar y te dice nota por nota qué erraste,
-cuánto te desviaste del tiempo y cómo salió cada bend. El intento también
+profe—, y después le das Practicar. Al terminar te da una **devolución**:
+tres números (notas acertadas, afinación de los bends, notas a tiempo) y dos
+o tres consejos en orden de importancia, del tipo "el ↓3'' te queda 36 cents
+alto: el bend se queda corto". Con el mismo criterio de toda la app: si
+coincidieron menos de tres notas, dice eso y no opina de ritmo ni de
+afinación. Abajo podés escuchar la referencia y tu intento uno debajo del
+otro, que es la única forma de OÍR la diferencia de ritmo que los números
+describen, y después viene el detalle nota por nota. El intento también
 puede ser un archivo, si ya lo grabaste con la grabadora de Windows. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
 los JSON que ya se guardaban. Y **Ajustes** tiene el micrófono y la
 configuración: la armónica que tenés en la mano, la posición y la escala de

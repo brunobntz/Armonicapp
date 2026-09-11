@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import threading
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -41,6 +42,7 @@ def servidor_andando():
     servidor.Manejador.detener = None
     servidor.Manejador.pendiente = None
     servidor.Manejador.sesion_pendiente = None
+    servidor.Manejador.ultimo_intento = None
 
     instancia = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Manejador)
     puerto = instancia.server_address[1]
@@ -2026,3 +2028,48 @@ def test_el_historial_trae_el_titulo_de_cada_sesion(tmp_path):
     sesiones = servidor.historial(str(tmp_path))["sesiones"]
 
     assert sorted(s["titulo"] for s in sesiones) == ["", "Bloque T2"]
+
+
+# =============================================================================
+# La devolucion y el audio del intento, desde la pantalla
+# =============================================================================
+
+def test_la_comparacion_trae_la_devolucion(servidor_andando, carpeta_de_frases):
+    frases.guardar(frases.desde_eventos(
+        eventos_de(["-2", "-3''", "4", "-4"]), "con devolucion", "C", 2, None))
+    preparar("practicar", "con devolucion", eventos_de(["-2", "-3''", "4", "-4"]))
+
+    comparacion = mandar(servidor_andando, "/api/terminar")["comparacion"]
+
+    devolucion = comparacion["devolucion"]
+    assert devolucion["notas"]["porcentaje"] == 100
+    assert devolucion["consejos"]
+    assert comparacion["referencia_con_audio"] is False    # se guardo sin audio
+    assert comparacion["intento_con_audio"] is False        # y se practico sin microfono
+
+
+def test_el_audio_del_intento_se_puede_escuchar(servidor_andando, carpeta_de_frases):
+    """
+    Lo que tocaste al practicar queda en memoria para escucharlo al lado de
+    la referencia. Es la unica forma de OIR la diferencia de ritmo que los
+    numeros describen.
+    """
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4", "-4"]), "para oir"))
+    estado = preparar("practicar", "para oir", eventos_de(["-2", "4", "-4"]))
+    estado.audio_grabado = generar_wav.generar_nota(440.0, 0.5, 44100)
+    estado.frecuencia_muestreo = 44100
+
+    comparacion = mandar(servidor_andando, "/api/terminar")["comparacion"]
+    assert comparacion["intento_con_audio"] is True
+
+    codigo, cuerpo = traer(servidor_andando, "/api/frases/intento/audio")
+    assert codigo == 200
+    assert cuerpo[:4] == b"RIFF"
+    assert len(cuerpo) > 44 + 44100 * 0.5 * 2 - 10       # medio segundo de 16 bits
+
+
+def test_sin_intento_el_audio_da_404(servidor_andando):
+    servidor.Manejador.ultimo_intento = None
+    with pytest.raises(urllib.error.HTTPError) as error:
+        traer(servidor_andando, "/api/frases/intento/audio")
+    assert error.value.code == 404

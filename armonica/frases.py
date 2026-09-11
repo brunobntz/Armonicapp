@@ -571,6 +571,222 @@ def _barrita(desvio_ms, tolerancia_ms, ancho=21):
     return "[" + "".join(casillas) + "]"
 
 
+
+# =============================================================================
+# La devolución: qué hacer con lo que salió
+# =============================================================================
+#
+# El informe de arriba cuenta todo. Esto elige QUE IMPORTA, en orden, y lo dice
+# en dos o tres frases. Es lo que te diría un profe que te escuchó una vez:
+# primero las notas, después los bends, después el tiempo. Y con el criterio de
+# toda la app: si hay pocos datos, se calla en vez de opinar.
+
+# Un bend está afinado si queda dentro de esto respecto de la referencia. Son
+# veinte cents y no los cincuenta de TOLERANCIA_CENTS porque cincuenta es
+# "cayó en la nota" y veinte es "suena bien". Un oído entrenado empieza a
+# escuchar la diferencia ahí.
+TOLERANCIA_BEND_CENTS = 20.0
+
+# Con menos notas emparejadas que esto no se habla ni de ritmo ni de
+# afinación: tres notas no son una muestra.
+NOTAS_MINIMAS_PARA_OPINAR = 3
+
+CONSEJOS_MAXIMOS = 3
+
+
+def devolucion(comparacion, tolerancia_ms=None, tolerancia_cents=None):
+    """
+    El resumen de la práctica, listo para mostrar: tres números y consejos.
+
+    Devuelve un diccionario:
+
+        notas      aciertos, esperadas, porcentaje
+        afinacion  medida (bool), desvio_tipico_cents, bends_fuera [...]
+        tiempo     medido (bool), velocidad_pct, calidad, a_tiempo, medidas, peor
+        consejos   dos o tres frases, en orden de importancia
+
+    Los tres bloques se calculan siempre; `medida`/`medido` dicen si hay
+    datos suficientes para tomarlos en serio. Los consejos solo hablan de lo
+    que está medido.
+    """
+    if tolerancia_ms is None:
+        tolerancia_ms = config.TOLERANCIA_RITMO_MS
+    if tolerancia_cents is None:
+        tolerancia_cents = TOLERANCIA_BEND_CENTS
+
+    pares = comparacion.pares
+    emparejadas = len(pares)
+    esperadas = comparacion.notas_esperadas()
+    porcentaje = round(comparacion.porcentaje_de_notas())
+    hay_datos = emparejadas >= NOTAS_MINIMAS_PARA_OPINAR
+
+    # --- Afinación: solo sobre las notas que coincidieron ---
+    desvios_cents = [evento.cents - ref.cents for ref, evento, _ in pares]
+    bends_fuera = _bends_fuera_de_afinacion(pares, tolerancia_cents)
+    afinacion = {
+        "medida": hay_datos,
+        "desvio_tipico_cents": round(median(abs(d) for d in desvios_cents)) if desvios_cents else 0,
+        "bends_fuera": bends_fuera,
+    }
+
+    # --- Tiempo: con la velocidad ya descontada ---
+    relativa = comparacion.dispersion_relativa()
+    peor = comparacion.peor_desvio()
+    tiempo = {
+        "medido": hay_datos and relativa is not None,
+        "velocidad_pct": round(comparacion.diferencia_de_velocidad()),
+        "calidad": comparacion.calidad() if hay_datos else "sin datos",
+        "a_tiempo": sum(1 for d in comparacion.desvios_ms() if abs(d) <= tolerancia_ms),
+        "medidas": emparejadas,
+        "peor": None if peor is None else {"tab": peor[0].tab, "desvio_ms": round(peor[2])},
+    }
+
+    consejos = _consejos(comparacion, porcentaje, bends_fuera, tiempo,
+                         tolerancia_ms, hay_datos)
+
+    return {
+        "notas": {"aciertos": emparejadas, "esperadas": esperadas,
+                  "porcentaje": porcentaje},
+        "afinacion": afinacion,
+        "tiempo": tiempo,
+        "consejos": consejos[:CONSEJOS_MAXIMOS],
+    }
+
+
+def _bends_fuera_de_afinacion(pares, tolerancia_cents):
+    """
+    Los bends que, en promedio, quedaron fuera de tolerancia. Uno por tab.
+
+    Solo los bends: una nota natural desafinada es la lengüeta, no vos, y ya
+    se descuenta al calibrar la armónica. Un bend desafinado sí es tuyo.
+    """
+    por_tab = {}
+    for ref, evento, _ in pares:
+        if _cantidad_de_bend(ref.tab) == 0:
+            continue
+        por_tab.setdefault(ref.tab, []).append(evento.cents - ref.cents)
+
+    fuera = []
+    for tab, desvios in por_tab.items():
+        promedio = mean(desvios)
+        if abs(promedio) > tolerancia_cents:
+            fuera.append({"tab": tab, "cents": round(promedio), "veces": len(desvios)})
+
+    fuera.sort(key=lambda b: -abs(b["cents"]))
+    return fuera
+
+
+def _consejos(comparacion, porcentaje, bends_fuera, tiempo, tolerancia_ms, hay_datos):
+    consejos = []
+
+    # 0. Sin datos no hay consejo: solo qué faltó.
+    if not hay_datos:
+        texto = (f"Coincidieron {len(comparacion.pares)} notas de "
+                 f"{comparacion.notas_esperadas()}: muy pocas para hablar de "
+                 f"ritmo o de afinación. Tocá la frase más lento, nota por "
+                 f"nota, hasta que salgan todas.")
+        if comparacion.faltantes:
+            texto += " Te faltaron: " + " ".join(n.tab for n in comparacion.faltantes[:6]) + "."
+        return [texto]
+
+    # 1. Las notas, si fallaron muchas. Antes que nada.
+    if porcentaje < 70:
+        texto = (f"Primero las notas: acertaste {len(comparacion.pares)} de "
+                 f"{comparacion.notas_esperadas()}.")
+        if comparacion.faltantes:
+            texto += " Te faltaron " + " ".join(n.tab for n in comparacion.faltantes[:6]) + "."
+        bends_cortos = _bends_cambiados(comparacion.cambiadas)
+        if bends_cortos:
+            texto += " " + bends_cortos
+        consejos.append(texto)
+
+    # 2. Los bends desafinados, del peor al mejor.
+    for bend in bends_fuera[:2]:
+        if bend["cents"] > 0:
+            como = "alto: el bend se queda corto. Bajalo un poco más"
+        else:
+            como = "bajo: te pasás del bend. Aflojá un poco"
+        consejos.append(f"El {bend['tab']} te queda {abs(bend['cents'])} cents "
+                        f"{como}. Medido en {bend['veces']} "
+                        f"{'nota' if bend['veces'] == 1 else 'notas'}.")
+
+    # 3. El tiempo interno, si cambió de verdad.
+    peor = tiempo["peor"]
+    if tiempo["medido"] and tiempo["calidad"] in ("reconocible pero distinta", "distinta"):
+        texto = "El ritmo interno cambió respecto de la referencia"
+        if peor is not None and abs(peor["desvio_ms"]) > tolerancia_ms:
+            cuando = "antes" if peor["desvio_ms"] < 0 else "después"
+            texto += (f": lo más corrido fue el {peor['tab']}, "
+                      f"{abs(peor['desvio_ms'])} ms {cuando} de lo que va")
+        texto += ". Escuchá la referencia y tu intento seguidos, y cantá la frase antes de tocarla."
+        consejos.append(texto)
+    elif (tiempo["medido"] and peor is not None
+          and abs(peor["desvio_ms"]) > tolerancia_ms * 2):
+        cuando = "antes" if peor["desvio_ms"] < 0 else "después"
+        consejos.append(f"Casi todo a tiempo, salvo el {peor['tab']}: "
+                        f"{abs(peor['desvio_ms'])} ms {cuando} de lo que va.")
+
+    # 4. La velocidad. No es un error, y por eso va última y solo si hay lugar.
+    velocidad = tiempo["velocidad_pct"]
+    if abs(velocidad) >= 15 and len(consejos) < CONSEJOS_MAXIMOS:
+        como = "más lento" if velocidad > 0 else "más rápido"
+        consejos.append(f"Tocaste un {abs(velocidad)}% {como} que la referencia. "
+                        f"No es un error: es una decisión. Los desvíos de "
+                        f"arriba ya la tienen descontada.")
+
+    if not consejos:
+        consejos.append("Salió muy parecida a la referencia: las notas, los "
+                        "bends y el tiempo. Subí la vara: una base más rápida, "
+                        "o la frase siguiente.")
+
+    return consejos
+
+
+def _bends_cambiados(cambiadas):
+    """
+    Si lo que cambiaste fue la PROFUNDIDAD de un bend, lo dice con esas
+    palabras: "-3'' te salió -3'" es un bend corto, no una nota equivocada.
+    """
+    cortos = []
+    pasados = []
+    for esperada, tocada in cambiadas:
+        if not esperada or not tocada:
+            continue
+        if _agujero_y_direccion(esperada) != _agujero_y_direccion(tocada):
+            continue
+        if _cantidad_de_bend(tocada) < _cantidad_de_bend(esperada):
+            cortos.append(f"{esperada} te salió {tocada}")
+        elif _cantidad_de_bend(tocada) > _cantidad_de_bend(esperada):
+            pasados.append(f"{esperada} te salió {tocada}")
+
+    partes = []
+    if cortos:
+        partes.append("Bends cortos: " + ", ".join(cortos[:3]) + ".")
+    if pasados:
+        partes.append("Bends pasados: " + ", ".join(pasados[:3]) + ".")
+    return " ".join(partes)
+
+
+def _cantidad_de_bend(tab):
+    return tab.count(config.SIMBOLO_BEND)
+
+
+def _agujero_y_direccion(tab):
+    """("3", "aspirado") a partir de "-3''" o de "↓3''". Sin el bend."""
+    limpio = tab.replace(config.SIMBOLO_BEND, "")
+    aspirado = limpio.startswith("-") or limpio.startswith("↓")
+    agujero = "".join(c for c in limpio if c.isdigit())
+    return agujero, ("aspirado" if aspirado else "soplado")
+
+
+def ruta_de_audio(nombre, carpeta=None):
+    """El .wav de una frase guardada, o None si no tiene."""
+    for guardada, ruta_json in listar(carpeta):
+        if guardada == nombre:
+            candidata = os.path.splitext(ruta_json)[0] + "_audio.wav"
+            return candidata if os.path.isfile(candidata) else None
+    return None
+
 # =============================================================================
 # Guardar y cargar
 # =============================================================================

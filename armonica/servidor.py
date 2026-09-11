@@ -39,6 +39,7 @@ tocan. Es la misma idea que en el callback del micrófono: el que produce no se
 frena a esperar al que consume.
 """
 
+import io
 import json
 import os
 import tempfile
@@ -706,7 +707,7 @@ def tramo_como_diccionario(tramo, tabs):
     }
 
 
-def comparacion_como_diccionario(comparacion, frase):
+def comparacion_como_diccionario(comparacion, frase, intento_con_audio=False):
     """
     Una Comparacion lista para mandarle al navegador.
 
@@ -731,6 +732,10 @@ def comparacion_como_diccionario(comparacion, frase):
         "dispersion_ms": round(comparacion.dispersion_ms()),
         "relativa": round(relativa, 2) if relativa is not None else None,
         "calidad": comparacion.calidad(),
+        # Los tres numeros y los consejos. Ver frases.devolucion().
+        "devolucion": frases.devolucion(comparacion),
+        "referencia_con_audio": frases.ruta_de_audio(frase.nombre) is not None,
+        "intento_con_audio": intento_con_audio,
         "notas": [
             {
                 "tab": nota_ref.tab,
@@ -878,6 +883,11 @@ class Manejador(SimpleHTTPRequestHandler):
     # que permite probar todo el servidor sin una placa de sonido.
     audio_automatico = False
 
+    # Lo ultimo que tocaste practicando: (muestras, frecuencia_muestreo). Vive
+    # en memoria para poder escucharlo al lado de la referencia. Es UNO solo:
+    # el siguiente intento lo reemplaza.
+    ultimo_intento = None
+
     # Windows no conoce .woff2 y lo serviria como "octet-stream". El
     # navegador igual lo usa, pero avisando en la consola cada vez.
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map,
@@ -946,6 +956,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json({"listas": frases.listar_listas()})
         if self.path == "/api/dispositivos":
             return self._responder_json(self._listar_dispositivos())
+        if self.path.startswith("/api/frases/intento/audio"):
+            return self._mandar_audio_del_intento()
         if self.path.startswith("/api/frases/audio"):
             return self._mandar_audio_de_frase(self.path.partition("?")[2])
         if self.path == "/api/resumen":
@@ -1360,11 +1372,18 @@ class Manejador(SimpleHTTPRequestHandler):
             return {"ok": False, "modo": "practicar",
                     "motivo": "la frase ya no esta"}
 
+        # El audio queda para escucharlo al lado de la referencia.
+        clase = type(self)
+        clase.ultimo_intento = None
+        if estado.audio_grabado is not None and len(estado.audio_grabado):
+            clase.ultimo_intento = (estado.audio_grabado, estado.frecuencia_muestreo)
+
         return {
             "ok": True,
             "modo": "practicar",
             "comparacion": comparacion_como_diccionario(
-                frases.comparar(frase, estado.eventos), frase),
+                frases.comparar(frase, estado.eventos), frase,
+                intento_con_audio=clase.ultimo_intento is not None),
         }
 
     def _tramos_del_audio(self, consulta):
@@ -1529,11 +1548,17 @@ class Manejador(SimpleHTTPRequestHandler):
             return {"ok": False,
                     "motivo": "no se reconocio ninguna nota en ese audio"}
 
+        clase = type(self)
+        clase.ultimo_intento = None
+        if resultado.muestras is not None and len(resultado.muestras):
+            clase.ultimo_intento = (resultado.muestras, resultado.frecuencia_muestreo)
+
         return {
             "ok": True,
             "modo": "practicar",
             "comparacion": comparacion_como_diccionario(
-                frases.comparar(frase, resultado.eventos), frase),
+                frases.comparar(frase, resultado.eventos), frase,
+                intento_con_audio=clase.ultimo_intento is not None),
         }
 
     def _listar_frases(self):
@@ -1730,6 +1755,30 @@ class Manejador(SimpleHTTPRequestHandler):
 
         with open(ruta, "rb") as archivo:
             datos = archivo.read()
+
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/wav")
+        self.send_header("Content-Length", str(len(datos)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(datos)
+
+    def _mandar_audio_del_intento(self):
+        """
+        Manda lo ultimo que tocaste practicando, como .wav armado al vuelo.
+
+        No se guarda en el disco: es para escucharlo AHORA, al lado de la
+        referencia, y compararlas de oido. Si queres conservarlo, grabalo
+        como frase.
+        """
+        intento = type(self).ultimo_intento
+        if intento is None:
+            return self.send_error(404, "todavia no practicaste nada")
+
+        muestras, frecuencia_muestreo = intento
+        salida = io.BytesIO()
+        audio.escribir_wav(salida, muestras, frecuencia_muestreo)
+        datos = salida.getvalue()
 
         self.send_response(200)
         self.send_header("Content-Type", "audio/wav")
