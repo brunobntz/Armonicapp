@@ -76,7 +76,7 @@ def test_el_diez_soplado_es_la_nota_mas_aguda():
 def test_bend_de_medio_tono_en_el_tres_aspirado():
     """
     466.16 Hz = Sib4. Es el primer bend del 3 aspirado.
-    Leandro lo llama "1º bend: Bb". Es la 4ª de Fa en 12a posición.
+    El profe lo llama "1º bend: Bb". Es la 4ª de Fa en 12a posición.
     """
     nota, _ = mapeo.frecuencia_a_nota(466.16, tabla_inversa=TABLA_C)
     assert nota.agujero == 3
@@ -101,7 +101,7 @@ def test_bend_de_un_tono_en_el_tres_aspirado():
 def test_bend_del_seis_aspirado_es_la_bemol():
     """
     El "-6'" es Lab. Es la nota guía del acorde de Sib en el blues en Fa, la
-    que Leandro subrayó el 11/08 y confirmó el 18/08. Y es la única blue note
+    que el profe subrayó el 11/08 y confirmó el 18/08. Y es la única blue note
     de la escala de blues en 3a posición.
     """
     nota, _ = mapeo.frecuencia_a_nota(hz("Ab5"), tabla_inversa=TABLA_C)

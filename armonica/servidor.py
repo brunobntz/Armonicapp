@@ -688,7 +688,7 @@ def tramo_como_diccionario(tramo, tabs):
     archivo. Al recortar, esa grilla arranca en otro lado y las ventanas caen
     corridas: una nota que estaba partida en dos se une, o al reves, y un bend
     de paso puede cruzar el umbral de duracion minima en un caso y no en el
-    otro. Medido sobre los audios de Leandro, cambia una o dos notas de
+    otro. Medido sobre los audios del profe, cambia una o dos notas de
     veinte.
 
     Ninguna de las dos lecturas es la equivocada. Pero si te mostramos una y
@@ -1282,7 +1282,7 @@ class Manejador(SimpleHTTPRequestHandler):
         Guarda la frase que quedo pendiente, con el nombre que le pusiste.
 
         Si ya hay una frase con ese nombre, no la pisa: avisa. Pisar seria
-        perder una grabacion por un nombre repetido, y las frases de Leandro
+        perder una grabacion por un nombre repetido, y las frases del profe
         no se pueden volver a grabar.
         """
         clase = type(self)
@@ -1431,7 +1431,7 @@ class Manejador(SimpleHTTPRequestHandler):
         """
         Transcribe un audio que subiste y lo deja PENDIENTE de guardar.
 
-        Es la puerta de entrada de las grabaciones de Leandro y de tus propios
+        Es la puerta de entrada de las grabaciones del profe y de tus propios
         audios ya grabados. No guarda nada: devuelve lo que salio —tablatura,
         notas, duracion, y si el audio sirve— y la misma pantalla que para
         una frase grabada con el microfono te deja ponerle nombre y guardarla.

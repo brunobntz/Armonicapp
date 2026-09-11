@@ -6,10 +6,10 @@ POR QUÉ ESTE MODULO ES EL MAS IMPORTANTE DE LA APP
 El registro de ocho meses de clases de Bruno dice siempre lo mismo:
 
     "El principal desafio de Bruno es el ritmo, no la precision de las notas,
-     lo cual hace que se adelante a la pista"          (Leandro, 18/03)
+     lo cual hace que se adelante a la pista"          (el profe, 18/03)
 
     "Bruno reaccionaba a los cambios de acorde demasiado tarde, haciendo que
-     las frases sonaran apresuradas"                   (Leandro, 19/05)
+     las frases sonaran apresuradas"                   (el profe, 19/05)
 
 Todo lo demás que hace esta app (qué agujero, qué escala, qué afinación) mide
 la elección de notas, que según su propio profesor NO es el problema. Este
@@ -440,7 +440,7 @@ def diagnostico(analisis, tolerancia_ms=None):
     elif sesgo < 0:
         frases.append(
             f"Te adelantas al pulso: en promedio {abs(sesgo):.0f} ms antes. "
-            f"Es lo que Leandro viene marcando."
+            f"Es lo que el profe viene marcando."
         )
     else:
         frases.append(
@@ -466,7 +466,7 @@ def diagnostico(analisis, tolerancia_ms=None):
             frases.append(
                 f"En los compases de cambio de acorde {direccion} que en el "
                 f"resto ({sesgo_cambios:+.0f} ms contra {sesgo_resto:+.0f} ms). "
-                f"Es donde Leandro recomienda simplificar a una sola nota."
+                f"Es donde el profe recomienda simplificar a una sola nota."
             )
         else:
             frases.append(

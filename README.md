@@ -82,8 +82,8 @@ valor por defecto, así que después de la primera vez son cuatro Enter.
 | Transcribir una grabación | `python main.py --wav grabacion.wav --posicion 12 --escala blues_mayor --detalle` |
 | Guardar una frase de referencia | `python main.py --grabar-frase "lick de 3a" --posicion 3` (o la solapa **Frases** de la web) |
 | Ver dónde hay armónica en una clase | `python main.py --wav clase.ogg --tramos` |
-| Importar una frase de un audio | `python main.py --grabar-frase "lick de Lean" --wav lean_01.ogg --tonalidad A` |
-| Importar solo un tramo de esa clase | `python main.py --grabar-frase "lick de Lean" --wav clase.ogg --desde 15.9 --hasta 26.6` |
+| Importar una frase de un audio | `python main.py --grabar-frase "lick del profe" --wav lean_01.ogg --tonalidad A` |
+| Importar solo un tramo de esa clase | `python main.py --grabar-frase "lick del profe" --wav clase.ogg --desde 15.9 --hasta 26.6` |
 | Practicar contra esa frase | `python main.py --practicar "lick de 3a"` (o la solapa **Frases** de la web) |
 | Practicar con un audio ya grabado | `python main.py --practicar "lick de 3a" --wav mi_intento.wav` |
 | Saber con qué armónica se grabó algo | `python main.py --wav ajeno.wav --que-tono` |
@@ -208,7 +208,7 @@ python main.py --wav clase.ogg --tramos
 y después guardás el que quieras:
 
 ```powershell
-python main.py --grabar-frase "lick de Lean" --wav clase.ogg --desde 15.9 --hasta 26.6
+python main.py --grabar-frase "lick del profe" --wav clase.ogg --desde 15.9 --hasta 26.6
 ```
 
 En la web es lo mismo con un botón: subís el audio, te muestra los tramos con
@@ -330,8 +330,8 @@ Cuatro solapas. **En vivo** tiene el medidor de afinación con una aguja que se
 mueve suave (en la terminal parpadea quince veces por segundo y no se puede
 leer mientras soplás), el diagrama de la armónica con la escala en verde, y la
 tablatura que vas tocando. **Frases** es el modo "repetí esta frase": grabás
-una frase de referencia con un nombre —o importás un `.wav`, tuyo o de
-Leandro—, y después le das Practicar y te dice nota por nota qué erraste,
+una frase de referencia con un nombre —o importás un `.wav`, tuyo o del
+profe—, y después le das Practicar y te dice nota por nota qué erraste,
 cuánto te desviaste del tiempo y cómo salió cada bend. El intento también
 puede ser un archivo, si ya lo grabaste con la grabadora de Windows. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
 los JSON que ya se guardaban. Y **Ajustes** tiene el micrófono y la
@@ -484,3 +484,12 @@ python -m herramientas.generar_wav
   micrófono lo captura Python. Para una versión de teléfono habría que
   portar los módulos puros a JavaScript y reescribir YIN con Web Audio.
   Están escritos para eso, pero es otro proyecto.
+
+---
+
+## Aportar
+
+Licencia MIT. Si querés ayudar con la armónica, o arrancar la **guitarra**
+como instrumento hermano en el mismo repo, leé [CONTRIBUTING.md](CONTRIBUTING.md):
+cómo correrlo, las reglas de la casa, y por dónde empezar. Primero un issue,
+después el código.

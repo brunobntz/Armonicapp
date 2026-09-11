@@ -89,7 +89,7 @@ def test_tocar_justo_en_el_pulso_da_cero():
 def test_adelantarse_da_desvio_negativo():
     """
     La convención: negativo = antes del pulso. Es la que usan los músicos
-    cuando dicen "te estás adelantando", que es lo que Leandro le marca a Bruno.
+    cuando dicen "te estás adelantando", que es lo que el profe le marca a Bruno.
     """
     analisis = ritmo.analizar(tocando([-50, -50, -50, -50]), bpm=60,
                               subdivision=1, offset_seg=0.0)
@@ -146,7 +146,7 @@ def test_la_dispersion_delata_lo_que_el_promedio_esconde():
     Estas notas caen 80 ms antes y 80 ms después, alternadas. El promedio da
     CERO, como si tocaras perfecto. La dispersión da 80, que es la verdad.
 
-    No es un caso inventado: el registro de Bruno tiene a Leandro diciendo en
+    No es un caso inventado: el registro de Bruno tiene al profe diciendo en
     marzo que se adelanta y en mayo que llega tarde. Las dos cosas son ciertas
     porque el desvío es inestable, y un promedio no lo muestra.
     """
@@ -219,7 +219,7 @@ def test_los_tiempos_del_compas_funcionan_con_subdivision():
 def test_se_marcan_los_compases_de_cambio_de_acorde():
     """
     En el blues de doce compases el acorde cambia en el 2, 3, 5, 7, 9, 10, 11
-    y 12. Poder separarlos importa porque es justo donde Leandro dice que Bruno
+    y 12. Poder separarlos importa porque es justo donde el profe dice que Bruno
     reacciona tarde.
     """
     eventos = [nota_en(numero * 4.0) for numero in range(12)]
@@ -358,7 +358,7 @@ def test_el_diagnostico_compara_los_cambios_de_acorde_con_el_resto():
     """
     Notas parejas salvo en los compases de cambio, donde se adelanta mucho.
     El diagnóstico tiene que señalarlo, porque es el patrón exacto que
-    Leandro le marca desde marzo.
+    el profe le marca desde marzo.
     """
     paso = 4.0    # un compás a 60 BPM en 4/4
     eventos = []

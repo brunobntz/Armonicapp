@@ -676,7 +676,7 @@ def test_el_estado_en_vivo_dice_en_que_modo_esta():
 # =============================================================================
 # Subir un .wav
 #
-# El camino de las grabaciones de Leandro y de los audios que Bruno ya tiene
+# El camino de las grabaciones del profe y de los audios que Bruno ya tiene
 # grabados. El nombre va en la URL y los bytes crudos en el cuerpo.
 # =============================================================================
 
@@ -1436,8 +1436,8 @@ def test_descartar_la_pendiente(servidor_andando, carpeta_de_frases):
 def test_un_nombre_repetido_no_pisa_la_frase_que_habia(servidor_andando,
                                                        carpeta_de_frases):
     """
-    Pisar seria perder una grabacion por un nombre repetido, y las frases de
-    Leandro no se pueden volver a grabar. Se avisa, y si queres pisarla lo
+    Pisar seria perder una grabacion por un nombre repetido, y las frases del
+    profe no se pueden volver a grabar. Se avisa, y si queres pisarla lo
     decis explicitamente.
     """
     frases.guardar(frases.desde_eventos(eventos_de(["4", "-4"]), "la misma"))
@@ -1485,7 +1485,7 @@ def test_importar_deja_pendiente_y_no_guarda(servidor_andando, carpeta_de_frases
 def test_importar_y_guardar_deja_el_audio_al_lado(servidor_andando,
                                                   carpeta_de_frases):
     """
-    Una frase de Leandro se lee, pero sobre todo se ESCUCHA.
+    Una frase del profe se lee, pero sobre todo se ESCUCHA.
 
     Sin el audio guardado, la referencia se degrada a una tablatura y perdes
     justo el ritmo, que es lo unico que la tablatura no sabe transmitir.

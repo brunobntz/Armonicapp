@@ -678,7 +678,7 @@ def _imprimir_acordes(tonalidad, posicion):
     Los tres acordes del blues en esta posicion, con sus notas guia.
 
     LAS NOTAS GUIA son la 3a y la 7a del acorde, y son el concepto central de
-    lo que Leandro viene enseniando desde agosto. La tonica y la quinta estan
+    lo que el profe viene enseniando desde agosto. La tonica y la quinta estan
     en casi todos los acordes y no dicen nada; la 3a dice si es mayor o menor
     y la 7a es la que lo hace dominante. Con esas dos ya se escucha el acorde.
 
@@ -881,7 +881,7 @@ def _frase_desde_archivo(argumentos, nombre):
     """
     Arma una frase a partir de un .wav en vez del microfono.
 
-    Sirve para las grabaciones que te manda Leandro y para tus propios audios
+    Sirve para las grabaciones que te manda el profe y para tus propios audios
     ya grabados. Devuelve (eventos, muestras, frecuencia) o None si el audio
     no sirve.
 
@@ -928,7 +928,7 @@ def _frase_desde_archivo(argumentos, nombre):
         print()
         # No se guarda nada, pero se muestra lo que HABRIA salido. El umbral
         # es una heuristica, no una ley: el que reconoce si esa tablatura es
-        # la frase de Leandro sos vos. Lo unico que la app se asegura es que
+        # la frase del profe sos vos. Lo unico que la app se asegura es que
         # lo decidas MIRANDO el resultado.
         reconocidas = resultado.reconocidas
         if reconocidas:
@@ -1043,7 +1043,7 @@ def modo_practicar_frase(argumentos):
 
     if argumentos.wav:
         # El intento tambien puede venir de un archivo. Util para comparar dos
-        # grabaciones viejas, o la tuya contra la de Leandro, sin tocar ahora.
+        # grabaciones viejas, o la tuya contra la del profe, sin tocar ahora.
         print()
         print(f"Comparando contra {argumentos.wav} ...")
         try:
@@ -1492,7 +1492,7 @@ def _estimar_y_avisar(eventos, subdivision):
 
 def _imprimir_ritmo(eventos, bpm, compas, subdivision, detalle):
     """
-    El reporte de ritmo: lo que Leandro viene marcando hace ocho meses.
+    El reporte de ritmo: lo que el profe viene marcando hace ocho meses.
 
     Va al final del informe a propósito, pero es lo que hay que leer primero.
     """

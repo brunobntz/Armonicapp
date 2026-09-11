@@ -261,7 +261,7 @@ def test_marcar_escala_completa_el_campo():
 
     # El 5 aspirado (Fa) es la tónica de la 12a: está en la escala.
     assert eventos[0].en_escala is True
-    # El 2 soplado (Mi) es el que Leandro te dijo que evites: no está.
+    # El 2 soplado (Mi) es el que el profe te dijo que evites: no está.
     assert eventos[1].en_escala is False
 
 

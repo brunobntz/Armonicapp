@@ -16,7 +16,7 @@ Con una armónica en Do:
 
 No es magia ni un truco: es que la escala de Sol usa casi las mismas notas que
 la de Do, y las que sobran salen con bends. Cada posición es un paso en el
-círculo de quintas, que es exactamente lo que te explicó Leandro el 28/07.
+círculo de quintas, que es exactamente lo que te explicó el profe el 28/07.
 
 QUÉ HACE ESTE MÓDULO
 
@@ -87,7 +87,7 @@ def tiene_tabla_explicita(posicion):
     """
     Dice si esta posición tiene tabla escrita a mano.
 
-    Las seis que Bruno trabaja con Leandro la tienen. Las otras las calcula
+    Las seis que Bruno trabaja con el profe la tienen. Las otras las calcula
     teoria.py. Sirve para que la app sepa a cuál de los dos módulos preguntarle.
     """
     return posicion in tablas.POSICIONES_CON_TABLA
@@ -105,7 +105,7 @@ def agujeros_de_escala(posicion, escala):
     afinación Richter, la escala de blues de 2a posición usa los mismos agujeros
     en una armónica en Do que en una en Sol. Cambia la nota que suena, no el
     agujero. Es la propiedad que hace que valga la pena aprender por posiciones
-    y no por tonalidades, y es lo que Leandro llama memorizar patrones
+    y no por tonalidades, y es lo que el profe llama memorizar patrones
     repetibles de agujero.
     """
     _verificar_posicion(posicion)

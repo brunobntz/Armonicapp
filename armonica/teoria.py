@@ -12,7 +12,7 @@ Pero la responden de maneras opuestas, y eso es a propósito.
 Tener las dos parece redundante. No lo es: cada una tapa el agujero de la otra.
 
     - Las tablas escritas a mano se pueden verificar leyéndolas contra un método
-      de armónica, y son las que Leandro te enseñó. Pero pueden tener erratas
+      de armónica, y son las que el profe te enseñó. Pero pueden tener erratas
       (de hecho tenían tres) y escribir 36 tablas a mano sería inviable.
     - El cálculo nunca tiene erratas de tipeo y cubre todo. Pero si la fórmula
       está mal, se equivoca en las 36 de la misma manera y nadie lo nota.
@@ -32,7 +32,7 @@ En tres pasos, sin misterio:
 
 El paso 3 también nos dice qué notas de la escala la armónica NO puede dar sin
 overblow. Eso es tan importante como lo que sí puede: es la razón por la que
-Leandro te empuja a la pentatónica mayor en 12a y no a la escala mayor completa.
+el profe te empuja a la pentatónica mayor en 12a y no a la escala mayor completa.
 
 Python puro: importa tablas, notas y mapeo. Nada de audio ni de pantalla.
 """
@@ -260,7 +260,7 @@ def posiciones_utiles(tonalidad_armonica, escala, maximo_bends=2):
 
     Es la respuesta calculada a la pregunta "¿en qué posición me conviene tocar
     esto?". Para la pentatónica mayor en una armónica en Do, la 12a tiene que
-    aparecer arriba de todo: es exactamente el argumento de Leandro sobre por
+    aparecer arriba de todo: es exactamente el argumento del profe sobre por
     qué la 12a es amable.
 
     Devuelve una lista de diccionarios, la más cómoda primero.
@@ -477,7 +477,7 @@ if __name__ == "__main__":
     print(f"Notas:    {' '.join(resultado.nombres_notas)}\n")
 
     # PRIMERO la corrida desde la tónica, que es como se estudia y como la
-    # escribe Leandro en las hojas. Va arriba porque es lo que uno busca.
+    # escribe el profe en las hojas. Va arriba porque es lo que uno busca.
     corrida = resultado.desde_la_tonica(octavas=2)
     print(f"LA CORRIDA, dos octavas desde la tonica ({resultado.tonica}):")
     print("  " + "  ".join(nota.como_tab() for nota in corrida))

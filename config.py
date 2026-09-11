@@ -200,7 +200,7 @@ SEGUNDOS_EN_PANTALLA = 20.0
 # Cuánto silencio de armónica separa un TRAMO del siguiente, en segundos.
 #
 # Sirve para partir una grabación larga en los pedazos donde realmente hay
-# armónica. Los audios de clase de Leandro son así: habla, toca una frase,
+# armónica. Los audios de clase del profe son así: habla, toca una frase,
 # vuelve a hablar. Sin esto, importar la clase entera como frase de referencia
 # daría una referencia con diez segundos de silencio en el medio, contra la
 # que es imposible practicar.
@@ -295,7 +295,7 @@ PREFERENCIA_AMBIGUEDAD = "aspirado"
 # En tu material conviven tres notaciones distintas:
 #   - La que vos confirmaste:      -4   -4'   -3''
 #   - La de tu atril de 12a:       ↓4   ↓4'   ↓3''   (y ↑ para soplado)
-#   - La de las hojas de Leandro:  el número con una rayita arriba o abajo
+#   - La de las hojas del profe:  el número con una rayita arriba o abajo
 #
 # Internamente la app NUNCA guarda texto: guarda agujero, dirección y cantidad
 # de bends. El texto se arma recién al mostrarlo. Por eso cambiar de notación

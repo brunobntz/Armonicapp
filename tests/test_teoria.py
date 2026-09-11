@@ -123,7 +123,7 @@ def test_entradas_invalidas_dan_error_claro():
 
 def test_la_pentatonica_de_doceava_sale_entera_sin_overblows():
     """
-    El argumento pedagógico de Leandro del 04/08, verificado por cálculo:
+    El argumento pedagógico del profe del 04/08, verificado por cálculo:
     la pentatónica mayor de Fa no necesita ninguna nota que la armónica no dé.
     """
     resultado = teoria.agujeros_para_escala("C", 12, "pentatonica_mayor")
@@ -133,7 +133,7 @@ def test_la_pentatonica_de_doceava_sale_entera_sin_overblows():
 
 def test_la_escala_mayor_completa_de_fa_si_pide_el_si_bemol():
     """
-    La contracara, y la razón por la que Leandro te empuja a la pentatónica:
+    La contracara, y la razón por la que el profe te empuja a la pentatónica:
     la escala mayor completa incluye Sib, que en el registro central solo sale
     con overblow del 6.
 
@@ -193,7 +193,7 @@ def test_la_blue_note_de_la_doceava_sale_sin_bend():
 
 def test_la_tonica_de_cuarta_posicion_es_el_bend_de_un_tono_del_tres():
     """
-    La regla que Leandro dio el 19/05, verificada: la tónica de la 4a posición
+    La regla que el profe dio el 19/05, verificada: la tónica de la 4a posición
     es el 3 aspirado con segundo bend.
 
     Es la razón por la que la fuga de aire del agujero 3 te complica medio
@@ -279,7 +279,7 @@ def test_la_mejor_posicion_para_la_pentatonica_mayor_no_pide_overblows():
 
 def test_la_doceava_esta_entre_las_comodas_para_pentatonica_mayor():
     """
-    Es lo que dice Leandro y lo que dice tu atril: la 12a es una posición
+    Es lo que dice el profe y lo que dice tu atril: la 12a es una posición
     amable para la pentatónica mayor. El cálculo lo confirma sin saber nada
     de tus clases.
     """

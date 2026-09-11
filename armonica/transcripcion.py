@@ -31,7 +31,7 @@ No puede decirte con seguridad de qué armónica es una grabación. Suena a que
 debería poder, y no: una armónica en Do, con bends, alcanza casi todas las
 notas del registro medio, así que una frase tocada en La leída como si fuera
 en Do cae entera dentro de lo posible. La tablatura sale distinta de la que
-tocó Leandro, pero no hay ninguna nota "imposible" que lo delate.
+tocó el profe, pero no hay ninguna nota "imposible" que lo delate.
 
 Lo que sí se detecta es cuando el audio se va de RANGO, que es el caso de una
 armónica más grave. Para lo otro está `--que-tono`, que compara las cuatro

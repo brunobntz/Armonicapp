@@ -219,7 +219,7 @@ def _revisar_ritmo(analisis, hallazgos, sin_medir):
             peso=70,
         ))
 
-    # Los cambios de acorde, que es donde Leandro dice que se le complica.
+    # Los cambios de acorde, que es donde el profe dice que se le complica.
     cambios = analisis.en_los_cambios()
     resto = analisis.fuera_de_los_cambios()
     if len(cambios) >= 3 and len(resto) >= 3:
@@ -233,7 +233,7 @@ def _revisar_ritmo(analisis, hallazgos, sin_medir):
                     f"ms mas {'temprano' if diferencia < 0 else 'tarde'} que en el resto."
                 ),
                 accion=(
-                    "Es lo que Leandro te viene diciendo desde marzo. Tocá la "
+                    "Es lo que el profe te viene diciendo desde marzo. Tocá la "
                     "vuelta entera con UNA sola nota por acorde, redonda, sin "
                     "adornos. Cuando eso salga parejo, agregá la segunda nota."
                 ),

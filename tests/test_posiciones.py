@@ -54,7 +54,7 @@ def test_la_doceava_baja_una_quinta_o_sube_una_cuarta():
     """
     La 12a posición es el paso hacia atrás en el círculo de quintas. Por eso
     agrega un bemol en vez de un sostenido, que es justo como te lo explicó
-    Leandro: Do -> Fa agrega Sib.
+    el profe: Do -> Fa agrega Sib.
     """
     assert posiciones.tonalidad_resultante("C", 12) == "F"
     assert posiciones.tonalidad_resultante("G", 12) == "C"
@@ -112,7 +112,7 @@ def test_la_descripcion_funciona_sin_escala():
 # =============================================================================
 
 def test_las_seis_posiciones_de_bruno_tienen_tabla():
-    """Las que trabaja con Leandro: 1a, 2a, 3a, 4a, 5a y 12a."""
+    """Las que trabaja con el profe: 1a, 2a, 3a, 4a, 5a y 12a."""
     for posicion in (1, 2, 3, 4, 5, 12):
         assert posiciones.tiene_tabla_explicita(posicion)
 
@@ -156,7 +156,7 @@ def test_el_turnaround_del_catorce_de_abril_mezcla_escala_y_notas_del_acorde():
     MAYOR de Sol, y la escala de blues tiene la tercera menor (Sib, el ↓3').
     El Si no está "mal": es una nota del acorde de Sol7 (Sol Si Re Fa) y es
     justamente la alternancia entre tercera mayor y menor la que suena a blues.
-    Es el mismo "sabor" del que habló Leandro el 04/08.
+    Es el mismo "sabor" del que habló el profe el 04/08.
 
     Conclusión para la app: cuando la pantalla marque una nota en amarillo por
     estar fuera de la escala, eso es información, no un reproche. Por eso el
@@ -277,7 +277,7 @@ def test_nota_none_no_rompe_nada():
 
 def test_el_dos_soplado_no_esta_en_la_doceava_y_por_eso_leandro_dice_que_lo_evites():
     """
-    En la clase del 25/08 Leandro dijo "evitar el ↑2" tocando el blues en Fa.
+    En la clase del 25/08 el profe dijo "evitar el ↑2" tocando el blues en Fa.
     El ↑2 es Mi, la séptima mayor de Fa, que choca con el Mib del acorde de Fa7.
     La app tiene que marcarlo como fuera de escala, sin que nadie se lo diga.
     """

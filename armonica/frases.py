@@ -3,7 +3,7 @@ frases.py — Guardar una frase de referencia y practicar contra ella.
 
 COMO FUNCIONA EL MODO
 
-1. Tocás una frase bien una vez, o usás una grabación que te mandó Leandro.
+1. Tocás una frase bien una vez, o usás una grabación que te mandó el profe.
    La app la transcribe y la guarda como REFERENCIA.
 2. Después la practicás. La app compara tu intento contra la referencia y te
    dice qué notas erraste, dónde te adelantaste y qué bends te salieron peor.
@@ -160,7 +160,7 @@ class Tramo:
     POR QUE EXISTE
 
     Los audios que manda un profesor no son frases: son clases. Habla, toca
-    una frase, vuelve a hablar. Medido sobre dos audios reales de Leandro, la
+    una frase, vuelve a hablar. Medido sobre dos audios reales del profe, la
     armónica ocupa el 64% y el 41% del archivo, repartida en 8 y en 16 tramos.
 
     Guardar la clase entera como frase de referencia sería inútil: quedaría

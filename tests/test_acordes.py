@@ -159,7 +159,7 @@ def test_las_notas_guia_del_blues_en_fa_coinciden_con_el_atril():
 
 def test_el_lab_del_seis_bendeado_es_la_septima_de_sib():
     """
-    La nota guía que Leandro subrayó el 11/08 y confirmó el 18/08, y que Bruno
+    La nota guía que el profe subrayó el 11/08 y confirmó el 18/08, y que Bruno
     tenía anotada como confirmada en su registro.
     """
     sib = teoria.arpegio("C", "Bb", "dominante")

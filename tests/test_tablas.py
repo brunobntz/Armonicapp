@@ -144,7 +144,7 @@ def test_los_bends_llegan_hasta_tono_y_medio():
     Como máximo se baja un tono y medio: son los tres bends del agujero 3.
 
     Ese tercer bend (el Lab en una armónica de Do) se incorporó el 02/09. Al
-    principio estaba afuera y era un error: Leandro lo enseña, y es la blue
+    principio estaba afuera y era un error: el profe lo enseña, y es la blue
     note de la 12a posición en el registro grave.
 
     Ningún otro agujero llega a tres. Es una particularidad del 3, que tiene
@@ -281,7 +281,7 @@ PATRON_TABLATURA = re.compile(r"^-?(10|[1-9])'{0,3}$")
 
 def test_hay_tabla_para_cada_posicion_estudiada_y_cada_escala():
     """
-    Las seis posiciones que Bruno trabaja con Leandro (1a, 2a, 3a, 4a, 5a y 12a)
+    Las seis posiciones que Bruno trabaja con el profe (1a, 2a, 3a, 4a, 5a y 12a)
     por tres escalas = dieciocho tablas.
 
     Las otras seis posiciones no tienen tabla explícita a propósito: las cubre
@@ -298,7 +298,7 @@ def test_hay_tabla_para_cada_posicion_estudiada_y_cada_escala():
 
 def test_la_pentatonica_mayor_de_doceava_no_pide_bends_del_cuatro_para_arriba():
     """
-    El hecho que hace amable a la 12a posición, y la razón por la que Leandro
+    El hecho que hace amable a la 12a posición, y la razón por la que el profe
     empuja la pentatónica y no la escala mayor completa: del agujero 4 al 10
     la escala sale entera con aire natural, sin un solo bend.
 

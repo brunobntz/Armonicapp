@@ -80,7 +80,7 @@ AFINACION_ASPIRADO = [2, 7, 11, 14, 17, 21, 23, 26, 29, 33]
 BENDS_ASPIRADOS = {
     1: 1,   # Db4 en armónica de C
     2: 2,   # Gb4 y F4
-    3: 3,   # Bb4, A4 y Ab4  — los tres que Leandro enumeró el 28/07
+    3: 3,   # Bb4, A4 y Ab4  — los tres que el profe enumeró el 28/07
     4: 1,   # Db5
     6: 1,   # Ab5
 }
@@ -94,7 +94,7 @@ BENDS_SOPLADOS = {
 
 # Sobre el TERCER BEND DEL 3 (el "-3'''", Ab4 en una armónica de C).
 # Al principio quedó afuera porque el pedido original hablaba de medio tono y
-# un tono nada más. Fue un error: Leandro lo enseña explícitamente el 28/07
+# un tono nada más. Fue un error: el profe lo enseña explícitamente el 28/07
 # ("1º bend: Bb, 2º bend: A, 3º bend: Ab") y ese Lab es una nota de verdad:
 # la tercera menor de Fa, o sea la blue note de la 12a posición, y la tónica
 # de la 4a. Sin él, media escala de blues quedaba sin su nota característica
@@ -140,12 +140,12 @@ POSICIONES = {
 }
 
 # Posiciones que tienen tabla explícita de escalas en agujeros (más abajo).
-# Son las seis que Bruno trabaja con Leandro. Las otras seis las cubre teoria.py
+# Son las seis que Bruno trabaja con el profe. Las otras seis las cubre teoria.py
 # por cálculo, sin tabla escrita a mano.
 POSICIONES_CON_TABLA = [1, 2, 3, 4, 5, 12]
 
 # Nombres para mostrar en pantalla.
-# Nota de vocabulario: Leandro usa siempre el ordinal ("4a posicion") y nunca
+# Nota de vocabulario: el profe usa siempre el ordinal ("4a posicion") y nunca
 # dice "cruzada" ni "straight harp". Los apodos en inglés van entre paréntesis
 # solo como referencia, porque aparecen en todos los métodos.
 NOMBRES_POSICIONES = {
@@ -190,7 +190,7 @@ ESCALAS_INTERVALOS = {
     # Es la escala que Bruno trabaja en 12a posición con el estudio de Carlos
     # del Junco. La gracia está en que tiene las DOS terceras, la menor y la
     # mayor, pegadas: pasar de una a la otra es el sonido más característico
-    # del blues, y es el "sabor" del que habló Leandro el 04/08.
+    # del blues, y es el "sabor" del que habló el profe el 04/08.
     #
     # No es lo mismo que la escala de blues de arriba, aunque las dos se llamen
     # blues. En Fa: esta da F G Ab A C D, la otra da F Ab Bb B C Eb.
@@ -198,7 +198,7 @@ ESCALAS_INTERVALOS = {
     # Se puede pensar de dos maneras, y las dos son la misma escala:
     #   - pentatónica MAYOR de Fa (F G A C D) + el Lab
     #   - pentatónica MENOR de Re (D F G A C) + el Lab, o sea la relativa menor
-    # Por eso Leandro dice "escala de blues de Re menor sobre el acorde de Fa"
+    # Por eso el profe dice "escala de blues de Re menor sobre el acorde de Fa"
     # y a la vez "el 1 soplado es la 5a": las dos frases describen esto mismo.
     "blues_mayor": [0, 2, 3, 4, 7, 9],
 }
@@ -277,7 +277,7 @@ NOMBRES_GRADOS = {
 # en casi todos los acordes. La tercera dice si es mayor o menor, y la séptima
 # es la que lo hace dominante. Tocando esas dos ya se escucha el acorde.
 #
-# Es el concepto central de lo que Leandro te viene enseñando desde agosto:
+# Es el concepto central de lo que el profe te viene enseñando desde agosto:
 # aterrizar en una nota guía en el tiempo 1 del cambio.
 GRADOS_GUIA = [3, 4, 10, 11]
 
@@ -374,7 +374,7 @@ ESCALAS_POR_POSICION = {
     (2, "blues_mayor"): [
         # G A Bb B D E — el sonido clasico del blues de 2a: las dos terceras
         # pegadas, "-3'" (Sib) y "-3" (Si). Alternar entre ellas es el "sabor"
-        # del que hablo Leandro el 04/08.
+        # del que hablo el profe el 04/08.
         "-1", "2", "-2", "3", "-3''", "-3'", "-3", "-4", "5", "6", "-6", "-7",
         "-8", "8", "9", "-10", "10''", "10'",
     ],
@@ -408,7 +408,7 @@ ESCALAS_POR_POSICION = {
 
     # -------------------------------------------------------------------------
     # 4a POSICIÓN — la menor relativa de la 1a. Armónica en C -> tocás en A.
-    # Es la que usaste para "Minor Swing" (Am) y para el tema de Leandro.
+    # Es la que usaste para "Minor Swing" (Am) y para el tema del profe.
     # Su tónica es el agujero 3 aspirado con bend de un tono, o sea "-3''":
     # justo el agujero que tenés con fuga de aire.
     # -------------------------------------------------------------------------
@@ -466,7 +466,7 @@ ESCALAS_POR_POSICION = {
     #
     # El dato que hace amable a esta posición: la pentatónica mayor de Fa sale
     # ENTERA del agujero 4 al 10 sin un solo bend. Once notas seguidas de aire
-    # natural. Por eso Leandro te empuja a la pentatónica y no a la escala
+    # natural. Por eso el profe te empuja a la pentatónica y no a la escala
     # mayor completa, que sí pide el Sib (el primer bend del 3, o el overblow
     # del 6).
     # -------------------------------------------------------------------------

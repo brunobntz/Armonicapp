@@ -338,7 +338,7 @@ def test_un_m4a_de_verdad_se_lee_entero(tmp_path):
     (mono, 44100, 16 bits) producen algo que la app pueda leer.
 
     AAC es el codec que mandan WhatsApp y el iPhone, que es de donde van a
-    venir las frases de Leandro.
+    venir las frases del profe.
     """
     import subprocess
 

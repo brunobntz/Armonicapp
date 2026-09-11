@@ -4,7 +4,7 @@ Tests de los tramos — encontrar las frases dentro de una grabación larga.
 POR QUE EXISTE ESTE ARCHIVO
 
 Los audios que manda un profesor no son frases: son clases. Habla, toca una
-frase, vuelve a hablar. Medido sobre dos audios reales de Leandro, la armónica
+frase, vuelve a hablar. Medido sobre dos audios reales del profe, la armónica
 ocupa el 64% y el 41% del archivo, repartida en 8 y en 10 tramos.
 
 Acá el audio se fabrica con silencios en el medio, así que sabemos exactamente
@@ -113,7 +113,7 @@ def test_los_tramos_de_una_nota_suelta_se_descartan(tmp_path):
     No se descartan por ser errores: una nota suelta puede ser real.
 
     Se descartan porque no son una frase, y ofrecerlas solo hace ruido en la
-    lista. En los audios de Leandro esto sacó 6 tramos de 16.
+    lista. En los audios del profe esto sacó 6 tramos de 16.
     """
     resultado, _ = transcribir(tmp_path, [
         ["-2", "4", "-4", "-5"],
@@ -171,7 +171,7 @@ def test_recortar_achica_tambien_el_audio(tmp_path):
     la base sonando mientras el profesor habla puede no pasar el control
     aunque el tramo elegido esté limpio.
 
-    Medido sobre el audio real de Leandro, recortar el tramo más largo subió
+    Medido sobre el audio real del profe, recortar el tramo más largo subió
     la monofonía de 0.76 a 0.80 y la detección de 0.38 a 0.56.
     """
     resultado, _ = transcribir(tmp_path, [
