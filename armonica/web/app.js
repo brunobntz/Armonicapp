@@ -203,17 +203,24 @@ function mostrarTramos(respuesta, archivo) {
     "<h3>" + respuesta.tramos.length + " tramos con armónica</h3>" +
     "<p>De los " + respuesta.duracion_seg.toFixed(0) + " segundos del audio, " +
     tocando.toFixed(0) + " tienen armónica. El resto es silencio, alguien " +
-    "hablando, o la base sola. Elegí qué tramo importar: la " +
+    "hablando, o la base sola. Escuchá cada uno y elegí cuál importar: la " +
     "grabación entera no sirve de referencia porque los silencios " +
     "también contarían.</p>" +
     respuesta.tramos.map((tramo) =>
-      '<div class="tramo">' +
+      '<div class="tramo" data-fila="' + tramo.numero + '">' +
+        '<button class="reproducir" data-escuchar="' + tramo.numero +
+          '" title="Escuchar este tramo">▶</button>' +
         '<span class="cuando">' + reloj(tramo.desde_seg) + " a " +
           reloj(tramo.hasta_seg) + "</span>" +
         '<span class="notas">' + tramo.tab.join(" ") +
           (tramo.hay_mas ? " …" : "") + "</span>" +
         '<span class="cuando">' + tramo.notas + " notas</span>" +
         '<button data-tramo="' + tramo.numero + '">Este</button>' +
+        // La línea de abajo: se llena mientras suena, y se puede clickear o
+        // arrastrar para moverse dentro del tramo.
+        '<div class="progreso" data-progreso="' + tramo.numero + '">' +
+          '<div class="relleno"></div><div class="perilla"></div></div>' +
+        '<span class="problema-audio" hidden></span>' +
       "</div>"
     ).join("");
 
@@ -227,6 +234,8 @@ function mostrarTramos(respuesta, archivo) {
       importar(archivo, tramo);
     });
   });
+
+  prepararReproductor(archivo, respuesta.tramos, contenedor);
 }
 
 
@@ -238,7 +247,227 @@ function reloj(segundos) {
 
 
 function limpiarTramos() {
+  apagarReproductor();
   document.getElementById("tramos").innerHTML = "";
+}
+
+
+/* ==========================================================================
+   Escuchar los tramos
+
+   El archivo que elegiste ya está en el navegador, así que no hace falta
+   que el servidor lo devuelva: se reproduce directo desde ahí, arrancando
+   en el segundo donde empieza el tramo y frenando donde termina. Chrome y
+   Edge decodifican wav, mp3, m4a, ogg y opus sin ayuda; si alguno no puede,
+   la fila lo dice en vez de fallar en silencio.
+
+   Hay UN reproductor para todos los tramos: apretar ▶ en otro corta el
+   que sonaba. La línea de abajo de cada fila se llena mientras suena y se
+   puede clickear o arrastrar para moverse dentro del tramo.
+   ========================================================================== */
+
+const reproductor = {
+  audio: null,        // el <audio>, creado una sola vez
+  url: null,          // la URL local del archivo elegido
+  tramos: [],
+  contenedor: null,
+  actual: null,       // el tramo que suena (o está en pausa)
+  animacion: null,    // el requestAnimationFrame que mueve la línea
+};
+
+
+function prepararReproductor(archivo, tramos, contenedor) {
+  apagarReproductor();
+
+  if (!reproductor.audio) {
+    reproductor.audio = new Audio();
+    reproductor.audio.preload = "auto";
+    reproductor.audio.addEventListener("error", () => {
+      if (!reproductor.actual) return;
+      const fila = filaDelTramo(reproductor.actual);
+      if (!fila) return;
+      const aviso = fila.querySelector(".problema-audio");
+      aviso.textContent = "El navegador no puede reproducir este formato. " +
+        "Convertilo a .wav o .mp3 y volvé a elegirlo.";
+      aviso.hidden = false;
+      marcarSonando(null);
+    });
+    reproductor.audio.addEventListener("timeupdate", alAvanzar);
+    // Sin esto, después de pausar y volver, el tiempo seguiría avanzando y
+    // la línea se quedaría quieta.
+    reproductor.audio.addEventListener("play", moverLaLinea);
+  }
+
+  reproductor.url = URL.createObjectURL(archivo);
+  reproductor.audio.src = reproductor.url;
+  reproductor.tramos = tramos;
+  reproductor.contenedor = contenedor;
+
+  contenedor.querySelectorAll("[data-escuchar]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const tramo = tramoNumero(boton.dataset.escuchar);
+      if (reproductor.actual === tramo && !reproductor.audio.paused) {
+        reproductor.audio.pause();
+        boton.textContent = "▶";
+        boton.title = "Seguir";
+        return;
+      }
+      reproducirTramo(tramo);
+    });
+  });
+
+  // La línea: clic o arrastre para moverse dentro del tramo.
+  contenedor.querySelectorAll("[data-progreso]").forEach((barra) => {
+    const tramo = tramoNumero(barra.dataset.progreso);
+    const irA = (evento) => {
+      const caja = barra.getBoundingClientRect();
+      const fraccion = Math.max(0, Math.min(1, (evento.clientX - caja.left) / caja.width));
+      const segundo = tramo.desde_seg + fraccion * (tramo.hasta_seg - tramo.desde_seg);
+      if (reproductor.actual !== tramo) {
+        reproducirTramo(tramo, segundo);
+      } else {
+        reproductor.audio.currentTime = segundo;
+        pintarLinea(tramo);
+      }
+    };
+    barra.addEventListener("pointerdown", (evento) => {
+      barra.setPointerCapture(evento.pointerId);
+      barra.classList.add("arrastrando");
+      irA(evento);
+    });
+    barra.addEventListener("pointermove", (evento) => {
+      if (barra.classList.contains("arrastrando")) irA(evento);
+    });
+    ["pointerup", "pointercancel"].forEach((nombre) =>
+      barra.addEventListener(nombre, () => barra.classList.remove("arrastrando")));
+  });
+}
+
+
+function tramoNumero(numero) {
+  return reproductor.tramos.find((t) => String(t.numero) === String(numero));
+}
+
+
+function filaDelTramo(tramo) {
+  if (!reproductor.contenedor || !tramo) return null;
+  return reproductor.contenedor.querySelector('[data-fila="' + tramo.numero + '"]');
+}
+
+
+/* Arranca un tramo. Si `desde` viene, arranca ahí (es un clic en la línea);
+ * si no, desde el principio del tramo, o desde donde lo pausaste. */
+async function reproducirTramo(tramo, desde) {
+  const audio = reproductor.audio;
+
+  let inicio = desde;
+  if (inicio === undefined) {
+    const enPausaAdentro = reproductor.actual === tramo && audio.paused &&
+      audio.currentTime > tramo.desde_seg && audio.currentTime < tramo.hasta_seg - 0.05;
+    inicio = enPausaAdentro ? audio.currentTime : tramo.desde_seg;
+  }
+
+  reproductor.actual = tramo;
+  marcarSonando(tramo);
+
+  // No se puede saltar a un segundo antes de que el navegador sepa cuánto
+  // dura el archivo: la primera vez hay que esperar a que lo lea.
+  if (audio.readyState === 0) {
+    await new Promise((listo) => {
+      audio.addEventListener("loadedmetadata", listo, { once: true });
+      audio.addEventListener("error", listo, { once: true });
+      audio.load();
+    });
+    if (audio.readyState === 0) return;                 // no lo pudo leer
+  }
+
+  audio.currentTime = inicio;
+  try {
+    await audio.play();
+  } catch (error) {
+    // play() rechaza si el navegador no puede con el formato; el evento
+    // "error" del audio ya lo avisa en la fila.
+  }
+}
+
+
+/* Cada vez que el audio avanza: frena al llegar al final del tramo, y pinta.
+ *
+ * Va enganchado a `timeupdate`, que el navegador dispara unas cuatro veces
+ * por segundo AUNQUE LA PESTAÑA ESTÉ OCULTA. Eso es lo que garantiza que el
+ * tramo frene donde tiene que frenar aunque estés mirando otra cosa. Para
+ * que la línea se mueva suave se agrega la animación de abajo, que el
+ * navegador congela en pestañas ocultas —y por eso no puede ser la única. */
+function alAvanzar() {
+  const tramo = reproductor.actual;
+  const audio = reproductor.audio;
+  if (!tramo) return;
+
+  if (!audio.paused && audio.currentTime >= tramo.hasta_seg) {
+    audio.pause();
+    audio.currentTime = tramo.desde_seg;
+    const boton = filaDelTramo(tramo)?.querySelector("[data-escuchar]");
+    if (boton) { boton.textContent = "▶"; boton.title = "Escuchar de nuevo"; }
+  }
+  pintarLinea(tramo);
+}
+
+
+function moverLaLinea() {
+  cancelAnimationFrame(reproductor.animacion);
+  const paso = () => {
+    if (!reproductor.actual || reproductor.audio.paused) return;
+    pintarLinea(reproductor.actual);
+    reproductor.animacion = requestAnimationFrame(paso);
+  };
+  reproductor.animacion = requestAnimationFrame(paso);
+}
+
+
+function pintarLinea(tramo) {
+  const fila = filaDelTramo(tramo);
+  if (!fila) return;
+  const largo = tramo.hasta_seg - tramo.desde_seg;
+  const fraccion = largo > 0
+    ? Math.max(0, Math.min(1, (reproductor.audio.currentTime - tramo.desde_seg) / largo))
+    : 0;
+  fila.querySelector(".relleno").style.width = fraccion * 100 + "%";
+  fila.querySelector(".perilla").style.left = fraccion * 100 + "%";
+}
+
+
+/* Marca la fila que suena y pone el botón en "pausa"; las demás vuelven a ▶. */
+function marcarSonando(tramo) {
+  if (!reproductor.contenedor) return;
+  reproductor.contenedor.querySelectorAll(".tramo").forEach((fila) => {
+    const esta = tramo && fila.dataset.fila === String(tramo.numero);
+    fila.classList.toggle("sonando", Boolean(esta));
+    const boton = fila.querySelector("[data-escuchar]");
+    if (boton) {
+      boton.textContent = esta ? "❚❚" : "▶";
+      boton.title = esta ? "Pausar" : "Escuchar este tramo";
+    }
+    if (!esta) {
+      fila.querySelector(".relleno").style.width = "0%";
+      fila.querySelector(".perilla").style.left = "0%";
+    }
+  });
+}
+
+
+function apagarReproductor() {
+  cancelAnimationFrame(reproductor.animacion);
+  if (reproductor.audio) {
+    reproductor.audio.pause();
+    reproductor.audio.removeAttribute("src");
+  }
+  if (reproductor.url) {
+    URL.revokeObjectURL(reproductor.url);
+    reproductor.url = null;
+  }
+  reproductor.actual = null;
+  reproductor.tramos = [];
+  reproductor.contenedor = null;
 }
 
 

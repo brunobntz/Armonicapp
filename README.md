@@ -215,6 +215,11 @@ En la web es lo mismo con un botón: subís el audio, te muestra los tramos con
 su tablatura, y elegís cuál guardar. Si el audio tiene un solo tramo, no
 pregunta nada y lo guarda.
 
+Antes de elegir, **podés escuchar cada tramo**: cada fila tiene un botón de
+reproducir y pausar, y una línea abajo que se llena mientras suena y se
+arrastra para moverte dentro del tramo. Se reproduce desde el archivo que
+elegiste, en el navegador, sin pasar por el servidor.
+
 **El recorte se hace sobre el audio, no sobre la lista de notas.** Es más
 trabajo y vale la pena: así todo lo que se mide después —la monofonía, la
 cobertura, los tiempos— habla del pedazo que vas a guardar y no del archivo

@@ -743,6 +743,62 @@ label.con-titulo {
 }
 .tramo button:disabled { opacity: 0.4; cursor: default; }
 
+/* Escuchar un tramo: el botón redondo a la izquierda, y la línea de abajo
+ * que se llena mientras suena y se arrastra para moverse dentro del tramo. */
+.tramo .reproducir {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--borde);
+  background: transparent;
+  color: var(--texto);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex: none;
+}
+.tramo .reproducir:hover { border-color: var(--cobre); color: var(--cobre); }
+.tramo.sonando { background: rgba(224, 164, 88, 0.05); }
+.tramo.sonando .reproducir { background: var(--cobre); border-color: var(--cobre); color: var(--tinta); }
+.tramo.sonando .cuando:first-of-type { color: var(--cobre); }
+
+.tramo .progreso {
+  position: relative;
+  flex-basis: 100%;
+  height: 4px;
+  margin: 2px 0 4px;
+  border-radius: 999px;
+  background: var(--borde);
+  cursor: pointer;
+  touch-action: none;
+}
+/* La zona clickeable es más alta que la línea: 4 px no se atinan. */
+.tramo .progreso::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; bottom: -8px; }
+.tramo .progreso .relleno {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--cobre);
+}
+.tramo .progreso .perilla {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--texto);
+  border: 2px solid var(--cobre);
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 120ms;
+}
+.tramo.sonando .progreso .perilla,
+.tramo .progreso:hover .perilla,
+.tramo .progreso.arrastrando .perilla { transform: translate(-50%, -50%) scale(1); }
+
+.tramo .problema-audio { flex-basis: 100%; color: var(--amarillo); font-size: 13px; }
+
 /* --- La barra de nivel de entrada --- */
 
 .nivel { display: grid; gap: 6px; }
