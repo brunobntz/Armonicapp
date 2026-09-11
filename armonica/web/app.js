@@ -1573,8 +1573,7 @@ function dibujarListaDeFrases() {
         (frase.comentario
           ? '<div class="descripcion">' + escapar(frase.comentario) + "</div>"
           : "") +
-        '<div class="tab-corta">' + frase.tab.join(" ") +
-          (frase.notas > frase.tab.length ? " …" : "") + "</div>" +
+        '<div class="tab-corta">' + frase.tab.join(" ") + "</div>" +
         '<div class="ayuda">' + frase.notas + " notas · " +
           frase.duracion_seg.toFixed(1) + " s · armónica en " + frase.tonalidad +
           (frase.posicion ? " · " + frase.posicion + "ª posición" : "") +

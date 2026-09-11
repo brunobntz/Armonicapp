@@ -608,11 +608,15 @@ label.con-titulo {
   font-weight: 500;
   font-variation-settings: "SOFT" 30, "opsz" 24;
 }
+/* La tablatura completa de la frase. Se parte en varias lineas, nunca se
+ * corta: una frase larga ocupa mas alto, y eso esta bien. */
 .frase .tab-corta {
   font-family: var(--mono);
   font-size: 13px;
+  line-height: 1.7;
   color: var(--tenue);
   word-spacing: 4px;
+  overflow-wrap: anywhere;
 }
 .frase button {
   border: 1px solid var(--cobre);

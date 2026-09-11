@@ -1549,7 +1549,10 @@ class Manejador(SimpleHTTPRequestHandler):
                 "fecha": (frase.fecha or "")[:10],
                 "comentario": frase.comentario,
                 "lista": frase.lista,
-                "tab": frase.tablatura()[:16],
+                # La tablatura ENTERA. Antes iban 16 notas y "…": la lista
+                # quedaba prolija y la frase no se podia leer, que es al
+                # reves de lo que importa.
+                "tab": frase.tablatura(),
                 "hay_audio": os.path.isfile(
                     os.path.splitext(ruta)[0] + "_audio.wav"),
             })

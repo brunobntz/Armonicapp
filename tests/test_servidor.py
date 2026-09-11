@@ -637,6 +637,22 @@ def test_la_lista_de_frases_trae_los_datos_para_la_pantalla(
     assert frase["tab"] == ["-2", "-3''", "4"]
 
 
+def test_la_lista_trae_la_tablatura_entera_aunque_sea_larga(
+        servidor_andando, carpeta_de_frases):
+    """
+    Antes iban 16 notas y un "…". Una frase de Lean de 23 notas se cortaba
+    a la mitad y no habia forma de leerla desde la lista, que es justo donde
+    uno la busca.
+    """
+    tabs = ["-2", "4", "-4", "-5", "6", "-6", "6", "-5"] * 5     # 40 notas
+    frases.guardar(frases.desde_eventos(eventos_de(tabs), "larga", "C", 12, "blues"))
+
+    frase = traer_json(servidor_andando, "/api/frases")["frases"][0]
+
+    assert frase["notas"] == 40
+    assert frase["tab"] == tabs
+
+
 def test_borrar_una_frase_la_saca_de_la_lista(servidor_andando, carpeta_de_frases):
     frases.guardar(frases.desde_eventos(eventos_de(["-2", "4"]), "descartable"))
     assert len(frases.listar()) == 1
