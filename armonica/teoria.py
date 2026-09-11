@@ -450,6 +450,62 @@ def _clase_de_nombre(nombre):
     raise ValueError(f"No reconozco la nota {nombre!r}")
 
 # =============================================================================
+# QUÉ EVITAR
+# =============================================================================
+
+def notas_a_evitar(tonalidad_armonica, posicion, tipo="dominante"):
+    """
+    Por cada acorde del blues, los agujeros NATURALES que conviene no pisar.
+
+    LA REGLA: sobre un acorde dominante, la nota a evitar es la 7ª MAYOR de
+    ese acorde. El acorde tiene la 7ª menor (el Mib de Fa7), y la 7ª mayor
+    (el Mi) está a medio tono: sonando juntas se pelean, y no como la blue
+    note, que se pelea a propósito. Es la regla detrás de "evitá el ↑2 en el
+    blues en Fa" que apareció en clase: el ↑2 de una armónica en Do es Mi, la
+    7ª mayor de Fa.
+
+    Solo se listan los agujeros SIN bend. Un bend no se toca por accidente:
+    lo que hay que saber es qué nota natural, de las que salen solas, te
+    saca del acorde.
+
+    Devuelve una lista con un diccionario por acorde distinto de la
+    progresión: nombre del acorde, la nota, y las Notas (agujeros) a evitar.
+    """
+    progresion = progresion_de_blues(tonalidad_armonica, posicion, tipo)
+    formas = mapeo.todas_las_formas(tonalidad_armonica)
+
+    salida = []
+    vistos = set()
+    for compas in progresion:
+        acorde = compas["acorde"]
+        if acorde.nombre() in vistos:
+            continue
+        vistos.add(acorde.nombre())
+
+        clase_raiz = _clase_de_nombre(acorde.raiz)
+        clase_evitar = (clase_raiz + 11) % 12          # la 7ª mayor
+
+        agujeros = [
+            nota
+            for midi in sorted(formas)
+            if midi % 12 == clase_evitar
+            for nota in formas[midi]
+            if nota.bend == 0
+        ]
+
+        salida.append({
+            "acorde": acorde.nombre(),
+            "grado": compas["grado"],
+            "nota": notas.nombre_de_clase(clase_evitar),
+            "agujeros": agujeros,
+            "por_que": (f"es la 7ª mayor, y choca con la 7ª menor "
+                        f"({acorde.grados[3].nombre_nota}) que tiene el acorde"),
+        })
+
+    return salida
+
+
+# =============================================================================
 # Modo de demostración
 # =============================================================================
 #

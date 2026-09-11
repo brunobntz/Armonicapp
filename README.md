@@ -326,7 +326,7 @@ la mediana ni se entera.
 python main.py --web --posicion 12 --escala blues_mayor
 ```
 
-Cuatro solapas. **En vivo** tiene el medidor de afinación con una aguja que se
+Cinco solapas. **En vivo** tiene el medidor de afinación con una aguja que se
 mueve suave (en la terminal parpadea quince veces por segundo y no se puede
 leer mientras soplás), el diagrama de la armónica con la escala en verde, y la
 tablatura que vas tocando. **Frases** es el modo "repetí esta frase": grabás
@@ -340,9 +340,19 @@ afinación. Abajo podés escuchar la referencia y tu intento uno debajo del
 otro, que es la única forma de OÍR la diferencia de ritmo que los números
 describen, y después viene el detalle nota por nota. El intento también
 puede ser un archivo, si ya lo grabaste con la grabadora de Windows. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
-los JSON que ya se guardaban. Y **Ajustes** tiene el micrófono y la
-configuración: la armónica que tenés en la mano, la posición y la escala de
-referencia se cambian ahí, sin reiniciar nada.
+los JSON que ya se guardaban. **Teoría** es lo que `teoria.py` sabía y solo
+se veía en la terminal: elegís armónica, posición y escala (las doce
+posiciones, no solo las seis con tabla) y te muestra la escala marcada en la
+armónica con la tónica en un aro, la corrida de dos octavas, el blues de
+doce compases con las notas guía de cada acorde y por dónde agarrarlas, qué
+notas naturales evitar sobre cada acorde y por qué, y en qué posición
+conviene esa escala. **Cada bloque dice de dónde sale el dato**: del
+cálculo, de la tabla escrita a mano (y si las dos coinciden, que es la
+conciliación de los tests mostrada en pantalla), o de una clase, de la que
+solo se cita la fecha. Los selectores de Teoría no cambian lo que la app
+tiene puesto: podés estudiar la 3ª sin dejar de tocar en 12ª. Y **Ajustes**
+tiene el micrófono y la configuración: la armónica que tenés en la mano, la
+posición y la escala de referencia se cambian ahí, sin reiniciar nada.
 
 **El micrófono queda encendido todo el tiempo.** Abrís la app y podés tocar y
 ver lo que sale sin apretar nada: el medidor, el diagrama y la tablatura

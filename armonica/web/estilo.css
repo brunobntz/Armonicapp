@@ -346,7 +346,7 @@ button:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
  * verde. Antes el color decía "en escala" y el azul "esta": nada decía de un
  * vistazo si había que soplar o aspirar, que es lo primero que uno mira. */
 
-#diagrama {
+#diagrama, #diagrama-teoria {
   display: grid;
   grid-template-columns: 54px repeat(10, 1fr);
   gap: 5px;
@@ -1089,3 +1089,96 @@ code {
   border-radius: 4px;
   padding: 1px 5px;
 }
+
+/* --- La solapa Teoría --- */
+
+.teoria-cabecera {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 22px;
+  align-items: center;
+  background: linear-gradient(180deg, var(--panel-alto), var(--panel));
+  border: 1px solid var(--borde);
+  border-radius: 18px;
+  padding: 22px 26px;
+}
+.teoria-cabecera h2 { margin-bottom: 6px; }
+.tono-grande {
+  font-family: var(--display);
+  font-weight: 300;
+  font-size: 96px;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  font-variation-settings: "SOFT" 60, "WONK" 1, "opsz" 144;
+  color: var(--cobre);
+}
+.notas-escala { margin: 0 0 6px; font-family: var(--mono); font-size: 16px; color: var(--texto); }
+.notas-escala span { margin-right: 4px; }
+.notas-escala .tonica { color: var(--cobre); font-weight: 600; }
+@media (max-width: 640px) { .teoria-cabecera { grid-template-columns: 1fr; } }
+
+/* De dónde sale cada dato. Chiquito y siempre presente. */
+.fuente {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--tenue);
+  letter-spacing: 0.02em;
+}
+.fuente::before { content: "◦ "; color: var(--cobre); }
+.fuente.ojo { color: var(--amarillo); }
+
+/* La tónica lleva un aro en el diagrama, además del punto verde de escala. */
+.celda.tonica { box-shadow: inset 0 0 0 2px var(--cobre); }
+.celda.actual.tonica { box-shadow: inset 0 0 0 2px var(--tinta), 0 0 16px rgba(224, 164, 88, 0.5); }
+
+.corrida { display: flex; flex-wrap: wrap; gap: 6px; }
+.corrida .nota {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 46px;
+  padding: 7px 8px 5px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--texto);
+}
+.corrida .nota em { font-style: normal; font-size: 10.5px; color: var(--tenue); margin-top: 2px; }
+.corrida .nota.bend { border-style: dashed; }
+
+.compases {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.compas {
+  position: relative;
+  padding: 14px 10px 10px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  font-family: var(--mono);
+  font-size: 15px;
+  text-align: center;
+  color: var(--tenue);
+}
+.compas .numero { position: absolute; top: 4px; left: 7px; font-size: 10px; color: var(--tenue); }
+.compas.cambia { color: var(--texto); border-color: rgba(224, 164, 88, 0.5); }
+.compas.grado-I.cambia { box-shadow: inset 0 -2px 0 var(--cobre); }
+.compas.grado-IV.cambia { box-shadow: inset 0 -2px 0 var(--aspirado); }
+.compas.grado-V.cambia { box-shadow: inset 0 -2px 0 var(--aguja); }
+
+.tabla-envuelta { overflow-x: auto; }
+table.guias { margin-top: 8px; }
+table.guias code { font-size: 14px; }
+table.guias code.bend { border: 1px dashed var(--tenue); }
+table.guias tr.esta td { color: var(--cobre); }
+
+.hallazgo.evitar { border-left-color: var(--rojo); }
+.hallazgo.evitar code { color: var(--rojo); }
+
+#teoria-contenido h3 { margin: 18px 0 4px; font-size: 15px; font-weight: 600; }
+#teoria-contenido section { margin-top: 26px; }

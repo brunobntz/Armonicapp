@@ -2073,3 +2073,58 @@ def test_sin_intento_el_audio_da_404(servidor_andando):
     with pytest.raises(urllib.error.HTTPError) as error:
         traer(servidor_andando, "/api/frases/intento/audio")
     assert error.value.code == 404
+
+
+# =============================================================================
+# La solapa Teoria
+# =============================================================================
+
+def test_la_teoria_trae_todo_lo_que_muestra_la_solapa(servidor_andando):
+    datos = traer_json(servidor_andando,
+                       "/api/teoria?tonalidad=C&posicion=12&escala=blues_mayor")
+
+    assert datos["ok"] is True
+    assert datos["tono"] == "F"
+    assert datos["tonica"] == "F"
+    assert datos["notas"] == ["F", "G", "Ab", "A", "C", "D"]
+    assert datos["fuente_escala"]["tabla"] == "coincide"       # la conciliacion, mostrada
+    assert datos["corrida"][0]["nombre"].startswith("F")
+    assert len(datos["progresion"]) == 12
+    assert [a["nombre"] for a in datos["acordes"]] == ["F7", "Bb7", "C7"]
+    assert datos["acordes"][0]["tercera"]["nota"] == "A"
+    assert datos["acordes"][0]["septima"]["nota"] == "Eb"
+    assert datos["evitar"][0]["agujeros"] == ["2", "5", "8"]      # notacion de guiones en los tests
+    assert datos["posiciones_utiles"][0]["posicion"] in (12, 1, 2, 3, 4, 5)
+    assert len(datos["posiciones"]) == 12
+    assert "notas_guia" in datos["fuentes"]
+    assert len(datos["diagrama"]) == 10
+
+
+def test_la_teoria_marca_la_tonica_en_el_diagrama(servidor_andando):
+    datos = traer_json(servidor_andando,
+                       "/api/teoria?tonalidad=C&posicion=12&escala=pentatonica_mayor")
+    tonicas = [c["tab"] for c in celdas_de(datos["diagrama"]) if c.get("es_tonica")]
+    # Los Fa de una armonica en Do: -2'' (bend), -5, -9
+    assert "-5" in tonicas and "-9" in tonicas
+    assert all(c["nombre"].startswith("F") for c in celdas_de(datos["diagrama"]) if c.get("es_tonica"))
+
+
+def test_la_teoria_sin_parametros_usa_lo_que_tenes_puesto(servidor_andando):
+    datos = traer_json(servidor_andando, "/api/teoria")
+    assert datos["ok"] is True
+    assert datos["tonalidad"] == "C" and datos["posicion"] == 12
+    assert datos["escala"] == "blues_mayor"
+
+
+def test_la_teoria_funciona_en_una_posicion_sin_tabla(servidor_andando):
+    """Las seis posiciones sin tabla escrita se calculan igual, y lo dicen."""
+    datos = traer_json(servidor_andando,
+                       "/api/teoria?tonalidad=C&posicion=7&escala=pentatonica_menor")
+    assert datos["ok"] is True
+    assert datos["fuente_escala"]["tabla"] == "no hay"
+
+
+def test_la_teoria_rechaza_lo_que_no_conoce(servidor_andando):
+    assert traer_json(servidor_andando, "/api/teoria?posicion=13")["ok"] is False
+    assert traer_json(servidor_andando, "/api/teoria?escala=dorica")["ok"] is False
+    assert traer_json(servidor_andando, "/api/teoria?tonalidad=H")["ok"] is False

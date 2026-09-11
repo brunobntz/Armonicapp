@@ -358,14 +358,12 @@ def diagrama_de_la_armonica(tonalidad, posicion=None, escala=None):
     línea que marca dónde está tu afinación entre una nota y la siguiente.
     """
     en_escala = set()
+    clase_tonica = None
     if posicion and escala:
         try:
-            en_escala = {
-                nota.midi
-                for nota in teoria.agujeros_para_escala(
-                    tonalidad, posicion, escala
-                ).agujeros
-            }
+            calculada = teoria.agujeros_para_escala(tonalidad, posicion, escala)
+            en_escala = {nota.midi for nota in calculada.agujeros}
+            clase_tonica = teoria._clase_de_nombre(calculada.tonica)
         except ValueError:
             en_escala = set()
 
@@ -386,6 +384,9 @@ def diagrama_de_la_armonica(tonalidad, posicion=None, escala=None):
             "direccion": nota.direccion,
             "bend": nota.bend,
             "en_escala": nota.midi in en_escala,
+            # La tonica de la escala, para el aro. Es la nota a la que todo
+            # vuelve, y conviene verla distinta del resto de la escala.
+            "es_tonica": clase_tonica is not None and nota.midi % 12 == clase_tonica,
         }
 
     filas = []
@@ -747,6 +748,119 @@ def comparacion_como_diccionario(comparacion, frase, intento_con_audio=False):
     }
 
 
+def teoria_como_diccionario(tonalidad, posicion, escala):
+    """
+    Todo lo que muestra la solapa Teoría, para una armónica, posición y escala.
+
+    Es el modo --teoria de la terminal, más los acordes de --acorde, más qué
+    evitar, en un solo diccionario. Nada se calcula acá: teoria.py ya sabía
+    todo esto y solo se usaba desde la terminal.
+
+    CON FUENTES
+
+    Cada bloque dice de dónde sale. La escala, del cálculo, y si esa posición
+    tiene tabla escrita a mano, si las dos coinciden: es la conciliación que
+    corre en los tests, mostrada. Los conceptos que vienen de una clase llevan
+    la fecha y nada más.
+    """
+    resultado = teoria.agujeros_para_escala(tonalidad, posicion, escala)
+    corrida = resultado.desde_la_tonica(octavas=2)
+
+    sobran, faltan = teoria.comparar_con_tabla_explicita(tonalidad, posicion, escala)
+    if sobran is None:
+        fuente_escala = {"tabla": "no hay",
+                         "texto": "calculada (esta posición no tiene tabla escrita a mano)"}
+    elif not sobran and not faltan:
+        fuente_escala = {"tabla": "coincide",
+                         "texto": "calculada, y coincide con la tabla escrita a mano"}
+    else:
+        fuente_escala = {"tabla": "difiere",
+                         "texto": f"calculada; DIFIERE de la tabla escrita a mano "
+                                  f"(solo en el cálculo: {' '.join(sobran) or '—'}; "
+                                  f"solo en la tabla: {' '.join(faltan) or '—'})"}
+
+    def nota_como_dicc(nota):
+        return {"tab": nota.como_tab(), "nombre": nota.nombre, "bend": nota.bend}
+
+    def grado_como_dicc(grado):
+        facil = grado.el_mas_facil()
+        return {
+            "grado": grado.nombre_grado,
+            "nota": grado.nombre_nota,
+            "tab": facil.como_tab() if facil else None,
+            "bend": facil.bend if facil else None,
+            "otros": max(0, len(grado.agujeros) - 1),
+            "todos": [n.como_tab() for n in grado.agujeros],
+        }
+
+    progresion = teoria.progresion_de_blues(tonalidad, posicion)
+    acordes = []
+    vistos = set()
+    for compas in progresion:
+        acorde = compas["acorde"]
+        if acorde.nombre() in vistos:
+            continue
+        vistos.add(acorde.nombre())
+        guias = acorde.notas_guia()
+        acordes.append({
+            "nombre": acorde.nombre(),
+            "grado": compas["grado"],
+            "notas": [g.nombre_nota for g in acorde.grados],
+            "tonica": grado_como_dicc(acorde.grados[0]),
+            "tercera": grado_como_dicc(guias[0]),
+            "septima": grado_como_dicc(guias[1]),
+        })
+
+    evitar = [
+        {"acorde": e["acorde"], "grado": e["grado"], "nota": e["nota"],
+         "agujeros": [n.como_tab() for n in e["agujeros"]], "por_que": e["por_que"]}
+        for e in teoria.notas_a_evitar(tonalidad, posicion)
+    ]
+
+    utiles = []
+    for fila in teoria.posiciones_utiles(tonalidad, escala)[:4]:
+        utiles.append({
+            "posicion": fila["posicion"],
+            "nombre": tablas.NOMBRES_POSICIONES.get(fila["posicion"], ""),
+            "tonica": fila["tonica"],
+            "sin_bend": fila["agujeros_sin_bend"],
+            "con_bend": fila["agujeros_con_bend"],
+            "imposibles": fila["notas_imposibles"],
+        })
+
+    return {
+        "tonalidad": tonalidad,
+        "posicion": posicion,
+        "nombre_posicion": tablas.NOMBRES_POSICIONES.get(posicion, f"{posicion}a"),
+        "tono": posiciones.tonalidad_resultante(tonalidad, posicion),
+        "escala": escala,
+        "nombre_escala": tablas.NOMBRES_ESCALAS.get(escala, escala),
+        "tonica": resultado.tonica,
+        "notas": resultado.nombres_notas,
+        "fuente_escala": fuente_escala,
+        "corrida": [nota_como_dicc(n) for n in corrida],
+        "agujeros": len(resultado.agujeros),
+        "con_bend": resultado.cantidad_de_bends(),
+        "faltantes": list(resultado.faltantes),
+        "diagrama": diagrama_de_la_armonica(tonalidad, posicion, escala),
+        "progresion": [
+            {"compas": c["compas"], "grado": c["grado"],
+             "acorde": c["acorde"].nombre(), "cambia": c["cambia"]}
+            for c in progresion
+        ],
+        "acordes": acordes,
+        "evitar": evitar,
+        "posiciones_utiles": utiles,
+        "fuentes": dict(tablas.FUENTES_DE_CLASE),
+        "posiciones": [
+            {"numero": numero,
+             "nombre": tablas.NOMBRES_POSICIONES.get(numero, f"{numero}a"),
+             "con_tabla": numero in tablas.POSICIONES_CON_TABLA}
+            for numero in sorted(tablas.POSICIONES)
+        ],
+    }
+
+
 class FrasePendiente:
     """
     Una frase grabada o importada que todavia no tiene nombre.
@@ -962,6 +1076,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._mandar_audio_de_frase(self.path.partition("?")[2])
         if self.path == "/api/resumen":
             return self._responder_json(self._resumen_actual())
+        if self.path.startswith("/api/teoria"):
+            return self._responder_json(self._teoria(self.path.partition("?")[2]))
         return super().do_GET()
 
     # --- POST ---
@@ -1786,6 +1902,30 @@ class Manejador(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(datos)
+
+    def _teoria(self, consulta):
+        """La solapa Teoría: una armónica, una posición y una escala."""
+        estado = type(self).estado
+        parametros = urllib.parse.parse_qs(consulta)
+
+        tonalidad = (parametros.get("tonalidad", [""])[0] or estado.tonalidad).strip()
+        escala = (parametros.get("escala", [""])[0] or estado.escala
+                  or "pentatonica_mayor").strip()
+        try:
+            posicion = int(parametros.get("posicion", [""])[0] or estado.posicion or 1)
+        except ValueError:
+            return {"ok": False, "motivo": "la posición tiene que ser un número"}
+
+        if tonalidad not in tablas.TONALIDADES:
+            return {"ok": False, "motivo": f"no conozco la armónica {tonalidad!r}"}
+        if posicion not in tablas.POSICIONES:
+            return {"ok": False, "motivo": f"la posición {posicion} no existe"}
+        if escala not in tablas.ESCALAS_INTERVALOS:
+            return {"ok": False, "motivo": f"no conozco la escala {escala!r}"}
+
+        datos = teoria_como_diccionario(tonalidad, posicion, escala)
+        datos["ok"] = True
+        return datos
 
     def _resumen_actual(self):
         estado = type(self).estado

@@ -516,3 +516,23 @@ NOMBRES_NOTAS_SOSTENIDOS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A"
 # Nota de referencia universal: el La de la orquesta, 440 Hz, es el MIDI 69.
 MIDI_LA_REFERENCIA = 69
 FRECUENCIA_LA_REFERENCIA = 440.0
+
+
+# =============================================================================
+# 7. LAS FUENTES — de dónde sale cada cosa
+# =============================================================================
+
+# La solapa Teoría dice, al lado de cada dato, de dónde sale: del cálculo,
+# de la tabla escrita a mano (y si las dos coinciden), o de una clase. De las
+# clases se guarda SOLO LA FECHA: el contenido es del profe y se queda en
+# material/, que no va al repositorio.
+#
+# Las fechas son las mismas que están en los comentarios de este archivo y de
+# teoria.py, juntadas en un solo lugar para que la pantalla las pueda mostrar.
+FUENTES_DE_CLASE = {
+    "posiciones": "clase del 28/07 (el círculo de quintas)",
+    "notas_guia": "clases del 11/08 y 18/08 (la 3ª y la 7ª)",
+    "evitar_septima_mayor": "clase del 25/08 (evitar el ↑2 en el blues en Fa)",
+    "blues_mayor": "clase del 04/08 (el sabor de las dos terceras)",
+    "doce_amable": "clase del 04/08 (por qué la 12ª es amable)",
+}

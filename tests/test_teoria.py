@@ -437,3 +437,42 @@ def test_la_corrida_se_puede_pedir_de_una_sola_octava():
     assert len(una) < len(dos)
     assert una[0].nombre == "F4"
     assert una[-1].nombre == "F5"
+
+
+# =============================================================================
+# Qué evitar
+# =============================================================================
+
+def test_sobre_fa7_en_doce_se_evita_el_mi():
+    """
+    LA REGLA DE LA CLASE DEL 25/08, CALCULADA.
+
+    "Evitá el ↑2 tocando el blues en Fa": el ↑2 de una armónica en Do es Mi,
+    la 7ª mayor de Fa7, y choca con el Mib del acorde. El cálculo tiene que
+    dar exactamente eso, y también los otros Mi naturales (↑5, ↑8).
+    """
+    evitar = teoria.notas_a_evitar("C", 12)
+    fa7 = next(e for e in evitar if e["acorde"] == "F7")
+
+    assert fa7["nota"] == "E"
+    assert [n.como_tab("guion") for n in fa7["agujeros"]] == ["2", "5", "8"]
+    assert "7ª mayor" in fa7["por_que"]
+
+
+def test_solo_los_agujeros_sin_bend_cuentan_como_a_evitar():
+    """
+    Sobre Sib7 la nota a evitar es La. En armónica en Do el La4 solo sale con
+    bend (-3''): no se lista, porque un bend no se toca por accidente. Quedan
+    los La naturales: -6 y -10.
+    """
+    evitar = teoria.notas_a_evitar("C", 12)
+    sib7 = next(e for e in evitar if e["acorde"] == "Bb7")
+
+    assert sib7["nota"] == "A"
+    assert [n.como_tab("guion") for n in sib7["agujeros"]] == ["-6", "-10"]
+
+
+def test_un_acorde_por_grado_sin_repetir():
+    evitar = teoria.notas_a_evitar("C", 12)
+    assert [e["acorde"] for e in evitar] == ["F7", "Bb7", "C7"]
+    assert [e["grado"] for e in evitar] == ["I", "IV", "V"]

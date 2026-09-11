@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarListas();
   configurarPendiente();
   configurarSesionPendiente();
+  configurarTeoria();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -75,13 +76,14 @@ function configurarSolapas() {
         otro.classList.toggle("activa", otro === boton));
 
       const cual = boton.dataset.panel;
-      ["vivo", "frases", "historial", "ajustes"].forEach((nombre) => {
+      ["vivo", "frases", "historial", "teoria", "ajustes"].forEach((nombre) => {
         document.getElementById("panel-" + nombre).hidden = nombre !== cual;
       });
 
       if (cual === "historial") cargarHistorial();
       if (cual === "frases") cargarFrases();
       if (cual === "ajustes") cargarAjustes();
+      if (cual === "teoria") cargarTeoria();
     });
   });
 }
@@ -800,7 +802,8 @@ function dibujarCelda(celda, registro, compacto) {
     return caja;
   }
   caja.className = "celda " + celda.direccion +
-    (celda.bend ? " bend" : "") + (celda.en_escala ? " en-escala" : "");
+    (celda.bend ? " bend" : "") + (celda.en_escala ? " en-escala" : "") +
+    (celda.es_tonica ? " tonica" : "");
   caja.innerHTML = celda.tab +
     (compacto ? "" : '<span class="nombre">' + celda.nombre + "</span>");
   registro.celdas[clave(celda)] = caja;
@@ -2011,3 +2014,190 @@ function mostrarResultadoDeAjustes() {
 }
 
 
+/* ==========================================================================
+   La solapa Teoría
+
+   Lo que teoria.py sabía y solo se veía en la terminal: la escala en la
+   armónica, la corrida, el blues de doce compases con sus notas guía, qué
+   evitar, y en qué posición conviene tocar esta escala. Cada bloque dice de
+   dónde sale el dato: del cálculo, de la tabla escrita a mano, o de una
+   clase (solo la fecha: el contenido es del profe).
+
+   Los selectores de acá NO cambian la configuración de la app. Es para
+   estudiar: podés mirar la 3a sin dejar de tocar en 12a.
+   ========================================================================== */
+
+let teoriaCargada = false;
+
+function configurarTeoria() {
+  ["teoria-tonalidad", "teoria-posicion", "teoria-escala"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", () => cargarTeoria());
+  });
+}
+
+
+async function cargarTeoria() {
+  const estado = document.getElementById("teoria-estado");
+
+  // La primera vez, los selectores arrancan en lo que tenés puesto.
+  if (!teoriaCargada) {
+    llenarSelectorSimple("teoria-tonalidad",
+      (inicio.tonalidades || []).map((clave) => ({ valor: clave, texto: clave })),
+      inicio.tonalidad);
+    llenarSelectorSimple("teoria-escala",
+      (inicio.escalas || []).map((e) => ({ valor: e.clave, texto: e.nombre })),
+      inicio.escala || "pentatonica_mayor");
+    // Las doce posiciones se piden al servidor con la primera carga.
+    llenarSelectorSimple("teoria-posicion",
+      (inicio.posiciones || []).map((p) => ({ valor: p.numero, texto: p.nombre })),
+      inicio.posicion || 1);
+  }
+
+  const consulta = "?tonalidad=" + encodeURIComponent(document.getElementById("teoria-tonalidad").value) +
+    "&posicion=" + encodeURIComponent(document.getElementById("teoria-posicion").value) +
+    "&escala=" + encodeURIComponent(document.getElementById("teoria-escala").value);
+
+  estado.textContent = "";
+  const datos = await pedir("/api/teoria" + consulta);
+  if (!datos.ok) {
+    estado.textContent = datos.motivo || "no pude calcular eso";
+    return;
+  }
+
+  if (!teoriaCargada) {
+    // Ahora sí, las doce posiciones. Las seis con tabla escrita a mano
+    // van marcadas: son las trabajadas en clase.
+    llenarSelectorSimple("teoria-posicion",
+      datos.posiciones.map((p) => ({
+        valor: p.numero,
+        texto: p.nombre + (p.con_tabla ? "" : " · solo calculada"),
+      })),
+      datos.posicion);
+    teoriaCargada = true;
+  }
+
+  dibujarTeoria(datos);
+}
+
+
+function dibujarTeoria(t) {
+  const contenedor = document.getElementById("teoria-contenido");
+  const bend = (nota) => nota.bend ? " bend" : "";
+  let html = "";
+
+  // --- El encabezado: en qué estás ---
+  html += '<section class="teoria-cabecera">' +
+    '<div class="tono-grande">' + escapar(t.tono) + "</div>" +
+    "<div><h2>Armónica en " + escapar(t.tonalidad) + ", " + escapar(t.nombre_posicion) +
+      " → tocás en " + escapar(t.tono) + "</h2>" +
+      '<p class="notas-escala">' + escapar(t.nombre_escala) + ": " +
+        t.notas.map((n) => '<span class="' + (n === t.tonica ? "tonica" : "") + '">' +
+                            escapar(n) + "</span>").join(" ") + "</p>" +
+      lineaDeFuente(t.fuente_escala.texto, t.fuente_escala.tabla === "difiere" ? "ojo" : "") +
+      lineaDeFuente(t.fuentes.posiciones) +
+    "</div></section>";
+
+  // --- La armónica, con la escala marcada ---
+  html += "<section><h2>Dónde está en la armónica</h2>" +
+    '<div id="diagrama-teoria"></div>' +
+    '<p class="ayuda">El punto verde marca la escala; el aro, la tónica (' +
+    escapar(t.tonica) + "). " + t.agujeros + " agujeros en total, " + t.con_bend +
+    (t.con_bend === 1 ? " pide" : " piden") + " bend" +
+    (t.faltantes.length
+      ? ". Notas de la escala que esta armónica NO da (harían falta overblows): " +
+        t.faltantes.map(escapar).join(", ")
+      : ". No falta ninguna nota: la escala está entera en la armónica") +
+    ".</p></section>";
+
+  // --- La corrida ---
+  html += "<section><h2>La corrida <small>dos octavas desde la tónica</small></h2>" +
+    '<div class="corrida">' +
+    t.corrida.map((n) => '<span class="nota' + bend(n) + '">' + escapar(n.tab) +
+                         "<em>" + escapar(n.nombre) + "</em></span>").join("") +
+    "</div><p class='ayuda'>Punteado = pide bend. Es la que se estudia: arranca en la tónica y sube.</p></section>";
+
+  // --- El blues de doce compases ---
+  html += "<section><h2>El blues de doce compases en esta posición</h2>" +
+    '<div class="compases">' +
+    t.progresion.map((c) => '<div class="compas' + (c.cambia ? " cambia" : "") +
+      ' grado-' + c.grado + '"><span class="numero">' + c.compas + "</span>" +
+      escapar(c.acorde) + "</div>").join("") +
+    "</div>" +
+    "<p class='ayuda'>Los compases marcados son cambios de acorde: ahí es donde " +
+    "hay que aterrizar en una nota guía en el tiempo 1.</p>";
+
+  // --- Las notas guía ---
+  html += "<h3>Las notas guía: la 3ª y la 7ª de cada acorde</h3>" +
+    '<div class="tabla-envuelta"><table class="guias"><thead><tr><th>acorde</th><th>3ª</th><th>7ª</th><th>tónica</th></tr></thead><tbody>' +
+    t.acordes.map((a) =>
+      "<tr><td><strong>" + escapar(a.nombre) + "</strong> <span class='ayuda'>" + a.grado + "</span></td>" +
+      celdaGrado(a.tercera) + celdaGrado(a.septima) + celdaGrado(a.tonica) + "</tr>").join("") +
+    "</tbody></table></div>" +
+    "<p class='ayuda'>La tónica y la 5ª están en casi todos los acordes y no dicen " +
+    "nada; la 3ª dice si es mayor o menor, y la 7ª es la que lo hace dominante. " +
+    "Con una sola nota por compás, si es una guía, ya suena la progresión entera. " +
+    "El +n dice en cuántos lugares más de la armónica está esa nota.</p>" +
+    lineaDeFuente(t.fuentes.notas_guia) + "</section>";
+
+  // --- Qué evitar ---
+  html += "<section><h2>Qué evitar</h2>" +
+    t.evitar.map((e) => '<div class="hallazgo evitar"><p class="accion">' +
+      (e.agujeros.length
+        ? "Sobre <strong>" + escapar(e.acorde) + "</strong>, evitá " +
+          e.agujeros.map((a) => "<code>" + escapar(a) + "</code>").join(" ") +
+          " (" + escapar(e.nota) + "): " + escapar(e.por_que) + "."
+        : "Sobre <strong>" + escapar(e.acorde) + "</strong> no hay ninguna nota natural " +
+          "que evitar: el " + escapar(e.nota) + " solo sale con bend.") +
+      "</p></div>").join("") +
+    "<p class='ayuda'>Solo los agujeros que salen sin bend: un bend no se toca por " +
+    "accidente. La blue note también choca, pero a propósito.</p>" +
+    lineaDeFuente("regla: la 7ª mayor sobre un acorde dominante · " + t.fuentes.evitar_septima_mayor) +
+    "</section>";
+
+  // --- En qué posición conviene ---
+  html += "<section><h2>En qué posición conviene esta escala</h2>" +
+    '<div class="tabla-envuelta"><table class="guias"><thead><tr><th>posición</th><th>tónica</th>' +
+    '<th class="numero">sin bend</th><th class="numero">con bend</th><th class="numero">no salen</th></tr></thead><tbody>' +
+    t.posiciones_utiles.map((p) =>
+      "<tr" + (p.posicion === t.posicion ? ' class="esta"' : "") + "><td>" + escapar(p.nombre) +
+      "</td><td>" + escapar(p.tonica) + '</td><td class="numero">' + p.sin_bend +
+      '</td><td class="numero">' + p.con_bend + '</td><td class="numero">' + p.imposibles + "</td></tr>").join("") +
+    "</tbody></table></div>" +
+    "<p class='ayuda'>Ordenadas de más cómoda a menos: primero las que no dejan " +
+    "notas afuera, y entre esas, las que más agujeros dan sin bend.</p>" +
+    lineaDeFuente("calculado para las doce posiciones · " + t.fuentes.doce_amable) +
+    "</section>";
+
+  contenedor.innerHTML = html;
+
+  // El diagrama se arma con la misma función que el de En vivo, pero NO se
+  // registra entre los que se iluminan al tocar: es para mirar, no para
+  // seguir.
+  armarDiagrama(document.getElementById("diagrama-teoria"), t.diagrama, false);
+}
+
+
+/* Llena un selector y nada más. El llenarSelector de Ajustes engancha
+ * guardarAjustes al cambiar y se marca como "listo" para no volver a
+ * llenarse: acá cambiar de posición tiene que cambiar lo que MIRÁS, no lo
+ * que la app tiene puesto. */
+function llenarSelectorSimple(id, opciones, elegido) {
+  const selector = document.getElementById(id);
+  selector.innerHTML = opciones.map((opcion) =>
+    '<option value="' + opcion.valor + '"' +
+    (String(opcion.valor) === String(elegido) ? " selected" : "") + ">" +
+    escapar(opcion.texto) + "</option>").join("");
+}
+
+
+function celdaGrado(g) {
+  if (!g.tab) return "<td><span class='ayuda'>" + escapar(g.nota) + " (no sale)</span></td>";
+  return "<td>" + escapar(g.nota) + " = <code" + (g.bend ? ' class="bend"' : "") + ">" +
+    escapar(g.tab) + "</code>" + (g.otros ? " <span class='ayuda'>+" + g.otros + "</span>" : "") + "</td>";
+}
+
+
+function lineaDeFuente(texto, tono) {
+  if (!texto) return "";
+  return '<p class="fuente' + (tono ? " " + tono : "") + '">' + escapar(texto) + "</p>";
+}

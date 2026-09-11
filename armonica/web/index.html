@@ -18,6 +18,7 @@
     <button class="solapa activa" data-panel="vivo">En vivo</button>
     <button class="solapa" data-panel="frases">Frases</button>
     <button class="solapa" data-panel="historial">Historial</button>
+    <button class="solapa" data-panel="teoria">Teoría</button>
     <button class="solapa" data-panel="ajustes">Ajustes</button>
   </nav>
 </header>
@@ -289,6 +290,30 @@
     <h2>Cómo te salió</h2>
     <div id="comparacion"></div>
   </section>
+
+</main>
+
+<!-- ===================== TEORÍA ===================== -->
+<main id="panel-teoria" class="panel" hidden>
+
+  <!-- Elegir qué mirar. NO cambia la configuración de la app: es para
+       estudiar, y podés mirar una posición sin dejar de tocar en otra. -->
+  <section>
+    <div class="controles">
+      <label class="con-titulo">armónica en
+        <select id="teoria-tonalidad"></select>
+      </label>
+      <label class="con-titulo">posición
+        <select id="teoria-posicion"></select>
+      </label>
+      <label class="con-titulo">escala
+        <select id="teoria-escala"></select>
+      </label>
+      <span id="teoria-estado" class="ayuda"></span>
+    </div>
+  </section>
+
+  <div id="teoria-contenido"></div>
 
 </main>
 
