@@ -396,7 +396,7 @@ referencia lleva un punto verde. Antes el color decía "en escala" y nada
 decía de un vistazo si había que soplar o aspirar, que es lo primero que se
 mira.
 
-Una **línea rosa** marca dónde está tu afinación entre una nota y la de al
+Una **línea blanca** marca dónde está tu afinación entre una nota y la de al
 lado. Corre en vertical dentro de la columna, y el signo es el mismo para los
 dos lados, que es la gracia de esta disposición: un bend es bajar de tono, y
 bajar de tono es alejarse del número, hacia afuera. En un bend a medio hacer

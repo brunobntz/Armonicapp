@@ -17,11 +17,12 @@
   --azul: #5aa9f0;
 
   /* La dirección del aire. Soplado en cobre —las placas de lengüetas son de
-   * latón—, aspirado en azul hielo. La aguja del bend en magenta, que no se
-   * confunde con ninguno de los dos. */
+   * latón—, aspirado en azul hielo. La aguja del bend en marfil: un blanco
+   * cálido que se ve sobre los dos colores y no compite con ninguno. Antes
+   * era magenta, y era lo único chillón de toda la pantalla. */
   --soplado: #e0a458;
   --aspirado: #6fb3ff;
-  --aguja: #ff5fa2;
+  --aguja: #f4efe6;
 }
 
 * { box-sizing: border-box; }
@@ -232,7 +233,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   height: 3px;
   border-radius: 2px;
   background: var(--aguja);
-  box-shadow: 0 0 6px rgba(255, 95, 162, 0.8);
+  box-shadow: 0 0 6px rgba(244, 239, 230, 0.7);
   transform: translateY(-50%);
   transition: top 90ms linear;
   pointer-events: none;
