@@ -1040,3 +1040,138 @@ def asignar_a_lista(nombres_de_frases, lista, carpeta=None):
         guardar(frase, carpeta)
         movidas += 1
     return movidas
+
+
+# =============================================================================
+# El historial de prácticas: cada intento contra cada frase
+# =============================================================================
+#
+# Practicar una frase la evaluaba y la olvidaba. Ahora cada intento queda
+# anotado, con lo que la devolución midió: notas, afinación de los bends,
+# tiempo. Es lo que cierra el círculo grabar → practicar → progresar: sin
+# esto no hay forma de ver que "la frase de la clase me sale cada vez mejor".
+#
+# Viven en frases/_intentos.json, un archivo para todas las frases, por
+# nombre. El guion bajo es lo que hace que listar() no lo confunda con una
+# frase, igual que _listas.json.
+
+ARCHIVO_DE_INTENTOS = "_intentos.json"
+
+# Con menos intentos que esto no se habla de tendencia: dos puntos no
+# dicen para dónde va nada.
+INTENTOS_PARA_TENDENCIA = 3
+
+# Cuánto tiene que cambiar el porcentaje de notas, entre los primeros y los
+# últimos intentos, para decir que mejoró o empeoró. Menos es ruido.
+CAMBIO_MINIMO_PCT = 8
+
+
+def _ruta_de_intentos(carpeta):
+    if carpeta is None:
+        carpeta = CARPETA_POR_DEFECTO
+    return os.path.join(carpeta, ARCHIVO_DE_INTENTOS)
+
+
+def _leer_intentos(carpeta=None):
+    ruta = _ruta_de_intentos(carpeta)
+    if not os.path.isfile(ruta):
+        return {}
+    try:
+        with io.open(ruta, encoding="utf-8") as archivo:
+            datos = json.load(archivo)
+    except (ValueError, OSError):
+        return {}
+    return datos.get("intentos", {}) if isinstance(datos, dict) else {}
+
+
+def _escribir_intentos(por_frase, carpeta=None):
+    ruta = _ruta_de_intentos(carpeta)
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with io.open(ruta, "w", encoding="utf-8", newline="") as archivo:
+        archivo.write(json.dumps({"version": 1, "intentos": por_frase},
+                                 indent=1, ensure_ascii=False))
+
+
+def registrar_intento(nombre, comparacion, origen="microfono", carpeta=None):
+    """
+    Anota un intento contra la frase `nombre`. Devuelve el intento anotado.
+
+    Se guarda lo que la devolución midió y nada más: es un resumen para
+    ver el progreso, no la comparación entera. Los bends van con su desvío
+    promedio en cents, que es lo que se quiere ver mejorar.
+    """
+    resumen = devolucion(comparacion)
+    bends = {}
+    for ref, evento, _ in comparacion.pares:
+        if _cantidad_de_bend(ref.tab):
+            bends.setdefault(ref.tab, []).append(evento.cents - ref.cents)
+
+    intento = {
+        "fecha": datetime.now().isoformat(timespec="seconds"),
+        "origen": origen,
+        "porcentaje": resumen["notas"]["porcentaje"],
+        "aciertos": resumen["notas"]["aciertos"],
+        "esperadas": resumen["notas"]["esperadas"],
+        "dispersion_ms": round(comparacion.dispersion_ms()),
+        "velocidad_pct": resumen["tiempo"]["velocidad_pct"],
+        "calidad": resumen["tiempo"]["calidad"],
+        "desvio_tipico_cents": resumen["afinacion"]["desvio_tipico_cents"],
+        "bends": {tab: round(mean(desvios)) for tab, desvios in bends.items()},
+    }
+
+    por_frase = _leer_intentos(carpeta)
+    por_frase.setdefault(nombre, []).append(intento)
+    _escribir_intentos(por_frase, carpeta)
+    return intento
+
+
+def intentos_de(nombre, carpeta=None):
+    """Los intentos contra una frase, del más viejo al más nuevo."""
+    return list(_leer_intentos(carpeta).get(nombre, []))
+
+
+def borrar_intentos(nombre, carpeta=None):
+    """Al borrar una frase se van sus intentos: sin la frase no dicen nada."""
+    por_frase = _leer_intentos(carpeta)
+    if nombre in por_frase:
+        del por_frase[nombre]
+        _escribir_intentos(por_frase, carpeta)
+
+
+def progreso(intentos):
+    """
+    Cómo viene una frase, a partir de sus intentos.
+
+    Devuelve {"intentos", "ultimo", "mejor", "tendencia", "veredicto"}.
+    La tendencia compara los dos primeros intentos con los dos últimos, en
+    porcentaje de notas: "mejorando", "igual" o "empeorando". Con menos de
+    tres intentos es None y el veredicto dice cuántos faltan. Es la misma
+    regla que el gráfico de bends del historial: no se opina con dos puntos.
+    """
+    cantidad = len(intentos)
+    if not cantidad:
+        return {"intentos": 0, "ultimo": None, "mejor": None, "tendencia": None,
+                "veredicto": "todavía no la practicaste"}
+
+    porcentajes = [i["porcentaje"] for i in intentos]
+    ultimo = intentos[-1]
+    mejor = max(porcentajes)
+
+    if cantidad < INTENTOS_PARA_TENDENCIA:
+        faltan = INTENTOS_PARA_TENDENCIA - cantidad
+        return {"intentos": cantidad, "ultimo": ultimo, "mejor": mejor, "tendencia": None,
+                "veredicto": f"{cantidad} {'intento' if cantidad == 1 else 'intentos'}: "
+                             f"con {faltan} más se ve la tendencia"}
+
+    primeros = mean(porcentajes[:2])
+    ultimos = mean(porcentajes[-2:])
+    cambio = ultimos - primeros
+    if cambio >= CAMBIO_MINIMO_PCT:
+        tendencia, veredicto = "mejorando", f"mejorando: de {primeros:.0f}% a {ultimos:.0f}% de las notas"
+    elif cambio <= -CAMBIO_MINIMO_PCT:
+        tendencia, veredicto = "empeorando", f"empeorando: de {primeros:.0f}% a {ultimos:.0f}% de las notas"
+    else:
+        tendencia, veredicto = "igual", f"estable alrededor del {ultimos:.0f}% de las notas"
+
+    return {"intentos": cantidad, "ultimo": ultimo, "mejor": mejor,
+            "tendencia": tendencia, "veredicto": veredicto}

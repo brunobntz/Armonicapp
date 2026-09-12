@@ -2388,3 +2388,57 @@ def test_armar_el_plan_sin_coach_lo_dice(servidor_andando, carpeta_de_clases, ca
     respuesta = mandar(servidor_andando, "/api/aprendizaje/plan")
     assert respuesta["ok"] is False
     assert ".env" in respuesta["motivo"]
+
+
+# =============================================================================
+# El historial de practicas, desde la pantalla (issue #1)
+# =============================================================================
+
+def practicar(base, nombre, tabs):
+    preparar("practicar", nombre, eventos_de(tabs))
+    return mandar(base, "/api/terminar")["comparacion"]
+
+
+def test_cada_practica_queda_en_el_historial_de_la_frase(servidor_andando, carpeta_de_frases):
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4", "-4", "-5"]), "con historial"))
+
+    primera = practicar(servidor_andando, "con historial", ["-2", "4", "-4", "-5"])
+    segunda = practicar(servidor_andando, "con historial", ["-2", "4", "5", "-5"])
+
+    assert primera["progreso"]["intentos"] == 1
+    assert segunda["progreso"]["intentos"] == 2
+    assert segunda["progreso"]["ultimo"]["porcentaje"] < 100
+    assert [i["porcentaje"] for i in segunda["intentos"]] == [100, segunda["progreso"]["ultimo"]["porcentaje"]]
+
+    en_la_lista = traer_json(servidor_andando, "/api/frases")["frases"][0]
+    assert en_la_lista["progreso"]["intentos"] == 2
+
+    detalle = traer_json(servidor_andando, "/api/frases/intentos?nombre=con+historial")
+    assert len(detalle["intentos"]) == 2
+    assert detalle["progreso"]["intentos"] == 2
+
+
+def test_borrar_la_frase_borra_su_historial(servidor_andando, carpeta_de_frases):
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4"]), "efimera"))
+    practicar(servidor_andando, "efimera", ["-2", "4"])
+    mandar(servidor_andando, "/api/frases/borrar", {"nombre": "efimera"})
+    assert frases.intentos_de("efimera") == []
+
+
+def test_el_coach_ve_los_intentos_anteriores_como_datos(servidor_andando, carpeta_de_frases,
+                                                       monkeypatch):
+    recibido = {}
+
+    def falsa(sistema, usuario, ruta_env=None):
+        recibido["usuario"] = usuario
+        return "Viene mejorando."
+
+    monkeypatch.setattr(coach, "_pedir", falsa)
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4", "-4"]), "con memoria"))
+    practicar(servidor_andando, "con memoria", ["-2", "5", "-4"])
+    practicar(servidor_andando, "con memoria", ["-2", "4", "-4"])
+
+    mandar(servidor_andando, "/api/coach/devolucion")
+
+    assert "intentos_anteriores" in recibido["usuario"]
+    assert '"intentos": 2' in recibido["usuario"]

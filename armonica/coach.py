@@ -222,6 +222,10 @@ def prompt_de_devolucion(comparacion, contexto=""):
         "sobrantes": comparacion.get("sobrantes", []),
         "cambiadas": comparacion.get("cambiadas", []),
         "velocidad_pct": comparacion.get("velocidad"),
+        # Los intentos anteriores contra esta misma frase, medidos por la
+        # app: son datos, y permiten decir "el bend del 3 viene mejorando".
+        "progreso": comparacion.get("progreso"),
+        "intentos_anteriores": comparacion.get("intentos", [])[:-1],
     }
     prompt = (
         "El alumno acaba de tocar una frase de referencia y la app la comparó "
@@ -229,7 +233,8 @@ def prompt_de_devolucion(comparacion, contexto=""):
         + json.dumps(datos, ensure_ascii=False, indent=1) +
         "\n\nExplicale cómo le salió y qué trabajar primero. Los consejos de "
         "`resumen.consejos` ya están priorizados por la app: apoyate en ellos, "
-        "agregá el porqué musical, y no los contradigas."
+        "agregá el porqué musical, y no los contradigas. Si hay intentos "
+        "anteriores, decí cómo viene respecto de ellos, con los números que están."
     )
     if contexto:
         prompt += (

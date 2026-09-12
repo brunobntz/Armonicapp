@@ -1345,3 +1345,25 @@ details.bloque > summary + * { margin-top: 12px; }
   color: var(--texto);
 }
 .plan-acciones { margin-top: 14px; }
+
+/* --- El historial de practicas de una frase --- */
+
+.historial-frase {
+  flex-basis: 100%;
+  border-top: 1px solid var(--borde);
+  margin-top: 6px;
+  padding-top: 10px;
+}
+.grafico-intentos { width: 100%; max-width: 560px; height: auto; display: block; margin: 6px 0 8px; }
+.historial-frase .bien { color: var(--verde); }
+.historial-frase .mal { color: var(--amarillo); }
+table.intentos { font-size: 13px; max-width: 620px; }
+.frase .progreso-corto { font-size: 12.5px; color: var(--tenue); }
+.frase .progreso-corto.mejorando { color: var(--verde); }
+.frase .progreso-corto.empeorando { color: var(--amarillo); }
+.frase button.como-viene { background: transparent; border: 1px solid var(--borde); color: var(--texto); }
+.frase button.como-viene:hover { border-color: var(--cobre); color: var(--cobre); }
+
+/* En la devolucion: este intento respecto de los anteriores. */
+.intento-numero { font-size: 13.5px; color: var(--tenue); margin: -6px 0 14px; }
+.intento-numero strong { color: var(--texto); }

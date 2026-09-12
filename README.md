@@ -347,6 +347,13 @@ afinación. Abajo podés escuchar la referencia y tu intento uno debajo del
 otro, que es la única forma de OÍR la diferencia de ritmo que los números
 describen, y después viene el detalle nota por nota. El intento también
 puede ser un archivo, si ya lo grabaste con la grabadora de Windows.
+**Cada práctica queda anotada** en `frases/_intentos.json`: en la tarjeta
+de la frase se ve cuántos intentos hubo y cómo viene, y "Cómo viene" abre
+el gráfico del porcentaje de notas intento por intento, los bends en cents,
+y la tabla. Con el mismo criterio que el gráfico de bends: con menos de tres
+intentos no se habla de tendencia. La devolución dice "intento 4 de esta
+frase, antes 85 %, ahora 92 %", y el coach ve los intentos anteriores como
+datos medidos, así que puede decir que el bend del 3 viene mejorando.
 **Aprendizaje** lee los apuntes de tus clases y te muestra qué estamos
 viendo (los puntos clave de la última clase), qué tenés que practicar (los
 próximos pasos de las últimas clases, cada uno con un botón que te lleva a la

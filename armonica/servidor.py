@@ -708,7 +708,8 @@ def tramo_como_diccionario(tramo, tabs):
     }
 
 
-def comparacion_como_diccionario(comparacion, frase, intento_con_audio=False):
+def comparacion_como_diccionario(comparacion, frase, intento_con_audio=False,
+                                 origen="microfono"):
     """
     Una Comparacion lista para mandarle al navegador.
 
@@ -718,6 +719,12 @@ def comparacion_como_diccionario(comparacion, frase, intento_con_audio=False):
     los eventos.
     """
     relativa = comparacion.dispersion_relativa()
+
+    # Cada practica queda anotada, y la respuesta trae como viene la frase
+    # con este intento incluido. Los ultimos ocho van enteros: el coach los
+    # ve como datos medidos, que es lo que son.
+    frases.registrar_intento(frase.nombre, comparacion, origen)
+    intentos = frases.intentos_de(frase.nombre)
 
     return {
         "nombre": frase.nombre,
@@ -737,6 +744,8 @@ def comparacion_como_diccionario(comparacion, frase, intento_con_audio=False):
         "devolucion": frases.devolucion(comparacion),
         "referencia_con_audio": frases.ruta_de_audio(frase.nombre) is not None,
         "intento_con_audio": intento_con_audio,
+        "progreso": frases.progreso(intentos),
+        "intentos": intentos[-8:],
         "notas": [
             {
                 "tab": nota_ref.tab,
@@ -1095,6 +1104,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._listar_dispositivos())
         if self.path.startswith("/api/frases/intento/audio"):
             return self._mandar_audio_del_intento()
+        if self.path.startswith("/api/frases/intentos"):
+            return self._responder_json(self._intentos_de_frase(self.path.partition("?")[2]))
         if self.path.startswith("/api/frases/audio"):
             return self._mandar_audio_de_frase(self.path.partition("?")[2])
         if self.path == "/api/resumen":
@@ -1717,7 +1728,8 @@ class Manejador(SimpleHTTPRequestHandler):
             "modo": "practicar",
             "comparacion": comparacion_como_diccionario(
                 frases.comparar(frase, resultado.eventos), frase,
-                intento_con_audio=clase.ultimo_intento is not None),
+                intento_con_audio=clase.ultimo_intento is not None,
+                origen="archivo"),
         }
         clase.ultima_comparacion = respuesta["comparacion"]
         return respuesta
@@ -1741,6 +1753,7 @@ class Manejador(SimpleHTTPRequestHandler):
                 "tab": frase.tablatura(),
                 "hay_audio": os.path.isfile(
                     os.path.splitext(ruta)[0] + "_audio.wav"),
+                "progreso": frases.progreso(frases.intentos_de(nombre)),
             })
         return {"frases": salida, "listas": frases.listar_listas()}
 
@@ -1792,8 +1805,18 @@ class Manejador(SimpleHTTPRequestHandler):
                 sobrante = os.path.splitext(ruta)[0] + "_audio.wav"
                 if os.path.isfile(sobrante):
                     os.remove(sobrante)
+                # Y sus intentos, por lo mismo.
+                frases.borrar_intentos(nombre)
                 return {"ok": True}
         return {"ok": False, "motivo": "no la encontre"}
+
+    def _intentos_de_frase(self, consulta):
+        """El historial de practicas de una frase, y como viene."""
+        parametros = urllib.parse.parse_qs(consulta)
+        nombre = (parametros.get("nombre", [""])[0] or "").strip()
+        intentos = frases.intentos_de(nombre)
+        return {"ok": True, "nombre": nombre, "intentos": intentos,
+                "progreso": frases.progreso(intentos)}
 
     def _listar_dispositivos(self):
         """

@@ -1609,6 +1609,8 @@ function dibujarListaDeFrases() {
           frase.duracion_seg.toFixed(1) + " s · armónica en " + frase.tonalidad +
           (frase.posicion ? " · " + frase.posicion + "ª posición" : "") +
           (frase.fecha ? " · " + frase.fecha : "") + "</div>" +
+        '<div class="progreso-corto ' + ((frase.progreso || {}).tendencia || "") + '">' +
+          escapar(textoDeProgreso(frase.progreso)) + "</div>" +
       "</div>" +
       (frase.hay_audio
         ? '<audio controls preload="none" src="/api/frases/audio?nombre=' +
@@ -1618,9 +1620,18 @@ function dibujarListaDeFrases() {
       '<label class="audio">Con un .wav' +
         '<input type="file" accept=".wav,audio/wav" data-intento="' +
         escapar(frase.nombre) + '"></label>' +
+      '<button class="como-viene" data-historial="' + escapar(frase.nombre) + '">Cómo viene</button>' +
       '<button class="borrar" data-borrar="' + escapar(frase.nombre) + '">Borrar</button>' +
+      '<div class="historial-frase" hidden></div>' +
     "</div>"
   ).join("");
+
+  contenedor.querySelectorAll("[data-historial]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const tarjeta = boton.closest(".frase");
+      mostrarHistorialDeFrase(boton.dataset.historial, tarjeta.querySelector(".historial-frase"));
+    });
+  });
 
   contenedor.querySelectorAll("[data-marcar]").forEach((casilla) => {
     casilla.addEventListener("change", () => {
@@ -1781,6 +1792,16 @@ function mostrarComparacion(c) {
   const d = c.devolucion || null;
 
   let html = "<p class='ayuda'>Contra «" + escapar(c.nombre) + "»</p>";
+
+  // Este intento respecto de los anteriores contra la misma frase.
+  if (c.progreso && c.progreso.intentos) {
+    const p = c.progreso;
+    const anteriores = (c.intentos || []).slice(0, -1);
+    const previo = anteriores.length ? anteriores[anteriores.length - 1].porcentaje : null;
+    html += '<p class="intento-numero">Intento <strong>' + p.intentos + "</strong> de esta frase" +
+      (previo !== null ? " · antes " + previo + "%, ahora <strong>" + p.ultimo.porcentaje + "%</strong>" : "") +
+      (p.tendencia ? " · " + escapar(p.veredicto) : "") + "</p>";
+  }
 
   // Los tres numeros. Cada uno dice si esta medido o no: preferimos un
   // "sin datos" honesto a un numero con cara de diagnostico.
@@ -2765,4 +2786,100 @@ function dibujarPlan(donde, datos) {
 
 function nombreDelProveedor(clave) {
   return { claude: "Claude", ollama: "Ollama (local)", openai: "ChatGPT" }[clave] || clave || "el coach";
+}
+
+
+/* ==========================================================================
+   El historial de practicas de una frase (issue #1)
+
+   Cada practica queda anotada. En la tarjeta de la frase se ve cuantos
+   intentos hubo y como viene, y "Como viene" abre el detalle: un grafico
+   del porcentaje de notas intento por intento, los bends en cents, y la
+   tabla. Mismo criterio que el grafico de bends: con menos de tres
+   intentos no se habla de tendencia.
+   ========================================================================== */
+
+function textoDeProgreso(p) {
+  if (!p || !p.intentos) return "sin practicar todavía";
+  const ultimo = p.ultimo ? p.ultimo.porcentaje + "% la última" : "";
+  return p.intentos + (p.intentos === 1 ? " intento" : " intentos") +
+         (ultimo ? " · " + ultimo : "") + (p.tendencia ? " · " + p.tendencia : "");
+}
+
+
+async function mostrarHistorialDeFrase(nombre, donde) {
+  if (donde.dataset.abierto === "si") {
+    donde.hidden = true;
+    donde.dataset.abierto = "no";
+    return;
+  }
+  const datos = await pedir("/api/frases/intentos?nombre=" + encodeURIComponent(nombre));
+  donde.innerHTML = htmlDeHistorialDeFrase(datos);
+  donde.hidden = false;
+  donde.dataset.abierto = "si";
+}
+
+
+function htmlDeHistorialDeFrase(datos) {
+  const intentos = datos.intentos || [];
+  const p = datos.progreso || {};
+  if (!intentos.length) {
+    return "<p class='ayuda'>Todavía no practicaste esta frase. Dale Practicar y tocala.</p>";
+  }
+
+  let html = "<p class='ayuda'><strong>" + escapar(p.veredicto || "") + "</strong>" +
+    (p.mejor !== null && p.mejor !== undefined ? " · mejor intento: " + p.mejor + "%" : "") + "</p>";
+
+  // El gráfico: porcentaje de notas por intento, con la zona de 90% arriba.
+  const ancho = 520, alto = 130, margen = { izq: 34, der: 10, arriba: 10, abajo: 22 };
+  const util = { ancho: ancho - margen.izq - margen.der, alto: alto - margen.arriba - margen.abajo };
+  const aX = (i) => intentos.length === 1
+    ? margen.izq + util.ancho / 2
+    : margen.izq + (i / (intentos.length - 1)) * util.ancho;
+  const aY = (pct) => margen.arriba + util.alto - (pct / 100) * util.alto;
+
+  const linea = intentos.map((it, i) => aX(i) + "," + aY(it.porcentaje)).join(" ");
+  const puntos = intentos.map((it, i) => {
+    const color = it.porcentaje >= 90 ? "var(--verde)" : it.porcentaje >= 70 ? "var(--amarillo)" : "var(--rojo)";
+    return '<circle cx="' + aX(i) + '" cy="' + aY(it.porcentaje) + '" r="5" fill="' + color +
+      '"><title>' + escapar((it.fecha || "").slice(0, 16).replace("T", " ")) + ": " +
+      it.porcentaje + "%</title></circle>";
+  }).join("");
+
+  html += '<svg class="grafico-intentos" viewBox="0 0 ' + ancho + " " + alto + '">' +
+    '<rect x="' + margen.izq + '" y="' + aY(100) + '" width="' + util.ancho + '" height="' +
+      (aY(90) - aY(100)) + '" fill="rgba(95,207,138,0.13)"/>' +
+    '<line x1="' + margen.izq + '" y1="' + aY(0) + '" x2="' + (ancho - margen.der) + '" y2="' + aY(0) +
+      '" stroke="var(--borde)"/>' +
+    ["100", "50", "0"].map((v) => '<text x="4" y="' + (aY(Number(v)) + 4) +
+      '" fill="var(--tenue)" font-size="10">' + v + "%</text>").join("") +
+    '<polyline points="' + linea + '" fill="none" stroke="var(--cobre)" stroke-width="2"/>' +
+    puntos +
+    '<text x="' + margen.izq + '" y="' + (alto - 6) + '" fill="var(--tenue)" font-size="10">primer intento</text>' +
+    '<text x="' + (ancho - margen.der) + '" y="' + (alto - 6) + '" fill="var(--tenue)" font-size="10" text-anchor="end">último</text>' +
+    "</svg>";
+
+  // Los bends, si la frase tiene: como viene cada uno, en cents.
+  const tabsDeBend = [...new Set(intentos.flatMap((it) => Object.keys(it.bends || {})))];
+  if (tabsDeBend.length) {
+    html += "<p class='ayuda'>Bends, desvío promedio en cents por intento (positivo = corto, negativo = pasado): " +
+      tabsDeBend.map((tab) => "<code>" + escapar(tab) + "</code> " +
+        intentos.map((it) => it.bends && it.bends[tab] !== undefined
+          ? '<span class="' + (Math.abs(it.bends[tab]) <= 20 ? "bien" : "mal") + '">' +
+            (it.bends[tab] > 0 ? "+" : "") + it.bends[tab] + "</span>" : "·").join(" ")
+      ).join(" &nbsp; ") + "</p>";
+  }
+
+  html += '<div class="tabla-envuelta"><table class="intentos"><thead><tr><th>cuándo</th>' +
+    "<th class='numero'>notas</th><th class='numero'>dispersión</th><th class='numero'>velocidad</th>" +
+    "<th>tiempo</th></tr></thead><tbody>" +
+    intentos.slice().reverse().map((it) =>
+      "<tr><td>" + escapar((it.fecha || "").slice(0, 16).replace("T", " ")) +
+      (it.origen === "archivo" ? " <span class='ayuda'>archivo</span>" : "") + "</td>" +
+      '<td class="numero">' + it.aciertos + "/" + it.esperadas + " · " + it.porcentaje + "%</td>" +
+      '<td class="numero">' + it.dispersion_ms + " ms</td>" +
+      '<td class="numero">' + (it.velocidad_pct > 0 ? "+" : "") + it.velocidad_pct + "%</td>" +
+      "<td>" + escapar(it.calidad || "") + "</td></tr>").join("") +
+    "</tbody></table></div>";
+  return html;
 }

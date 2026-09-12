@@ -504,3 +504,73 @@ def test_nunca_mas_de_tres_consejos():
 
     devolucion = frases.devolucion(frases.comparar(frase, intento))
     assert 1 <= len(devolucion["consejos"]) <= 3
+
+
+# =============================================================================
+# El historial de prácticas
+# =============================================================================
+
+def intento_con(frase, tabs, cents_bend=0.0, paso=0.5, carpeta=None):
+    """Practica `tabs` contra la frase y anota el intento."""
+    intento = eventos_de(tabs, paso=paso)
+    for evento in intento:
+        if "'" in evento.como_tab():
+            evento.cents = cents_bend
+    return frases.registrar_intento(frase.nombre, frases.comparar(frase, intento),
+                                    carpeta=carpeta)
+
+
+def test_cada_intento_queda_anotado_con_lo_que_midio_la_devolucion(tmp_path):
+    frase = frase_de(["-2", "-3''", "4", "-4"])
+
+    anotado = intento_con(frase, ["-2", "-3''", "4", "-4"], cents_bend=30.0, carpeta=str(tmp_path))
+
+    assert anotado["porcentaje"] == 100
+    assert anotado["bends"] == {"-3''": 30}
+    assert anotado["origen"] == "microfono"
+    assert frases.intentos_de("prueba", str(tmp_path)) == [anotado]
+    assert (tmp_path / "_intentos.json").is_file()
+
+
+def test_los_intentos_no_aparecen_como_frases(tmp_path):
+    frase = frase_de(["-2", "4"])
+    frases.guardar(frase, str(tmp_path))
+    intento_con(frase, ["-2", "4"], carpeta=str(tmp_path))
+    assert [n for n, _ in frases.listar(str(tmp_path))] == ["prueba"]
+
+
+def test_borrar_los_intentos_de_una_frase_deja_los_de_las_otras(tmp_path):
+    una = frase_de(["-2", "4"], nombre="una")
+    otra = frase_de(["-4", "5"], nombre="otra")
+    intento_con(una, ["-2", "4"], carpeta=str(tmp_path))
+    intento_con(otra, ["-4", "5"], carpeta=str(tmp_path))
+
+    frases.borrar_intentos("una", str(tmp_path))
+
+    assert frases.intentos_de("una", str(tmp_path)) == []
+    assert len(frases.intentos_de("otra", str(tmp_path))) == 1
+
+
+def test_con_menos_de_tres_intentos_no_hay_tendencia():
+    assert frases.progreso([])["veredicto"] == "todavía no la practicaste"
+    dos = frases.progreso([{"porcentaje": 50}, {"porcentaje": 100}])
+    assert dos["tendencia"] is None
+    assert dos["intentos"] == 2 and dos["mejor"] == 100
+    assert "1 más" in dos["veredicto"]
+
+
+def test_la_tendencia_compara_los_primeros_con_los_ultimos():
+    mejorando = frases.progreso([{"porcentaje": p} for p in (50, 60, 80, 90)])
+    assert mejorando["tendencia"] == "mejorando"
+    assert "de 55% a 85%" in mejorando["veredicto"]
+
+    estable = frases.progreso([{"porcentaje": p} for p in (80, 85, 82, 86)])
+    assert estable["tendencia"] == "igual"
+
+    empeorando = frases.progreso([{"porcentaje": p} for p in (90, 90, 70, 60)])
+    assert empeorando["tendencia"] == "empeorando"
+
+
+def test_un_archivo_de_intentos_roto_no_rompe(tmp_path):
+    (tmp_path / "_intentos.json").write_text("{esto no es json", encoding="utf-8")
+    assert frases.intentos_de("x", str(tmp_path)) == []
