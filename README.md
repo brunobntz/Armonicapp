@@ -363,20 +363,23 @@ profe que te escuchó una vez. Nunca mide nada, nunca inventa un número, y si
 algo no está medido lo dice. Aparece como un botón al pie de la devolución de
 una práctica y como una pregunta libre al pie de Teoría.
 
-Es opcional y está apagado por defecto. Para activarlo:
+Es opcional y está apagado por defecto. Se activa copiando `.env.ejemplo`
+a `.env` (git lo ignora: la clave es tuya) y eligiendo ahí uno de tres
+proveedores:
 
-```powershell
-pip install anthropic
-copy .env.ejemplo .env
-```
+| Proveedor | Qué pide | Qué cuesta |
+|---|---|---|
+| **Claude** (por defecto) | una clave de console.anthropic.com y `pip install anthropic` | centavos por devolución |
+| **Ollama** (modelo local) | instalar [Ollama](https://ollama.com) y bajar un modelo: `ollama pull qwen2.5:7b` | nada, ni internet |
+| **ChatGPT** | una clave de OpenAI | según su tarifa |
 
-y en el `.env` poné tu clave en `LLM_CLAVE`. Git ignora ese archivo: la clave
-es tuya. Usa la API de Claude con el SDK oficial; el modelo por defecto es
-`claude-opus-5` y se cambia con `LLM_MODELO`. Cada devolución cuesta
-alrededor de un centavo de dólar. El audio nunca sale de tu máquina: al coach
-le llegan números y texto. Para conectar otro proveedor hay UNA función que
-reemplazar, `_pedir()` en `armonica/coach.py`; todo lo demás no sabe con quién
-habla. Los tests nunca tocan la red: la llamada se reemplaza por una falsa.
+Con Ollama, una placa de video de 8 GB contesta en segundos; sin placa, en
+minutos. `LLM_MODELO` cambia el modelo de cualquiera de los tres y
+`LLM_URL` la dirección (sirve para LM Studio o cualquier servidor compatible
+con la API de OpenAI). El audio nunca sale de tu máquina con ninguno: al
+coach le llegan números y texto. Los tres se hablan desde `armonica/coach.py`
+y nada más sabe cuál está puesto; agregar un cuarto es agregar una función.
+Los tests nunca tocan la red: la llamada se reemplaza por una falsa.
 
 **El micrófono queda encendido todo el tiempo.** Abrís la app y podés tocar y
 ver lo que sale sin apretar nada: el medidor, el diagrama y la tablatura

@@ -1,9 +1,10 @@
 """
 Tests de armonica/coach.py — el modelo de lenguaje que explica lo medido.
 
-NUNCA TOCAN LA RED. La llamada al modelo (_pedir) se reemplaza por una falsa
-que devuelve lo que le pedimos y guarda lo que recibió: así se verifica qué
-le mandamos, que es lo único que está en nuestras manos.
+NUNCA TOCAN LA RED. La llamada al modelo (_pedir, o _http_json para los
+proveedores por HTTP) se reemplaza por una falsa que devuelve lo que le
+pedimos y guarda lo que recibió: así se verifica qué le mandamos, que es lo
+único que está en nuestras manos.
 """
 
 import pytest
@@ -11,46 +12,64 @@ import pytest
 from armonica import coach
 
 
+@pytest.fixture
+def sin_entorno(monkeypatch, tmp_path):
+    """Sin claves en el entorno y sin .env: la configuracion de fabrica."""
+    for nombre in ("LLM_PROVEEDOR", "LLM_CLAVE", "LLM_MODELO", "LLM_URL",
+                   "ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(nombre, raising=False)
+    return str(tmp_path / "no-existe.env")
+
+
+def env_con(tmp_path, texto):
+    ruta = tmp_path / ".env"
+    ruta.write_text(texto, encoding="utf-8")
+    return str(ruta)
+
+
 # =============================================================================
 # El .env
 # =============================================================================
 
 def test_lee_el_env_ignorando_comentarios_y_comillas(tmp_path):
-    ruta = tmp_path / ".env"
-    ruta.write_text(
-        "# la clave\nLLM_CLAVE=\"abc-123\"\n\nLLM_MODELO='un-modelo'\nSIN_IGUAL\n",
-        encoding="utf-8")
-
-    valores = coach.leer_env(str(ruta))
-
-    assert valores == {"LLM_CLAVE": "abc-123", "LLM_MODELO": "un-modelo"}
+    ruta = env_con(tmp_path,
+                   "# la clave\nLLM_CLAVE=\"abc-123\"\n\nLLM_MODELO='un-modelo'\nSIN_IGUAL\n")
+    assert coach.leer_env(ruta) == {"LLM_CLAVE": "abc-123", "LLM_MODELO": "un-modelo"}
 
 
-def test_sin_env_no_hay_clave_y_el_modelo_es_el_de_siempre(tmp_path, monkeypatch):
-    monkeypatch.delenv("LLM_CLAVE", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("LLM_MODELO", raising=False)
-
-    clave, modelo = coach.configuracion(str(tmp_path / "no-existe.env"))
-
-    assert clave == ""
-    assert modelo == coach.MODELO_POR_DEFECTO
+def test_de_fabrica_es_claude_sin_clave(sin_entorno):
+    conf = coach.configuracion(sin_entorno)
+    assert conf["proveedor"] == "claude"
+    assert conf["clave"] == ""
+    assert conf["modelo"] == "claude-opus-5"
 
 
-def test_sin_clave_el_estado_dice_como_activarlo(tmp_path, monkeypatch):
-    monkeypatch.delenv("LLM_CLAVE", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-
-    estado = coach.estado(str(tmp_path / "no-existe.env"))
-
+def test_sin_clave_el_estado_dice_como_activarlo(sin_entorno):
+    estado = coach.estado(sin_entorno)
     assert estado["disponible"] is False
     assert ".env" in estado["motivo"]
+    assert estado["proveedor"] == "claude"
 
 
-def test_la_variable_de_entorno_del_sdk_tambien_sirve(tmp_path, monkeypatch):
+def test_la_variable_de_entorno_del_sdk_tambien_sirve(sin_entorno, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "desde-el-entorno")
-    clave, _ = coach.configuracion(str(tmp_path / "no-existe.env"))
-    assert clave == "desde-el-entorno"
+    assert coach.configuracion(sin_entorno)["clave"] == "desde-el-entorno"
+
+
+def test_cada_proveedor_tiene_su_modelo_y_su_direccion_por_defecto(sin_entorno, tmp_path):
+    ollama = coach.configuracion(env_con(tmp_path, "LLM_PROVEEDOR=ollama\n"))
+    assert ollama["modelo"] == "qwen2.5:7b"
+    assert ollama["url"] == "http://localhost:11434"
+
+    openai = coach.configuracion(env_con(tmp_path, "LLM_PROVEEDOR=openai\nLLM_CLAVE=sk-x\n"))
+    assert openai["modelo"] == "gpt-4o-mini"
+    assert openai["url"] == "https://api.openai.com/v1"
+
+
+def test_un_proveedor_desconocido_se_explica(sin_entorno, tmp_path):
+    estado = coach.estado(env_con(tmp_path, "LLM_PROVEEDOR=gemini\n"))
+    assert estado["disponible"] is False
+    assert "gemini" in estado["motivo"] and "ollama" in estado["motivo"]
 
 
 # =============================================================================
@@ -134,11 +153,101 @@ def test_preguntar_teoria_sin_pregunta_no_llama_a_nadie(llamada_falsa):
     assert llamada_falsa == {}
 
 
-def test_sin_clave_pedir_no_intenta_conectarse(tmp_path, monkeypatch):
+def test_sin_clave_claude_no_intenta_conectarse(sin_entorno):
     """La llamada real, sin clave: tiene que fallar ANTES de tocar la red."""
-    monkeypatch.delenv("LLM_CLAVE", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", sin_entorno)
+    assert ".env" in str(error.value)
+
+
+# =============================================================================
+# Ollama y OpenAI: que pedido HTTP arman, con la red reemplazada
+# =============================================================================
+
+@pytest.fixture
+def http_falso(monkeypatch):
+    """Reemplaza _http_json: guarda el pedido y contesta lo que se le diga."""
+    registro = {"pedidos": [], "respuesta": None, "error": None}
+
+    def falso(url, cuerpo, cabeceras, segundos):
+        registro["pedidos"].append({"url": url, "cuerpo": cuerpo,
+                                    "cabeceras": cabeceras, "segundos": segundos})
+        if registro["error"]:
+            raise coach.CoachNoDisponible(registro["error"])
+        return registro["respuesta"]
+
+    monkeypatch.setattr(coach, "_http_json", falso)
+    return registro
+
+
+def test_ollama_manda_el_chat_al_servidor_local_sin_clave(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=ollama\n")
+    http_falso["respuesta"] = {"message": {"role": "assistant", "content": "  Bien ahí.  "}}
+
+    texto = coach._pedir("el sistema", "el usuario", ruta)
+
+    assert texto == "Bien ahí."
+    pedido = http_falso["pedidos"][0]
+    assert pedido["url"] == "http://localhost:11434/api/chat"
+    assert pedido["cuerpo"]["model"] == "qwen2.5:7b"
+    assert pedido["cuerpo"]["stream"] is False
+    assert pedido["cuerpo"]["messages"] == [
+        {"role": "system", "content": "el sistema"},
+        {"role": "user", "content": "el usuario"}]
+    assert "Authorization" not in pedido["cabeceras"]
+    assert pedido["segundos"] >= 120          # un modelo local tarda
+
+
+def test_ollama_apagado_se_dice_con_esas_palabras(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=ollama\n")
+    http_falso["error"] = "No hay conexión con el servicio (rechazada)."
+
+    estado = coach.estado(ruta)
+    assert estado["disponible"] is False
+    assert "no está corriendo" in estado["motivo"]
 
     with pytest.raises(coach.CoachNoDisponible) as error:
-        coach._pedir("s", "u", str(tmp_path / "no-existe.env"))
-    assert ".env" in str(error.value)
+        coach._pedir("s", "u", ruta)
+    assert "no está corriendo" in str(error.value)
+
+
+def test_ollama_sin_el_modelo_dice_como_bajarlo(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=ollama\nLLM_MODELO=llama3.1:8b\n")
+    http_falso["respuesta"] = {"models": [{"name": "qwen2.5:7b"}]}
+
+    estado = coach.estado(ruta)
+    assert estado["disponible"] is False
+    assert "ollama pull llama3.1:8b" in estado["motivo"]
+
+
+def test_ollama_con_el_modelo_esta_disponible(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=ollama\n")
+    http_falso["respuesta"] = {"models": [{"name": "qwen2.5:7b"}]}
+    assert coach.estado(ruta)["disponible"] is True
+
+
+def test_openai_manda_la_clave_en_la_cabecera(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=openai\nLLM_CLAVE=sk-prueba\nLLM_MODELO=gpt-x\n")
+    http_falso["respuesta"] = {"choices": [{"message": {"content": "Dale."}}]}
+
+    texto = coach._pedir("s", "u", ruta)
+
+    assert texto == "Dale."
+    pedido = http_falso["pedidos"][0]
+    assert pedido["url"] == "https://api.openai.com/v1/chat/completions"
+    assert pedido["cabeceras"]["Authorization"] == "Bearer sk-prueba"
+    assert pedido["cuerpo"]["model"] == "gpt-x"
+
+
+def test_openai_sin_clave_no_toca_la_red(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=openai\n")
+    with pytest.raises(coach.CoachNoDisponible):
+        coach._pedir("s", "u", ruta)
+    assert http_falso["pedidos"] == []
+
+
+def test_una_respuesta_vacia_es_un_error_y_no_un_texto_vacio(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=ollama\n")
+    http_falso["respuesta"] = {"message": {"content": "   "}}
+    with pytest.raises(coach.CoachNoDisponible):
+        coach._pedir("s", "u", ruta)

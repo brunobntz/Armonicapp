@@ -8,31 +8,59 @@ nadie. El coach recibe ESOS números ya calculados y los explica como lo haría
 un profe que te escuchó una vez: qué importa, por qué, y qué probar. Nunca
 mide nada, nunca inventa un número, y si no tiene datos lo dice.
 
-Es OPCIONAL. Sin clave, o sin el paquete instalado, la app anda exactamente
-igual que antes y en Ajustes dice cómo activarlo. La clave es tuya y se queda
-en tu máquina: va en un archivo .env que git ignora.
+Es OPCIONAL. Sin configurar, la app anda exactamente igual que antes y en
+Ajustes dice cómo activarlo. La configuración va en un archivo .env que git
+ignora: la clave es tuya y se queda en tu máquina.
 
-CÓMO SE ACTIVA
+TRES PROVEEDORES, UNA SOLA FORMA DE HABLARLES
 
-    pip install anthropic
-    copiar .env.ejemplo a .env y poner la clave
+    claude   la API de Claude, con el SDK oficial. Es el de por defecto.
+             Pide una clave y `pip install anthropic`. Cuesta centavos.
+    ollama   un modelo LOCAL, corriendo en tu propia máquina con Ollama.
+             No pide clave ni paquete ni internet. Pide una placa de video
+             decente para que conteste en segundos y no en minutos.
+    openai   la API de ChatGPT, para quien ya tiene una clave de ahí.
+             Sin paquete: se le habla por HTTP con la biblioteca estándar.
 
-Usa la API de Claude con el SDK oficial. Para conectar otro proveedor hay
-que reemplazar UNA función, _pedir(): todo lo demás —los prompts, las rutas,
-la pantalla— no sabe con quién habla.
+Los prompts, las rutas y la pantalla no saben cuál está puesto. Solo lo sabe
+_pedir(), que reparte. Agregar un cuarto proveedor es agregar una función.
 
-El audio nunca sale de tu máquina. Al coach le llegan números y texto.
+El audio nunca sale de tu máquina, con ninguno de los tres. Al coach le
+llegan números y texto.
 """
 
 import json
 import os
+import urllib.error
+import urllib.request
 
-# El modelo por defecto. Se puede cambiar en el .env con LLM_MODELO.
-MODELO_POR_DEFECTO = "claude-opus-5"
+PROVEEDORES = ("claude", "ollama", "openai")
+PROVEEDOR_POR_DEFECTO = "claude"
+
+# El modelo de cada proveedor si no se elige otro con LLM_MODELO.
+#
+# Para Ollama va un modelo de 7 mil millones de parámetros: entra entero en
+# una placa de 8 GB y contesta en pocos segundos. Qwen 2.5 habla bien
+# castellano; llama3.1:8b es la alternativa. Uno más grande (14B) ya no
+# entra en 8 GB y pasa a contestar en minutos.
+MODELOS_POR_DEFECTO = {
+    "claude": "claude-opus-5",
+    "ollama": "qwen2.5:7b",
+    "openai": "gpt-4o-mini",
+}
+
+URLS_POR_DEFECTO = {
+    "ollama": "http://localhost:11434",
+    "openai": "https://api.openai.com/v1",
+}
 
 # Las respuestas son cortas a propósito: dos o tres párrafos que se leen con
 # la armónica en la mano. Este tope es un seguro, no un objetivo.
 MAXIMO_DE_TOKENS = 1500
+
+# Un modelo local puede tardar: la primera respuesta carga el modelo en la
+# placa (diez o veinte segundos) y sin placa cada respuesta es lenta.
+SEGUNDOS_DE_ESPERA = {"claude": 60, "ollama": 240, "openai": 60}
 
 ARCHIVO_ENV = ".env"
 
@@ -73,35 +101,79 @@ def leer_env(ruta=None):
 
 def configuracion(ruta_env=None):
     """
-    La clave y el modelo, del .env o del entorno. Devuelve (clave, modelo).
+    Qué proveedor, con qué clave, qué modelo y en qué dirección.
 
-    La variable de entorno ANTHROPIC_API_KEY también sirve, porque es la que
-    el SDK lee solo: si ya la tenés puesta por otra cosa, no hace falta el
-    .env.
+    Devuelve un diccionario {"proveedor", "clave", "modelo", "url"}. Lee el
+    .env primero y las variables de entorno después. La variable
+    ANTHROPIC_API_KEY también sirve como clave, porque es la que el SDK de
+    Claude lee solo: si ya la tenés puesta por otra cosa, no hace falta más.
     """
     env = leer_env(ruta_env)
-    clave = (env.get("LLM_CLAVE") or env.get("ANTHROPIC_API_KEY")
-             or os.environ.get("LLM_CLAVE") or os.environ.get("ANTHROPIC_API_KEY") or "")
-    modelo = env.get("LLM_MODELO") or os.environ.get("LLM_MODELO") or MODELO_POR_DEFECTO
-    return clave.strip(), modelo.strip()
+
+    def valor(nombre, *alternativas):
+        for candidato in (nombre,) + alternativas:
+            if env.get(candidato):
+                return env[candidato].strip()
+        for candidato in (nombre,) + alternativas:
+            if os.environ.get(candidato):
+                return os.environ[candidato].strip()
+        return ""
+
+    proveedor = (valor("LLM_PROVEEDOR") or PROVEEDOR_POR_DEFECTO).lower()
+    return {
+        "proveedor": proveedor,
+        "clave": valor("LLM_CLAVE", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"),
+        "modelo": valor("LLM_MODELO") or MODELOS_POR_DEFECTO.get(proveedor, ""),
+        "url": (valor("LLM_URL") or URLS_POR_DEFECTO.get(proveedor, "")).rstrip("/"),
+    }
 
 
 def estado(ruta_env=None):
     """
     Si el coach puede contestar, y si no, por qué. Para la solapa Ajustes.
 
-    Devuelve {"disponible": bool, "motivo": str, "modelo": str}.
+    Devuelve {"disponible": bool, "motivo": str, "proveedor": str, "modelo": str}.
+    Con Ollama, además pregunta si el servidor local está corriendo: es lo
+    primero que falla y lo que menos se ve.
     """
-    clave, modelo = configuracion(ruta_env)
-    if not clave:
-        return {"disponible": False, "modelo": modelo,
-                "motivo": "Falta la clave. Copiá .env.ejemplo a .env y poné la tuya en LLM_CLAVE."}
+    conf = configuracion(ruta_env)
+    base = {"proveedor": conf["proveedor"], "modelo": conf["modelo"]}
+
+    if conf["proveedor"] not in PROVEEDORES:
+        return dict(base, disponible=False,
+                    motivo=f"No conozco el proveedor {conf['proveedor']!r}. "
+                           f"En el .env, LLM_PROVEEDOR puede ser: {', '.join(PROVEEDORES)}.")
+
+    if conf["proveedor"] == "claude":
+        if not conf["clave"]:
+            return dict(base, disponible=False,
+                        motivo="Falta la clave. Copiá .env.ejemplo a .env y poné la tuya en LLM_CLAVE.")
+        try:
+            import anthropic  # noqa: F401  — solo para saber si está
+        except ImportError:
+            return dict(base, disponible=False, motivo="Falta el paquete: pip install anthropic")
+        return dict(base, disponible=True, motivo="")
+
+    if conf["proveedor"] == "openai":
+        if not conf["clave"]:
+            return dict(base, disponible=False,
+                        motivo="Falta la clave de OpenAI. Ponela en LLM_CLAVE en el .env.")
+        return dict(base, disponible=True, motivo="")
+
+    # ollama: sin clave ni paquete, pero el servidor tiene que estar andando.
     try:
-        import anthropic  # noqa: F401  — solo para saber si está
-    except ImportError:
-        return {"disponible": False, "modelo": modelo,
-                "motivo": "Falta el paquete: pip install anthropic"}
-    return {"disponible": True, "modelo": modelo, "motivo": ""}
+        modelos = _http_json(conf["url"] + "/api/tags", None, {}, segundos=2)
+    except CoachNoDisponible:
+        return dict(base, disponible=False,
+                    motivo=f"Ollama no está corriendo en {conf['url']}. "
+                           f"Abrilo (o corré `ollama serve`) y recargá esta solapa.")
+    nombres = [m.get("name", "") for m in (modelos or {}).get("models", [])]
+    if not any(n == conf["modelo"] or n.split(":")[0] == conf["modelo"].split(":")[0]
+               for n in nombres):
+        return dict(base, disponible=False,
+                    motivo=f"Ollama está corriendo pero no tiene el modelo {conf['modelo']!r}. "
+                           f"Bajalo con: ollama pull {conf['modelo']}")
+    return dict(base, disponible=True, motivo="")
 
 
 # =============================================================================
@@ -207,26 +279,39 @@ def preguntar_teoria(teoria, pregunta, ruta_env=None):
 
 def _pedir(sistema, usuario, ruta_env=None):
     """
-    Manda un pedido al modelo y devuelve el texto de la respuesta.
+    Manda un pedido al proveedor configurado y devuelve el texto.
 
-    Para usar otro proveedor, reemplazá esta función: recibe el prompt de
-    sistema y el del usuario, devuelve texto, y levanta CoachNoDisponible
-    con un motivo legible cuando no puede.
+    Recibe el prompt de sistema y el del usuario, devuelve texto, y levanta
+    CoachNoDisponible con un motivo legible cuando no puede. Los tests la
+    reemplazan por una función falsa: nunca tocan la red.
     """
-    clave, modelo = configuracion(ruta_env)
-    if not clave:
-        raise CoachNoDisponible(estado(ruta_env)["motivo"])
+    conf = configuracion(ruta_env)
+    proveedor = conf["proveedor"]
 
+    if proveedor == "claude":
+        return _pedir_a_claude(conf, sistema, usuario)
+    if proveedor == "ollama":
+        return _pedir_a_ollama(conf, sistema, usuario)
+    if proveedor == "openai":
+        return _pedir_a_openai(conf, sistema, usuario)
+    raise CoachNoDisponible(estado(ruta_env)["motivo"])
+
+
+def _pedir_a_claude(conf, sistema, usuario):
+    """La API de Claude, con el SDK oficial."""
+    if not conf["clave"]:
+        raise CoachNoDisponible(
+            "Falta la clave. Copiá .env.ejemplo a .env y poné la tuya en LLM_CLAVE.")
     try:
         import anthropic
     except ImportError:
         raise CoachNoDisponible("Falta el paquete: pip install anthropic")
 
-    cliente = anthropic.Anthropic(api_key=clave, timeout=60.0, max_retries=1)
-
+    cliente = anthropic.Anthropic(api_key=conf["clave"],
+                                  timeout=float(SEGUNDOS_DE_ESPERA["claude"]), max_retries=1)
     try:
         respuesta = cliente.messages.create(
-            model=modelo,
+            model=conf["modelo"],
             max_tokens=MAXIMO_DE_TOKENS,
             system=sistema,
             # Poco esfuerzo alcanza: no hay nada que deducir, solo explicar
@@ -237,7 +322,7 @@ def _pedir(sistema, usuario, ruta_env=None):
     except anthropic.AuthenticationError:
         raise CoachNoDisponible("La clave no es válida. Revisá LLM_CLAVE en el .env.")
     except anthropic.NotFoundError:
-        raise CoachNoDisponible(f"No existe el modelo {modelo!r}. Revisá LLM_MODELO en el .env.")
+        raise CoachNoDisponible(f"No existe el modelo {conf['modelo']!r}. Revisá LLM_MODELO en el .env.")
     except anthropic.RateLimitError:
         raise CoachNoDisponible("El servicio está saturado. Probá en un minuto.")
     except anthropic.APIStatusError as error:
@@ -249,6 +334,95 @@ def _pedir(sistema, usuario, ruta_env=None):
         raise CoachNoDisponible("El modelo no quiso contestar esto.")
 
     texto = "".join(bloque.text for bloque in respuesta.content if bloque.type == "text")
-    if not texto.strip():
+    return _texto_o_error(texto)
+
+
+def _pedir_a_ollama(conf, sistema, usuario):
+    """
+    Un modelo local, por la API de chat de Ollama. Sin clave ni paquete.
+
+    `stream: false` para recibir la respuesta entera de una. `num_predict`
+    es el tope de tokens, el equivalente de max_tokens.
+    """
+    cuerpo = {
+        "model": conf["modelo"],
+        "stream": False,
+        "messages": [{"role": "system", "content": sistema},
+                     {"role": "user", "content": usuario}],
+        "options": {"num_predict": MAXIMO_DE_TOKENS, "temperature": 0.4},
+    }
+    try:
+        respuesta = _http_json(conf["url"] + "/api/chat", cuerpo, {},
+                               segundos=SEGUNDOS_DE_ESPERA["ollama"])
+    except CoachNoDisponible as error:
+        texto = str(error)
+        if "404" in texto:
+            raise CoachNoDisponible(
+                f"Ollama no tiene el modelo {conf['modelo']!r}. Bajalo con: ollama pull {conf['modelo']}")
+        if "conexión" in texto:
+            raise CoachNoDisponible(
+                f"Ollama no está corriendo en {conf['url']}. Abrilo (o corré `ollama serve`).")
+        raise
+    return _texto_o_error(((respuesta or {}).get("message") or {}).get("content", ""))
+
+
+def _pedir_a_openai(conf, sistema, usuario):
+    """
+    La API de ChatGPT (o cualquiera compatible: LM Studio, etc., cambiando
+    LLM_URL). Por HTTP con la biblioteca estándar, sin paquete.
+    """
+    if not conf["clave"]:
+        raise CoachNoDisponible("Falta la clave de OpenAI. Ponela en LLM_CLAVE en el .env.")
+    cuerpo = {
+        "model": conf["modelo"],
+        "max_tokens": MAXIMO_DE_TOKENS,
+        "messages": [{"role": "system", "content": sistema},
+                     {"role": "user", "content": usuario}],
+    }
+    cabeceras = {"Authorization": "Bearer " + conf["clave"]}
+    try:
+        respuesta = _http_json(conf["url"] + "/chat/completions", cuerpo, cabeceras,
+                               segundos=SEGUNDOS_DE_ESPERA["openai"])
+    except CoachNoDisponible as error:
+        texto = str(error)
+        if "401" in texto:
+            raise CoachNoDisponible("La clave de OpenAI no es válida. Revisá LLM_CLAVE en el .env.")
+        if "404" in texto:
+            raise CoachNoDisponible(f"No existe el modelo {conf['modelo']!r}. Revisá LLM_MODELO en el .env.")
+        if "429" in texto:
+            raise CoachNoDisponible("El servicio está saturado o sin crédito. Probá en un minuto.")
+        raise
+    opciones = (respuesta or {}).get("choices") or [{}]
+    return _texto_o_error(((opciones[0].get("message") or {}).get("content") or ""))
+
+
+def _texto_o_error(texto):
+    texto = (texto or "").strip()
+    if not texto:
         raise CoachNoDisponible("El modelo devolvió una respuesta vacía.")
-    return texto.strip()
+    return texto
+
+
+def _http_json(url, cuerpo, cabeceras, segundos):
+    """
+    Un pedido HTTP con JSON de ida y de vuelta. GET si `cuerpo` es None.
+
+    Es la única función que toca la red para Ollama y OpenAI; los tests la
+    reemplazan. Traduce cada fallo a un CoachNoDisponible con el código o
+    la palabra "conexión", que las funciones de arriba usan para dar un
+    motivo entendible.
+    """
+    datos = None if cuerpo is None else json.dumps(cuerpo).encode("utf-8")
+    pedido = urllib.request.Request(url, data=datos, method="GET" if datos is None else "POST")
+    pedido.add_header("Content-Type", "application/json")
+    for nombre, valor in cabeceras.items():
+        pedido.add_header(nombre, valor)
+    try:
+        with urllib.request.urlopen(pedido, timeout=segundos) as respuesta:
+            return json.loads(respuesta.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        raise CoachNoDisponible(f"El servicio contestó con un error ({error.code}).")
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise CoachNoDisponible(f"No hay conexión con el servicio ({error}).")
+    except ValueError:
+        raise CoachNoDisponible("El servicio contestó algo que no es JSON.")

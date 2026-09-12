@@ -2311,13 +2311,19 @@ async function mostrarEstadoDelCoach() {
   const datos = await cargarEstadoDelCoach();
   const donde = document.getElementById("estado-coach");
   if (!donde) return;
+  const nombres = { claude: "Claude", ollama: "Ollama (local)", openai: "ChatGPT" };
+  const proveedor = nombres[datos.proveedor] || datos.proveedor || "";
   if (datos.disponible) {
     donde.className = "ayuda";
-    donde.innerHTML = "<strong>Activo</strong>, con el modelo <code>" +
+    donde.innerHTML = "<strong>Activo</strong>: " + escapar(proveedor) + ", modelo <code>" +
       escapar(datos.modelo) + "</code>. Vas a ver el botón del coach al pie de la " +
-      "devolución de una práctica, y una pregunta libre al pie de Teoría.";
+      "devolución de una práctica, y una pregunta libre al pie de Teoría." +
+      (datos.proveedor === "ollama"
+        ? " Con un modelo local la primera respuesta tarda más: está cargando el modelo."
+        : "");
   } else {
     donde.className = "ayuda";
-    donde.innerHTML = "<strong>Apagado.</strong> " + escapar(datos.motivo);
+    donde.innerHTML = "<strong>Apagado</strong>" + (proveedor ? " (" + escapar(proveedor) + ")" : "") +
+      ". " + escapar(datos.motivo);
   }
 }
