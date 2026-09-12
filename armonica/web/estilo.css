@@ -1322,3 +1322,26 @@ details.bloque > summary h2 small {
   text-transform: none; letter-spacing: 0;
 }
 details.bloque > summary + * { margin-top: 12px; }
+
+/* --- El plan de estudio --- */
+
+.plan-viendo {
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--panel-alto), var(--panel));
+  border: 1px solid rgba(185, 166, 255, 0.35);
+}
+.paso .por-que { margin-top: 4px; font-size: 13.5px; color: var(--tenue); font-style: italic; }
+.frase-del-profe {
+  margin: 12px 0 0;
+  padding: 10px 16px;
+  border-left: 3px solid var(--cobre);
+  font-family: var(--display);
+  font-size: 17px;
+  font-variation-settings: "SOFT" 40, "opsz" 24;
+  color: var(--texto);
+}
+.plan-acciones { margin-top: 14px; }

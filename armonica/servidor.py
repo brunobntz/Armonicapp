@@ -50,7 +50,7 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from armonica import (audio, clases, coach, exportacion, frases, mapeo, posiciones,
+from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
                       segmentacion, tablas, teoria, tono, transcripcion)
 
@@ -1109,6 +1109,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._una_clase(self.path.partition("?")[2]))
         if self.path.startswith("/api/aprendizaje/buscar"):
             return self._responder_json(self._buscar_en_clases(self.path.partition("?")[2]))
+        if self.path == "/api/aprendizaje/plan":
+            return self._responder_json(self._plan())
         return super().do_GET()
 
     # --- POST ---
@@ -1137,6 +1139,10 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._coach_devolucion())
         if self.path == "/api/coach/teoria":
             return self._responder_json(self._coach_teoria(cuerpo))
+        if self.path == "/api/aprendizaje/plan":
+            return self._responder_json(self._armar_plan())
+        if self.path == "/api/aprendizaje/plan/borrar":
+            return self._responder_json(self._borrar_plan())
         if self.path == "/api/sesiones/guardar":
             return self._responder_json(self._guardar_sesion_pendiente(cuerpo))
         if self.path == "/api/sesiones/descartar":
@@ -1977,7 +1983,10 @@ class Manejador(SimpleHTTPRequestHandler):
         if comparacion is None:
             return {"ok": False, "motivo": "Todavía no practicaste ninguna frase."}
         try:
-            return {"ok": True, "texto": coach.explicar_devolucion(comparacion)}
+            # Fase 3: el coach ve el plan de estudio vigente, si hay, para
+            # conectar la practica con lo que el profe viene marcando.
+            contexto = plan.como_contexto(plan.cargar())
+            return {"ok": True, "texto": coach.explicar_devolucion(comparacion, contexto=contexto)}
         except coach.CoachNoDisponible as error:
             return {"ok": False, "motivo": str(error)}
 
@@ -2044,6 +2053,32 @@ class Manejador(SimpleHTTPRequestHandler):
         if clase.error:
             return {"ok": False, "motivo": clase.error}
         return dict(clase.como_diccionario(con_texto=True), ok=True)
+
+    # --- El plan de estudio (Aprendizaje, fase 2) ---
+
+    def _plan(self):
+        """El plan guardado, si hay, y lo que hay que saber antes de armarlo."""
+        estado_coach = coach.estado()
+        return {
+            "ok": True,
+            "plan": plan.cargar(),
+            "coach": estado_coach,
+            # Con un modelo local el texto de las clases no sale de la maquina;
+            # con Claude o ChatGPT, si. La pantalla lo dice al lado del boton.
+            "sale_de_la_maquina": estado_coach["proveedor"] != "ollama",
+        }
+
+    def _armar_plan(self):
+        try:
+            return {"ok": True, "plan": plan.armar()}
+        except coach.CoachNoDisponible as error:
+            return {"ok": False, "motivo": str(error)}
+        except OSError as error:
+            return {"ok": False, "motivo": f"no pude guardar el plan: {error}"}
+
+    def _borrar_plan(self):
+        plan.borrar()
+        return {"ok": True}
 
     def _resumen_actual(self):
         estado = type(self).estado

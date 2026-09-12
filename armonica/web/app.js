@@ -87,7 +87,7 @@ function configurarSolapas() {
       if (cual === "frases") cargarFrases();
       if (cual === "ajustes") cargarAjustes();
       if (cual === "teoria") cargarTeoria();
-      if (cual === "aprendizaje") cargarAprendizaje();
+      if (cual === "aprendizaje") { cargarPlan(); cargarAprendizaje(); }
     });
   });
 }
@@ -2659,4 +2659,110 @@ async function mostrarOrigenDeLasClases() {
     ": " + datos.cantidad + (datos.cantidad === 1 ? " clase" : " clases") +
     (datos.existe ? "" : " (la carpeta no existe todavía)") +
     ". La app solo lee esa carpeta.";
+}
+
+
+/* ==========================================================================
+   El plan de estudio (Aprendizaje, fase 2)
+
+   Los apuntes leidos por el coach: que estamos viendo, que recomienda el
+   profe, y con que parte de la app se trabaja cada cosa. Se arma cuando lo
+   pedis y queda guardado con fecha; se muestra sin volver a llamar.
+   ========================================================================== */
+
+async function cargarPlan() {
+  const donde = document.getElementById("aprendizaje-plan");
+  if (!donde) return;
+  const datos = await pedir("/api/aprendizaje/plan");
+  dibujarPlan(donde, datos);
+}
+
+
+function dibujarPlan(donde, datos) {
+  const p = datos.plan;
+  const coachActivo = datos.coach && datos.coach.disponible;
+  const aviso = datos.sale_de_la_maquina
+    ? "Para armarlo, el texto de las últimas clases se le manda al modelo: con " +
+      escapar(nombreDelProveedor(datos.coach.proveedor)) + " <strong>sale de tu máquina</strong>. " +
+      "Con Ollama, no."
+    : "Para armarlo, el texto de las últimas clases se le manda al modelo local: " +
+      "no sale de tu máquina.";
+
+  let html = '<details class="bloque" open><summary><h2>Mi plan' +
+    (p ? " <small>armado el " + escapar((p.fecha || "").slice(0, 10)) + " con " +
+         escapar(nombreDelProveedor(p.proveedor)) + "</small>" : "") + "</h2></summary>";
+
+  if (p) {
+    if (p.viendo) {
+      html += '<div class="plan-viendo">' + escapar(p.viendo) + "</div>";
+    }
+    (p.recomendaciones || []).forEach((r, indice) => {
+      html += '<div class="paso"><div class="quien">' + (indice + 1) + "</div>" +
+        '<div class="texto">' + escapar(r.que) + "</div>" +
+        (r.por_que ? '<div class="por-que">' + escapar(r.por_que) + "</div>" : "") +
+        (r.solapa || r.en_la_app
+          ? '<div class="propuesta">' +
+            (r.solapa ? '<button data-plan-ir="' + indice + '">' + nombreDeSolapa(r.solapa) + "</button>" : "") +
+            "<span>" + escapar(r.en_la_app) + "</span></div>"
+          : "") +
+        "</div>";
+    });
+    if (p.frase_del_profe) {
+      html += '<blockquote class="frase-del-profe">' + escapar(p.frase_del_profe) + "</blockquote>";
+    }
+    if (p.en_crudo) {
+      html += "<p class='ayuda'>El modelo no contestó en el formato pedido: se muestra tal cual.</p>";
+    }
+  } else {
+    html += "<p class='ayuda'>Todavía no hay plan. El coach lee las últimas clases y " +
+            "arma qué practicar y con qué parte de la app.</p>";
+  }
+
+  html += '<div class="controles plan-acciones">';
+  if (coachActivo) {
+    html += '<button id="plan-armar" class="' + (p ? "secundario" : "principal") + '">' +
+            (p ? "Rehacer el plan" : "Armar mi plan con el coach") + "</button>";
+    if (p) html += '<button id="plan-borrar" class="secundario">Borrar</button>';
+    html += '<span id="plan-estado" class="ayuda"></span>';
+  } else {
+    html += "<span class='ayuda'>Para armar el plan hace falta el coach: " +
+            escapar((datos.coach && datos.coach.motivo) || "configuralo en Ajustes") + "</span>";
+  }
+  html += "</div><p class='ayuda'>" + aviso + "</p></details>";
+
+  donde.innerHTML = html;
+
+  const armar = document.getElementById("plan-armar");
+  if (armar) {
+    armar.addEventListener("click", async () => {
+      const estado = document.getElementById("plan-estado");
+      armar.disabled = true;
+      estado.textContent = "Leyendo las clases... puede tardar medio minuto.";
+      const respuesta = await pedir("/api/aprendizaje/plan", { method: "POST" });
+      if (!respuesta.ok) {
+        estado.textContent = respuesta.motivo || "no se pudo armar el plan";
+        armar.disabled = false;
+        return;
+      }
+      cargarPlan();
+    });
+  }
+  const borrar = document.getElementById("plan-borrar");
+  if (borrar) {
+    borrar.addEventListener("click", async () => {
+      await pedir("/api/aprendizaje/plan/borrar", { method: "POST" });
+      cargarPlan();
+    });
+  }
+  donde.querySelectorAll("[data-plan-ir]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const r = p.recomendaciones[Number(boton.dataset.planIr)];
+      irASolapa(r.solapa, r.config || {});
+    });
+  });
+}
+
+
+function nombreDelProveedor(clave) {
+  return { claude: "Claude", ollama: "Ollama (local)", openai: "ChatGPT" }[clave] || clave || "el coach";
 }

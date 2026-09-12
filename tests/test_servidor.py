@@ -20,7 +20,7 @@ from http.server import ThreadingHTTPServer
 import pytest
 
 import config
-from armonica import (audio, clases, coach, exportacion, frases, mapeo,
+from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan,
                       segmentacion, servidor)
 from herramientas import generar_wav
 
@@ -2314,3 +2314,77 @@ def test_la_solapa_aprendizaje_nunca_escribe_en_la_carpeta(servidor_andando, car
     despues = {n: os.path.getmtime(os.path.join(carpeta_de_clases, n))
                for n in os.listdir(carpeta_de_clases)}
     assert antes == despues
+
+
+# =============================================================================
+# El plan de estudio (Aprendizaje, fase 2) y el coach con contexto (fase 3)
+# =============================================================================
+
+@pytest.fixture
+def carpeta_del_plan(tmp_path, monkeypatch):
+    """El plan se guarda en una carpeta temporal, no en material/."""
+    carpeta = tmp_path / "material"
+    monkeypatch.setattr(plan, "CARPETA_POR_DEFECTO", str(carpeta))
+    return str(carpeta)
+
+
+def test_sin_plan_la_ruta_dice_que_no_hay_y_si_el_texto_sale_de_la_maquina(
+        servidor_andando, carpeta_del_plan, monkeypatch):
+    monkeypatch.setattr(coach, "estado", lambda ruta_env=None: {
+        "disponible": True, "proveedor": "claude", "modelo": "x", "motivo": ""})
+    datos = traer_json(servidor_andando, "/api/aprendizaje/plan")
+    assert datos["plan"] is None
+    assert datos["sale_de_la_maquina"] is True
+
+    monkeypatch.setattr(coach, "estado", lambda ruta_env=None: {
+        "disponible": True, "proveedor": "ollama", "modelo": "x", "motivo": ""})
+    assert traer_json(servidor_andando, "/api/aprendizaje/plan")["sale_de_la_maquina"] is False
+
+
+def test_armar_el_plan_lo_guarda_y_la_devolucion_lo_usa_de_contexto(
+        servidor_andando, carpeta_de_clases, carpeta_del_plan, carpeta_de_frases, monkeypatch):
+    """
+    FASE 2 Y FASE 3 JUNTAS. Se arma el plan con un coach falso; despues se
+    practica una frase y se le pide la explicacion: el prompt tiene que
+    llevar el plan como contexto.
+    """
+    recibido = []
+
+    def falsa(sistema, usuario, ruta_env=None):
+        recibido.append(usuario)
+        if "Armá el plan" in usuario:
+            return ('{"viendo": "El bend del 3.", "recomendaciones": [{"que": "Practicá el '
+                    'bend del 3.", "solapa": "vivo"}], "frase_del_profe": "Anticipá."}')
+        return "Salió bien."
+
+    monkeypatch.setattr(coach, "_pedir", falsa)
+
+    respuesta = mandar(servidor_andando, "/api/aprendizaje/plan")
+    assert respuesta["ok"] is True
+    assert respuesta["plan"]["recomendaciones"][0]["solapa"] == "vivo"
+    assert os.path.isfile(os.path.join(carpeta_del_plan, "_plan.json"))
+    assert traer_json(servidor_andando, "/api/aprendizaje/plan")["plan"]["viendo"] == "El bend del 3."
+
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4", "-4"]), "con plan"))
+    preparar("practicar", "con plan", eventos_de(["-2", "4", "-4"]))
+    mandar(servidor_andando, "/api/terminar")
+    mandar(servidor_andando, "/api/coach/devolucion")
+
+    assert "Practicá el bend del 3." in recibido[-1]
+    assert "no saques números de acá" in recibido[-1]
+
+
+def test_borrar_el_plan(servidor_andando, carpeta_del_plan):
+    plan.guardar({"viendo": "x", "recomendaciones": []})
+    mandar(servidor_andando, "/api/aprendizaje/plan/borrar")
+    assert traer_json(servidor_andando, "/api/aprendizaje/plan")["plan"] is None
+
+
+def test_armar_el_plan_sin_coach_lo_dice(servidor_andando, carpeta_de_clases, carpeta_del_plan,
+                                         monkeypatch, tmp_path):
+    monkeypatch.setattr(coach, "ARCHIVO_ENV", str(tmp_path / "no-existe.env"))
+    monkeypatch.delenv("LLM_CLAVE", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    respuesta = mandar(servidor_andando, "/api/aprendizaje/plan")
+    assert respuesta["ok"] is False
+    assert ".env" in respuesta["motivo"]

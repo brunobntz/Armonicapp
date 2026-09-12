@@ -202,11 +202,16 @@ REGLAS QUE NO SE NEGOCIAN
   decisión. No lo corrijas salvo que el alumno pregunte por eso."""
 
 
-def prompt_de_devolucion(comparacion):
+def prompt_de_devolucion(comparacion, contexto=""):
     """
     El pedido para explicar una práctica. `comparacion` es el diccionario que
     el servidor ya le manda al navegador: los tres números, los consejos y
     el detalle nota por nota.
+
+    `contexto` es el plan de estudio vigente, en texto: lo que el profe
+    viene marcando. Sirve para conectar la práctica con eso ("el bend del 2
+    es justo lo que se trabajó en la última clase"). Es contexto, no datos:
+    los números siguen siendo solo los medidos.
     """
     devolucion = comparacion.get("devolucion", {})
     datos = {
@@ -218,7 +223,7 @@ def prompt_de_devolucion(comparacion):
         "cambiadas": comparacion.get("cambiadas", []),
         "velocidad_pct": comparacion.get("velocidad"),
     }
-    return (
+    prompt = (
         "El alumno acaba de tocar una frase de referencia y la app la comparó "
         "con el original. Estos son los datos medidos, en JSON:\n\n"
         + json.dumps(datos, ensure_ascii=False, indent=1) +
@@ -226,6 +231,77 @@ def prompt_de_devolucion(comparacion):
         "`resumen.consejos` ya están priorizados por la app: apoyate en ellos, "
         "agregá el porqué musical, y no los contradigas."
     )
+    if contexto:
+        prompt += (
+            "\n\nPara que lo conectes con lo que el profe viene marcando, este es "
+            "el plan de estudio vigente. Es contexto: no saques números de acá.\n\n"
+            + contexto
+        )
+    return prompt
+
+
+# Lo que la app sabe hacer, para que el coach pueda decir CON QUE se
+# trabaja cada recomendacion del profe. Una linea por cosa; las claves de
+# solapa son las que usa la pantalla.
+CATALOGO_DE_LA_APP = """\
+- solapa "vivo": el medidor de afinación en tiempo real (cents), el diagrama
+  de la armónica con la escala marcada y la línea que muestra un bend a
+  medio hacer, y grabar una sesión; al guardarla con el BPM de la base se
+  mide el ritmo (cuánto te adelantás o atrasás, dispersión nota a nota).
+- solapa "frases": grabar una frase de referencia o importar el audio del
+  profe, practicarla y recibir una devolución: notas acertadas, afinación
+  de cada bend en cents, tiempo nota por nota, y escuchar las dos seguidas.
+- solapa "teoria": para una armónica, posición y escala: dónde cae la
+  escala en la armónica, la corrida desde la tónica, el blues de doce
+  compases con las notas guía (3ª y 7ª) de cada acorde y por dónde agarrarlas,
+  qué notas evitar sobre cada acorde, y en qué posición conviene la escala.
+  Acepta config: {"posicion": 1-12, "escala": "pentatonica_mayor" |
+  "pentatonica_menor" | "blues" | "blues_mayor"}.
+- solapa "historial": cómo viene cada bend sesión por sesión."""
+
+
+def prompt_de_plan(clases_recientes, sintesis):
+    """
+    El pedido para armar el plan de estudio a partir de los apuntes.
+
+    `clases_recientes` es una lista de {"fecha", "tema", "texto"}, de la
+    más vieja a la más nueva. `sintesis` es el texto de la capa editable,
+    si hay. Se pide JSON con una forma fija, que plan.interpretar() lee.
+    """
+    partes = ["Estos son los apuntes de las últimas clases del alumno, de la más "
+              "vieja a la más nueva. Son resúmenes que manda el profesor:\n"]
+    for clase in clases_recientes:
+        partes.append(f"=== Clase del {clase['fecha']} — {clase['tema'] or 'sin tema'} ===\n"
+                      f"{clase['texto']}\n")
+    if sintesis:
+        partes.append("=== La síntesis que el alumno lleva de todas las clases (puede "
+                      "estar desactualizada respecto de las de arriba) ===\n" + sintesis + "\n")
+    partes.append("=== Lo que la app sabe hacer ===\n" + CATALOGO_DE_LA_APP + "\n")
+    partes.append(
+        "Armá el plan de estudio de esta semana. Contestá SOLO con un JSON con "
+        "esta forma exacta, sin texto antes ni después:\n\n"
+        '{\n'
+        ' "viendo": "dos o tres oraciones: qué se está trabajando ahora, según la última clase",\n'
+        ' "recomendaciones": [\n'
+        '  {"que": "una cosa concreta para practicar, en imperativo y de vos",\n'
+        '   "por_que": "el motivo musical, en una oración",\n'
+        '   "en_la_app": "cómo se trabaja con la app, en una oración",\n'
+        '   "solapa": "vivo" | "frases" | "teoria" | "historial",\n'
+        '   "config": {"posicion": 12, "escala": "blues_mayor"}   (solo si solapa es teoria y aplica)\n'
+        '  }\n'
+        ' ],\n'
+        ' "frase_del_profe": "una frase textual del profe, de los apuntes, para tener presente"\n'
+        '}\n\n'
+        "Entre tres y cinco recomendaciones, de la más importante a la menos. Lo que "
+        "el profe pidió explícitamente en \"Próximos pasos\" va primero. Solo cosas "
+        "que estén en los apuntes: no inventes ejercicios que el profe no dio."
+    )
+    return "\n".join(partes)
+
+
+def armar_plan(clases_recientes, sintesis, ruta_env=None):
+    """El texto (JSON, si el modelo hizo caso) del plan de estudio."""
+    return _pedir(SISTEMA, prompt_de_plan(clases_recientes, sintesis), ruta_env)
 
 
 def prompt_de_teoria(teoria, pregunta):
@@ -261,9 +337,9 @@ def prompt_de_teoria(teoria, pregunta):
 # Las dos preguntas
 # =============================================================================
 
-def explicar_devolucion(comparacion, ruta_env=None):
+def explicar_devolucion(comparacion, ruta_env=None, contexto=""):
     """Una devolución en palabras, a partir de la comparación ya medida."""
-    return _pedir(SISTEMA, prompt_de_devolucion(comparacion), ruta_env)
+    return _pedir(SISTEMA, prompt_de_devolucion(comparacion, contexto), ruta_env)
 
 
 def preguntar_teoria(teoria, pregunta, ruta_env=None):

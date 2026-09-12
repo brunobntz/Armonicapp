@@ -357,7 +357,18 @@ de la carpeta que diga `CARPETA_CLASES` en el `.env`: si un asistente ya te
 deja los resúmenes ordenados en un cuaderno, apuntás ahí y no hay copias.
 Entiende Markdown, texto y Word sin dependencias, y PDF si instalás `pypdf`.
 **La app solo lee esa carpeta**: hay un test que revisa el código y falla si
-aparece cualquier apertura para escribir. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
+aparece cualquier apertura para escribir. Con el coach activo, arriba de todo
+está **Mi plan**: el coach lee las últimas tres clases y la síntesis, y arma
+qué estamos viendo, hasta cinco recomendaciones con su porqué y con qué
+parte de la app se trabaja cada una (con un botón que te lleva ahí), y una
+frase del profe para tener presente. Se guarda con fecha en
+`material/_plan.json` y se muestra sin volver a llamar al modelo; se rehace
+cuando querés. Y cuando después el coach explica una práctica, ve el plan
+como contexto: puede decir "el bend del 2 es justo lo de la última clase".
+**Lo que hay que saber:** para armar el plan, el texto de las clases se le
+manda al modelo. Con Ollama se queda en tu máquina; con Claude o ChatGPT,
+sale. La pantalla lo dice al lado del botón, porque para apuntes de un
+tercero esa decisión es tuya. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
 los JSON que ya se guardaban. **Teoría** es lo que `teoria.py` sabía y solo
 se veía en la terminal: elegís armónica, posición y escala (las doce
 posiciones, no solo las seis con tabla) y te muestra la escala marcada en la
