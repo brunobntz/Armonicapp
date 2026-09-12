@@ -354,6 +354,30 @@ tiene puesto: podés estudiar la 3ª sin dejar de tocar en 12ª. Y **Ajustes**
 tiene el micrófono y la configuración: la armónica que tenés en la mano, la
 posición y la escala de referencia se cambian ahí, sin reiniciar nada.
 
+### El coach (opcional)
+
+Un modelo de lenguaje que **explica lo que la app midió**. Recibe los
+números ya calculados —los tres de la devolución, los consejos, la nota por
+nota; o lo que está en pantalla en Teoría— y los cuenta como lo haría un
+profe que te escuchó una vez. Nunca mide nada, nunca inventa un número, y si
+algo no está medido lo dice. Aparece como un botón al pie de la devolución de
+una práctica y como una pregunta libre al pie de Teoría.
+
+Es opcional y está apagado por defecto. Para activarlo:
+
+```powershell
+pip install anthropic
+copy .env.ejemplo .env
+```
+
+y en el `.env` poné tu clave en `LLM_CLAVE`. Git ignora ese archivo: la clave
+es tuya. Usa la API de Claude con el SDK oficial; el modelo por defecto es
+`claude-opus-5` y se cambia con `LLM_MODELO`. Cada devolución cuesta
+alrededor de un centavo de dólar. El audio nunca sale de tu máquina: al coach
+le llegan números y texto. Para conectar otro proveedor hay UNA función que
+reemplazar, `_pedir()` en `armonica/coach.py`; todo lo demás no sabe con quién
+habla. Los tests nunca tocan la red: la llamada se reemplaza por una falsa.
+
 **El micrófono queda encendido todo el tiempo.** Abrís la app y podés tocar y
 ver lo que sale sin apretar nada: el medidor, el diagrama y la tablatura
 funcionan siempre. Grabar es una decisión aparte, con un solo botón que dice

@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   conectarEnVivo();
   recuperarPendiente();
   recuperarSesionPendiente();
+  cargarEstadoDelCoach();
 });
 
 
@@ -1831,7 +1832,8 @@ function mostrarComparacion(c) {
       .join(", ") + "</p>";
   }
 
-  contenedor.innerHTML = html;
+  contenedor.innerHTML = html + botonDelCoachEnDevolucion();
+  configurarCoachEnDevolucion();
   seccion.hidden = false;
   seccion.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -1926,6 +1928,7 @@ function dibujarNivel(estado) {
    ========================================================================== */
 
 async function cargarAjustes() {
+  mostrarEstadoDelCoach();
   llenarSelector("ajuste-tonalidad",
     (inicio.tonalidades || []).map((clave) => ({ valor: clave, texto: clave })),
     inicio.tonalidad);
@@ -2168,7 +2171,8 @@ function dibujarTeoria(t) {
     lineaDeFuente("calculado para las doce posiciones · " + t.fuentes.doce_amable) +
     "</section>";
 
-  contenedor.innerHTML = html;
+  contenedor.innerHTML = html + bloqueDelCoachEnTeoria();
+  configurarCoachEnTeoria();
 
   // El diagrama se arma con la misma función que el de En vivo, pero NO se
   // registra entre los que se iluminan al tocar: es para mirar, no para
@@ -2200,4 +2204,120 @@ function celdaGrado(g) {
 function lineaDeFuente(texto, tono) {
   if (!texto) return "";
   return '<p class="fuente' + (tono ? " " + tono : "") + '">' + escapar(texto) + "</p>";
+}
+
+
+/* ==========================================================================
+   El coach
+
+   Un modelo de lenguaje que explica lo que la app midio. Opcional: sin
+   clave, los botones no aparecen y Ajustes dice como activarlo. El coach
+   recibe los numeros ya calculados y los explica; nunca mide nada.
+   ========================================================================== */
+
+let coachDisponible = false;
+
+async function cargarEstadoDelCoach() {
+  const datos = await pedir("/api/coach");
+  coachDisponible = Boolean(datos.disponible);
+  return datos;
+}
+
+
+/* El boton "Que me lo explique el coach" al pie de la devolucion. */
+function botonDelCoachEnDevolucion() {
+  if (!coachDisponible) return "";
+  return '<div class="coach"><button id="coach-devolucion" class="secundario">' +
+         "Que me lo explique el coach</button>" +
+         '<div id="coach-devolucion-texto" class="coach-texto" hidden></div></div>';
+}
+
+
+function configurarCoachEnDevolucion() {
+  const boton = document.getElementById("coach-devolucion");
+  if (!boton) return;
+  boton.addEventListener("click", async () => {
+    const salida = document.getElementById("coach-devolucion-texto");
+    boton.disabled = true;
+    boton.textContent = "Pensando...";
+    const respuesta = await pedir("/api/coach/devolucion", { method: "POST" });
+    mostrarRespuestaDelCoach(salida, respuesta);
+    boton.disabled = false;
+    boton.textContent = "Que me lo explique de nuevo";
+  });
+}
+
+
+/* La pregunta libre al pie de Teoria. */
+function bloqueDelCoachEnTeoria() {
+  if (!coachDisponible) return "";
+  return '<section class="coach"><h2>Preguntale al coach</h2>' +
+    '<p class="ayuda">Sobre lo que está en pantalla: por qué esa nota, cómo practicar ' +
+    'un cambio de acorde, qué es una nota guía. El coach ve estos mismos datos.</p>' +
+    '<div class="controles"><input id="coach-pregunta" type="text" maxlength="600" ' +
+    'placeholder="por ejemplo: cómo practico aterrizar en la 3ª del compás 5">' +
+    '<button id="coach-preguntar" class="principal">Preguntar</button></div>' +
+    '<div id="coach-teoria-texto" class="coach-texto" hidden></div></section>';
+}
+
+
+function configurarCoachEnTeoria() {
+  const boton = document.getElementById("coach-preguntar");
+  if (!boton) return;
+  const preguntar = async () => {
+    const salida = document.getElementById("coach-teoria-texto");
+    const pregunta = document.getElementById("coach-pregunta").value.trim();
+    if (!pregunta) return;
+    boton.disabled = true;
+    boton.textContent = "Pensando...";
+    const respuesta = await pedir("/api/coach/teoria", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pregunta: pregunta,
+        tonalidad: document.getElementById("teoria-tonalidad").value,
+        posicion: document.getElementById("teoria-posicion").value,
+        escala: document.getElementById("teoria-escala").value,
+      }),
+    });
+    mostrarRespuestaDelCoach(salida, respuesta);
+    boton.disabled = false;
+    boton.textContent = "Preguntar";
+  };
+  boton.addEventListener("click", preguntar);
+  document.getElementById("coach-pregunta").addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") preguntar();
+  });
+}
+
+
+function mostrarRespuestaDelCoach(salida, respuesta) {
+  salida.hidden = false;
+  if (!respuesta.ok) {
+    salida.className = "coach-texto problema";
+    salida.textContent = respuesta.motivo || "el coach no pudo contestar";
+    return;
+  }
+  salida.className = "coach-texto";
+  // El texto viene en parrafos separados por lineas en blanco.
+  salida.innerHTML = respuesta.texto.split(/\n\s*\n/)
+    .map((parrafo) => "<p>" + escapar(parrafo.trim()).replace(/\n/g, "<br>") + "</p>")
+    .join("");
+}
+
+
+/* La solapa Ajustes: si el coach esta activo, y si no, como activarlo. */
+async function mostrarEstadoDelCoach() {
+  const datos = await cargarEstadoDelCoach();
+  const donde = document.getElementById("estado-coach");
+  if (!donde) return;
+  if (datos.disponible) {
+    donde.className = "ayuda";
+    donde.innerHTML = "<strong>Activo</strong>, con el modelo <code>" +
+      escapar(datos.modelo) + "</code>. Vas a ver el botón del coach al pie de la " +
+      "devolución de una práctica, y una pregunta libre al pie de Teoría.";
+  } else {
+    donde.className = "ayuda";
+    donde.innerHTML = "<strong>Apagado.</strong> " + escapar(datos.motivo);
+  }
 }

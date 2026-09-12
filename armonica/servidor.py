@@ -50,7 +50,7 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from armonica import (audio, exportacion, frases, mapeo, posiciones,
+from armonica import (audio, coach, exportacion, frases, mapeo, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
                       segmentacion, tablas, teoria, tono, transcripcion)
 
@@ -1002,6 +1002,11 @@ class Manejador(SimpleHTTPRequestHandler):
     # el siguiente intento lo reemplaza.
     ultimo_intento = None
 
+    # La ultima comparacion, tal como se le mando al navegador. El coach
+    # explica ESTA y no una que mande el navegador: asi no puede recibir
+    # numeros inventados.
+    ultima_comparacion = None
+
     # Windows no conoce .woff2 y lo serviria como "octet-stream". El
     # navegador igual lo usa, pero avisando en la consola cada vez.
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map,
@@ -1078,6 +1083,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._resumen_actual())
         if self.path.startswith("/api/teoria"):
             return self._responder_json(self._teoria(self.path.partition("?")[2]))
+        if self.path == "/api/coach":
+            return self._responder_json(self._estado_del_coach())
         return super().do_GET()
 
     # --- POST ---
@@ -1102,6 +1109,10 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._terminar())
         if self.path == "/api/frases/borrar":
             return self._responder_json(self._borrar_frase(cuerpo))
+        if self.path == "/api/coach/devolucion":
+            return self._responder_json(self._coach_devolucion())
+        if self.path == "/api/coach/teoria":
+            return self._responder_json(self._coach_teoria(cuerpo))
         if self.path == "/api/sesiones/guardar":
             return self._responder_json(self._guardar_sesion_pendiente(cuerpo))
         if self.path == "/api/sesiones/descartar":
@@ -1494,13 +1505,15 @@ class Manejador(SimpleHTTPRequestHandler):
         if estado.audio_grabado is not None and len(estado.audio_grabado):
             clase.ultimo_intento = (estado.audio_grabado, estado.frecuencia_muestreo)
 
-        return {
+        respuesta = {
             "ok": True,
             "modo": "practicar",
             "comparacion": comparacion_como_diccionario(
                 frases.comparar(frase, estado.eventos), frase,
                 intento_con_audio=clase.ultimo_intento is not None),
         }
+        clase.ultima_comparacion = respuesta["comparacion"]
+        return respuesta
 
     def _tramos_del_audio(self, consulta):
         """
@@ -1669,13 +1682,15 @@ class Manejador(SimpleHTTPRequestHandler):
         if resultado.muestras is not None and len(resultado.muestras):
             clase.ultimo_intento = (resultado.muestras, resultado.frecuencia_muestreo)
 
-        return {
+        respuesta = {
             "ok": True,
             "modo": "practicar",
             "comparacion": comparacion_como_diccionario(
                 frases.comparar(frase, resultado.eventos), frase,
                 intento_con_audio=clase.ultimo_intento is not None),
         }
+        clase.ultima_comparacion = respuesta["comparacion"]
+        return respuesta
 
     def _listar_frases(self):
         salida = []
@@ -1926,6 +1941,42 @@ class Manejador(SimpleHTTPRequestHandler):
         datos = teoria_como_diccionario(tonalidad, posicion, escala)
         datos["ok"] = True
         return datos
+
+    # --- El coach ---
+
+    def _estado_del_coach(self):
+        return coach.estado()
+
+    def _coach_devolucion(self):
+        """Explica la ultima practica. Usa la comparacion que ya se midio."""
+        comparacion = type(self).ultima_comparacion
+        if comparacion is None:
+            return {"ok": False, "motivo": "Todavía no practicaste ninguna frase."}
+        try:
+            return {"ok": True, "texto": coach.explicar_devolucion(comparacion)}
+        except coach.CoachNoDisponible as error:
+            return {"ok": False, "motivo": str(error)}
+
+    def _coach_teoria(self, peticion):
+        """Contesta una pregunta sobre lo que muestra la solapa Teoria."""
+        peticion = peticion or {}
+        pregunta = (peticion.get("pregunta") or "").strip()[:600]
+        if not pregunta:
+            return {"ok": False, "motivo": "Escribí una pregunta primero."}
+
+        consulta = urllib.parse.urlencode({
+            "tonalidad": peticion.get("tonalidad") or "",
+            "posicion": peticion.get("posicion") or "",
+            "escala": peticion.get("escala") or "",
+        })
+        teoria_datos = self._teoria(consulta)
+        if not teoria_datos.get("ok"):
+            return teoria_datos
+
+        try:
+            return {"ok": True, "texto": coach.preguntar_teoria(teoria_datos, pregunta)}
+        except coach.CoachNoDisponible as error:
+            return {"ok": False, "motivo": str(error)}
 
     def _resumen_actual(self):
         estado = type(self).estado

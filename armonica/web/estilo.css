@@ -1182,3 +1182,21 @@ table.guias tr.esta td { color: var(--cobre); }
 
 #teoria-contenido h3 { margin: 18px 0 4px; font-size: 15px; font-weight: 600; }
 #teoria-contenido section { margin-top: 26px; }
+
+/* --- El coach --- */
+
+.coach { margin-top: 16px; }
+.coach-texto {
+  margin-top: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--panel-alto), var(--panel));
+  border: 1px solid rgba(185, 166, 255, 0.35);
+  box-shadow: 0 12px 40px -24px rgba(185, 166, 255, 0.5);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.coach-texto p { margin: 0 0 10px; }
+.coach-texto p:last-child { margin-bottom: 0; }
+.coach-texto.problema { border-color: rgba(232, 193, 74, 0.4); color: var(--amarillo); }
+#coach-pregunta { flex: 1; min-width: 260px; }

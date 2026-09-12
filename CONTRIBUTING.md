@@ -54,5 +54,14 @@ que no se sube.
 ## Lo que no va al repo
 
 `material/` (apuntes de clases, contenido de terceros), `frases/`,
-`sesiones/` y `audio_prueba/` están en `.gitignore`. Son datos de quien usa
-la app en su máquina. No los subas, ni los tuyos ni los de nadie.
+`sesiones/`, `audio_prueba/` y `.env` (la clave del coach) están en
+`.gitignore`. Son datos de quien usa la app en su máquina. No los subas, ni
+los tuyos ni los de nadie.
+
+## El coach (LLM)
+
+Es opcional y vive entero en `armonica/coach.py`. Dos reglas: el modelo
+recibe números que la app ya midió y solo los explica, nunca mide ni
+inventa; y los tests **nunca tocan la red** (se reemplaza `_pedir()` por una
+función falsa, mirá `tests/test_coach.py`). Para otro proveedor, reemplazá
+`_pedir()` y nada más.

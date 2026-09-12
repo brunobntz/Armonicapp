@@ -22,3 +22,6 @@ frases/*
 # Pistas separadas con Demucs (pesan mucho, se regeneran)
 separado/
 .venv-demucs/
+
+# La clave del coach (LLM). Es tuya y se queda en tu maquina.
+.env

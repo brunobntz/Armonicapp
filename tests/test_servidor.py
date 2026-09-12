@@ -20,8 +20,8 @@ from http.server import ThreadingHTTPServer
 import pytest
 
 import config
-from armonica import (audio, exportacion, frases, mapeo, segmentacion,
-                      servidor)
+from armonica import (audio, coach, exportacion, frases, mapeo,
+                      segmentacion, servidor)
 from herramientas import generar_wav
 
 
@@ -43,6 +43,7 @@ def servidor_andando():
     servidor.Manejador.pendiente = None
     servidor.Manejador.sesion_pendiente = None
     servidor.Manejador.ultimo_intento = None
+    servidor.Manejador.ultima_comparacion = None
 
     instancia = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Manejador)
     puerto = instancia.server_address[1]
@@ -2128,3 +2129,88 @@ def test_la_teoria_rechaza_lo_que_no_conoce(servidor_andando):
     assert traer_json(servidor_andando, "/api/teoria?posicion=13")["ok"] is False
     assert traer_json(servidor_andando, "/api/teoria?escala=dorica")["ok"] is False
     assert traer_json(servidor_andando, "/api/teoria?tonalidad=H")["ok"] is False
+
+
+# =============================================================================
+# El coach, desde la pantalla
+# =============================================================================
+
+def test_sin_clave_el_coach_se_declara_apagado(servidor_andando, monkeypatch, tmp_path):
+    monkeypatch.setattr(coach, "ARCHIVO_ENV", str(tmp_path / "no-existe.env"))
+    monkeypatch.delenv("LLM_CLAVE", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    datos = traer_json(servidor_andando, "/api/coach")
+
+    assert datos["disponible"] is False
+    assert ".env" in datos["motivo"]
+
+
+def test_el_coach_explica_la_ultima_practica(servidor_andando, carpeta_de_frases,
+                                             monkeypatch):
+    """
+    La ruta usa la comparacion que el servidor YA midio, no una que mande
+    el navegador: asi el coach no puede recibir numeros inventados.
+    """
+    recibido = {}
+
+    def falsa(sistema, usuario, ruta_env=None):
+        recibido["usuario"] = usuario
+        return "Salio bien. Segui con la frase siguiente."
+
+    monkeypatch.setattr(coach, "_pedir", falsa)
+
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4", "-4"]), "para el coach"))
+    preparar("practicar", "para el coach", eventos_de(["-2", "4", "-4"]))
+    mandar(servidor_andando, "/api/terminar")
+
+    respuesta = mandar(servidor_andando, "/api/coach/devolucion")
+
+    assert respuesta["ok"] is True
+    assert respuesta["texto"].startswith("Salio bien")
+    assert "para el coach" in recibido["usuario"]
+
+
+def test_sin_practica_previa_el_coach_lo_dice(servidor_andando):
+    servidor.Manejador.ultima_comparacion = None
+    respuesta = mandar(servidor_andando, "/api/coach/devolucion")
+    assert respuesta["ok"] is False
+    assert "practicaste" in respuesta["motivo"]
+
+
+def test_el_coach_contesta_sobre_la_teoria_en_pantalla(servidor_andando, monkeypatch):
+    recibido = {}
+
+    def falsa(sistema, usuario, ruta_env=None):
+        recibido["usuario"] = usuario
+        return "El Mi es la 7a mayor de Fa."
+
+    monkeypatch.setattr(coach, "_pedir", falsa)
+
+    respuesta = mandar(servidor_andando, "/api/coach/teoria", {
+        "tonalidad": "C", "posicion": 12, "escala": "blues_mayor",
+        "pregunta": "por que evito el 2 soplado",
+    })
+
+    assert respuesta["ok"] is True
+    assert "por que evito el 2 soplado" in recibido["usuario"]
+    assert "F7" in recibido["usuario"]          # los datos de pantalla van adentro
+
+
+def test_una_pregunta_vacia_al_coach_se_rechaza(servidor_andando):
+    respuesta = mandar(servidor_andando, "/api/coach/teoria",
+                       {"tonalidad": "C", "posicion": 12, "escala": "blues_mayor",
+                        "pregunta": " "})
+    assert respuesta["ok"] is False
+
+
+def test_cuando_el_coach_no_puede_lo_dice_sin_romper(servidor_andando, monkeypatch):
+    def rota(sistema, usuario, ruta_env=None):
+        raise coach.CoachNoDisponible("No hay conexión con el servicio.")
+
+    monkeypatch.setattr(coach, "_pedir", rota)
+    respuesta = mandar(servidor_andando, "/api/coach/teoria",
+                       {"tonalidad": "C", "posicion": 12, "escala": "blues_mayor",
+                        "pregunta": "algo"})
+    assert respuesta["ok"] is False
+    assert "conexión" in respuesta["motivo"]
