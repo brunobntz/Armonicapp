@@ -136,6 +136,8 @@ def test_los_datos_iniciales_traen_la_corrida_desde_la_tonica(servidor_andando):
     assert corrida[-1]["nombre"] == "F6"
     # Blues mayor en Fa: F G Ab A C D, y de vuelta al F.
     assert [n["nombre"] for n in corrida][:7] == ["F4", "G4", "Ab4", "A4", "C5", "D5", "F5"]
+    # Todas las tonicas llevan aro, no solo la primera.
+    assert [n["nombre"] for n in corrida if n["es_tonica"]] == ["F4", "F5", "F6"]
 
 
 def test_sin_escala_no_hay_corrida(servidor_andando):

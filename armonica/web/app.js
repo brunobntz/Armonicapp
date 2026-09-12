@@ -843,7 +843,7 @@ function dibujarCorridaEnVivo(corrida) {
   }
 
   contenedor.innerHTML = corrida.map((nota, indice) =>
-    '<span class="nota' + (nota.bend ? " bend" : "") + (indice === 0 ? " tonica" : "") +
+    '<span class="nota' + (nota.bend ? " bend" : "") + (nota.es_tonica ? " tonica" : "") +
     '">' + escapar(nota.tab) + "<em>" + escapar(nota.nombre) + "</em></span>").join("");
   contenedor.hidden = false;
 }
@@ -2165,7 +2165,7 @@ function dibujarTeoria(t) {
   // --- La corrida ---
   html += "<section><h2>La corrida <small>dos octavas desde la tónica</small></h2>" +
     '<div class="corrida">' +
-    t.corrida.map((n) => '<span class="nota' + bend(n) + '">' + escapar(n.tab) +
+    t.corrida.map((n) => '<span class="nota' + bend(n) + (n.es_tonica ? " tonica" : "") + '">' + escapar(n.tab) +
                          "<em>" + escapar(n.nombre) + "</em></span>").join("") +
     "</div><p class='ayuda'>Punteado = pide bend. Es la que se estudia: arranca en la tónica y sube.</p></section>";
 

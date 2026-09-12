@@ -771,7 +771,11 @@ def corrida_de_la_escala(tonalidad, posicion, escala):
         resultado = teoria.agujeros_para_escala(tonalidad, posicion, escala)
     except ValueError:
         return []
-    return [{"tab": n.como_tab(), "nombre": n.nombre, "bend": n.bend}
+    # Todas las tonicas llevan aro, no solo la primera: el diagrama de arriba
+    # marca los tres Fa, y la corrida tiene que decir lo mismo.
+    clase_tonica = teoria._clase_de_nombre(resultado.tonica)
+    return [{"tab": n.como_tab(), "nombre": n.nombre, "bend": n.bend,
+             "es_tonica": n.midi % 12 == clase_tonica}
             for n in resultado.desde_la_tonica(octavas=2)]
 
 
@@ -806,8 +810,11 @@ def teoria_como_diccionario(tonalidad, posicion, escala):
                                   f"(solo en el cálculo: {' '.join(sobran) or '—'}; "
                                   f"solo en la tabla: {' '.join(faltan) or '—'})"}
 
+    clase_tonica = teoria._clase_de_nombre(resultado.tonica)
+
     def nota_como_dicc(nota):
-        return {"tab": nota.como_tab(), "nombre": nota.nombre, "bend": nota.bend}
+        return {"tab": nota.como_tab(), "nombre": nota.nombre, "bend": nota.bend,
+                "es_tonica": nota.midi % 12 == clase_tonica}
 
     def grado_como_dicc(grado):
         facil = grado.el_mas_facil()
