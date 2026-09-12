@@ -21,9 +21,18 @@ if (-not (Test-Path $icono)) {
 }
 
 $escritorio = [Environment]::GetFolderPath("Desktop")
-$destino = Join-Path $escritorio "Armonica.lnk"
-
 $shell = New-Object -ComObject WScript.Shell
+
+# Si ya hay un acceso directo que apunta a la app, con el nombre que sea
+# (uno renombrado a mano, por ejemplo), se actualiza ese. Sin esto quedaban
+# dos en el escritorio.
+$destino = Join-Path $escritorio "Armonica.lnk"
+foreach ($existente in Get-ChildItem $escritorio -Filter "*.lnk" -ErrorAction SilentlyContinue) {
+    if ($shell.CreateShortcut($existente.FullName).TargetPath -ieq $bat) {
+        $destino = $existente.FullName
+        break
+    }
+}
 $acceso = $shell.CreateShortcut($destino)
 $acceso.TargetPath = $bat
 $acceso.WorkingDirectory = $proyecto
