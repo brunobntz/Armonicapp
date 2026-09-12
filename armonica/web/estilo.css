@@ -1114,7 +1114,7 @@ code {
 }
 .notas-escala { margin: 0 0 6px; font-family: var(--mono); font-size: 16px; color: var(--texto); }
 .notas-escala span { margin-right: 4px; }
-.notas-escala .tonica { color: var(--cobre); font-weight: 600; }
+.notas-escala .tonica { color: var(--aguja); font-weight: 600; }
 @media (max-width: 640px) { .teoria-cabecera { grid-template-columns: 1fr; } }
 
 /* De dónde sale cada dato. Chiquito y siempre presente. */
@@ -1128,8 +1128,10 @@ code {
 .fuente.ojo { color: var(--amarillo); }
 
 /* La tónica lleva un aro en el diagrama, además del punto verde de escala. */
-.celda.tonica { box-shadow: inset 0 0 0 2px var(--cobre); }
-.celda.actual.tonica { box-shadow: inset 0 0 0 2px var(--tinta), 0 0 16px rgba(224, 164, 88, 0.5); }
+/* El aro va en lavanda, el color de la linea de afinacion: es el unico que
+ * no es ni soplado ni aspirado. En cobre se confundia con el soplado. */
+.celda.tonica { box-shadow: inset 0 0 0 2px var(--aguja); }
+.celda.actual.tonica { box-shadow: inset 0 0 0 2px var(--aguja), 0 0 16px rgba(185, 166, 255, 0.5); }
 
 .corrida { display: flex; flex-wrap: wrap; gap: 6px; }
 .corrida .nota {
@@ -1147,15 +1149,9 @@ code {
 }
 .corrida .nota em { font-style: normal; font-size: 10.5px; color: var(--tenue); margin-top: 2px; }
 .corrida .nota.bend { border-style: dashed; }
-.corrida .nota.tonica { box-shadow: inset 0 0 0 2px var(--cobre); }
-.corrida .nota.actual {
-  background: var(--cobre);
-  border-color: var(--cobre);
-  color: var(--tinta);
-  box-shadow: 0 0 14px rgba(224, 164, 88, 0.5);
-}
-.corrida .nota.actual em { color: var(--tinta); opacity: 0.8; }
-.corrida-vivo { margin-top: 12px; }
+.corrida .nota.tonica { box-shadow: inset 0 0 0 2px var(--aguja); }
+/* En En vivo va centrada debajo de la armonica, que es simetrica. */
+.corrida-vivo { margin-top: 12px; justify-content: center; }
 
 .compases {
   display: grid;

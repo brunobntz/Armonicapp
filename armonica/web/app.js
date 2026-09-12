@@ -820,20 +820,19 @@ function clave(nota) {
 
 function resaltarAgujero(nota, cents) {
   diagramas.forEach((diagrama) => resaltarEn(diagrama, nota, cents));
-  resaltarEnLaCorrida(nota);
 }
 
 
 /* La corrida debajo de la armonica: la escala en orden desde la tonica.
- * Con la nota que estas tocando iluminada, el "que sigue" se lee solo. */
-let celdasDeLaCorrida = {};
-let celdaDeCorridaResaltada = null;
-
+ *
+ * Es una referencia quieta a proposito. La primera version iluminaba la
+ * nota que estabas tocando, y eso era una segunda cosa moviendose ademas
+ * del diagrama: cada vez que las dos no coincidieran (una nota fuera de la
+ * escala, un bend a medio hacer) pareceria un error. Con que este, y en
+ * orden, alcanza. */
 function dibujarCorridaEnVivo(corrida) {
   const contenedor = document.getElementById("corrida-vivo");
   if (!contenedor) return;
-  celdasDeLaCorrida = {};
-  celdaDeCorridaResaltada = null;
 
   if (!corrida || !corrida.length) {
     contenedor.hidden = true;
@@ -843,24 +842,8 @@ function dibujarCorridaEnVivo(corrida) {
 
   contenedor.innerHTML = corrida.map((nota, indice) =>
     '<span class="nota' + (nota.bend ? " bend" : "") + (indice === 0 ? " tonica" : "") +
-    '" data-tab="' + escapar(nota.tab) + '">' + escapar(nota.tab) +
-    "<em>" + escapar(nota.nombre) + "</em></span>").join("");
+    '">' + escapar(nota.tab) + "<em>" + escapar(nota.nombre) + "</em></span>").join("");
   contenedor.hidden = false;
-
-  contenedor.querySelectorAll("[data-tab]").forEach((celda) => {
-    // La misma nota puede aparecer una vez sola en la corrida (sin
-    // repetir), asi que el tab alcanza como clave.
-    celdasDeLaCorrida[celda.dataset.tab] = celda;
-  });
-}
-
-
-function resaltarEnLaCorrida(nota) {
-  const nueva = nota ? celdasDeLaCorrida[nota.tab] || null : null;
-  if (nueva === celdaDeCorridaResaltada) return;
-  if (celdaDeCorridaResaltada) celdaDeCorridaResaltada.classList.remove("actual");
-  if (nueva) nueva.classList.add("actual");
-  celdaDeCorridaResaltada = nueva;
 }
 
 
@@ -2146,7 +2129,7 @@ function dibujarTeoria(t) {
   // --- La armónica, con la escala marcada ---
   html += "<section><h2>Dónde está en la armónica</h2>" +
     '<div id="diagrama-teoria"></div>' +
-    '<p class="ayuda">El punto verde marca la escala; el aro, la tónica (' +
+    '<p class="ayuda">El punto verde marca la escala; el aro lavanda, la tónica (' +
     escapar(t.tonica) + "). " + t.agujeros + " agujeros en total, " + t.con_bend +
     (t.con_bend === 1 ? " pide" : " piden") + " bend" +
     (t.faltantes.length
