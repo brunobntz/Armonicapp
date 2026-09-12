@@ -123,6 +123,26 @@ def celdas_de(filas):
             if celda]
 
 
+def test_los_datos_iniciales_traen_la_corrida_desde_la_tonica(servidor_andando):
+    """
+    La escala EN ORDEN, debajo de la armonica. El punto verde dice que
+    notas; esto dice en cual orden, que es lo que se practica. En 12a con
+    armonica de Do arranca en el Fa del -2'' (bend) y sube dos octavas.
+    """
+    corrida = traer_json(servidor_andando, "/api/inicio")["corrida"]
+
+    assert corrida[0]["nombre"] == "F4"
+    assert corrida[0]["tab"] == "-2''" and corrida[0]["bend"] == 2
+    assert corrida[-1]["nombre"] == "F6"
+    # Blues mayor en Fa: F G Ab A C D, y de vuelta al F.
+    assert [n["nombre"] for n in corrida][:7] == ["F4", "G4", "Ab4", "A4", "C5", "D5", "F5"]
+
+
+def test_sin_escala_no_hay_corrida(servidor_andando):
+    mandar(servidor_andando, "/api/configuracion", {"escala": None})
+    assert traer_json(servidor_andando, "/api/inicio")["corrida"] == []
+
+
 def test_los_datos_iniciales_traen_el_diagrama(servidor_andando):
     """
     Una fila por agujero, y TODAS con la misma cantidad de columnas.

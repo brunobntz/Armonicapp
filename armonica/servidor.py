@@ -748,6 +748,24 @@ def comparacion_como_diccionario(comparacion, frase, intento_con_audio=False):
     }
 
 
+def corrida_de_la_escala(tonalidad, posicion, escala):
+    """
+    La escala de referencia como se estudia: desde la tonica, dos octavas.
+
+    Va debajo de la armonica en En vivo. El punto verde del diagrama dice
+    QUE notas son de la escala; esto dice EN QUE ORDEN, que es lo que uno
+    practica. Sin posicion o sin escala no hay corrida: lista vacia.
+    """
+    if not posicion or not escala:
+        return []
+    try:
+        resultado = teoria.agujeros_para_escala(tonalidad, posicion, escala)
+    except ValueError:
+        return []
+    return [{"tab": n.como_tab(), "nombre": n.nombre, "bend": n.bend}
+            for n in resultado.desde_la_tonica(octavas=2)]
+
+
 def teoria_como_diccionario(tonalidad, posicion, escala):
     """
     Todo lo que muestra la solapa Teoría, para una armónica, posición y escala.
@@ -2050,6 +2068,9 @@ class Manejador(SimpleHTTPRequestHandler):
                 estado.tonalidad, estado.posicion, estado.escala
             ),
             "tolerancia_cents": 10.0,
+            "corrida": corrida_de_la_escala(
+                estado.tonalidad, estado.posicion, estado.escala
+            ),
         }
 
     # --- Las respuestas ---

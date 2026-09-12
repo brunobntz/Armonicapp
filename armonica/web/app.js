@@ -37,6 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   llenarTonalidades();
   marcarUmbral();
   dibujarDiagrama(inicio.diagrama);
+  dibujarCorridaEnVivo(inicio.corrida);
   ajustarZonaBuena();
 
   conectarEnVivo();
@@ -819,6 +820,47 @@ function clave(nota) {
 
 function resaltarAgujero(nota, cents) {
   diagramas.forEach((diagrama) => resaltarEn(diagrama, nota, cents));
+  resaltarEnLaCorrida(nota);
+}
+
+
+/* La corrida debajo de la armonica: la escala en orden desde la tonica.
+ * Con la nota que estas tocando iluminada, el "que sigue" se lee solo. */
+let celdasDeLaCorrida = {};
+let celdaDeCorridaResaltada = null;
+
+function dibujarCorridaEnVivo(corrida) {
+  const contenedor = document.getElementById("corrida-vivo");
+  if (!contenedor) return;
+  celdasDeLaCorrida = {};
+  celdaDeCorridaResaltada = null;
+
+  if (!corrida || !corrida.length) {
+    contenedor.hidden = true;
+    contenedor.innerHTML = "";
+    return;
+  }
+
+  contenedor.innerHTML = corrida.map((nota, indice) =>
+    '<span class="nota' + (nota.bend ? " bend" : "") + (indice === 0 ? " tonica" : "") +
+    '" data-tab="' + escapar(nota.tab) + '">' + escapar(nota.tab) +
+    "<em>" + escapar(nota.nombre) + "</em></span>").join("");
+  contenedor.hidden = false;
+
+  contenedor.querySelectorAll("[data-tab]").forEach((celda) => {
+    // La misma nota puede aparecer una vez sola en la corrida (sin
+    // repetir), asi que el tab alcanza como clave.
+    celdasDeLaCorrida[celda.dataset.tab] = celda;
+  });
+}
+
+
+function resaltarEnLaCorrida(nota) {
+  const nueva = nota ? celdasDeLaCorrida[nota.tab] || null : null;
+  if (nueva === celdaDeCorridaResaltada) return;
+  if (celdaDeCorridaResaltada) celdaDeCorridaResaltada.classList.remove("actual");
+  if (nueva) nueva.classList.add("actual");
+  celdaDeCorridaResaltada = nueva;
 }
 
 
@@ -2000,6 +2042,7 @@ async function guardarAjustes() {
   inicio = respuesta.inicio;
   mostrarEncabezado();
   dibujarDiagrama(inicio.diagrama);
+  dibujarCorridaEnVivo(inicio.corrida);
   marcarUmbral();
   mostrarResultadoDeAjustes();
 }
