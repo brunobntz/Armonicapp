@@ -109,6 +109,9 @@ def test_armar_manda_las_clases_y_la_sintesis_y_guarda_con_fecha(carpetas, coach
     assert "bend del 3" in coach_falso["usuario"]           # la clase fue
     assert "El ritmo." in coach_falso["usuario"]            # la síntesis también
     assert 'solapa "teoria"' in coach_falso["usuario"]     # y el catálogo de la app
+    # Medido con el plan real: el modelo inventó agujeros (dijo ↓8 para un
+    # Mib que en armónica de Do es ↑8'). Los agujeros los calcula la app.
+    assert "NO INDIQUES NÚMEROS DE AGUJERO" in coach_falso["usuario"]
     assert datos["clases_usadas"] == ["2026-03-04"]
     assert datos["proveedor"] == "ollama"
     assert datos["fecha"][:4] == "2026"

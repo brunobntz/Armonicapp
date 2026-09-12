@@ -294,7 +294,11 @@ def prompt_de_plan(clases_recientes, sintesis):
         '}\n\n'
         "Entre tres y cinco recomendaciones, de la más importante a la menos. Lo que "
         "el profe pidió explícitamente en \"Próximos pasos\" va primero. Solo cosas "
-        "que estén en los apuntes: no inventes ejercicios que el profe no dio."
+        "que estén en los apuntes: no inventes ejercicios que el profe no dio.\n\n"
+        "NO INDIQUES NÚMEROS DE AGUJERO POR TU CUENTA. Nombrá las notas (Mib, Lab, "
+        "el bend del 2) y copiá los agujeros solo si el apunte los trae textualmente. "
+        "Dónde cae cada nota en la armónica lo calcula la app en Teoría, y lo calcula "
+        "bien; un agujero equivocado en el plan es peor que ninguno."
     )
     return "\n".join(partes)
 
