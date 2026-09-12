@@ -119,6 +119,17 @@ primera respuesta tarda diez o veinte segundos porque carga el modelo en la
 placa; las siguientes, unos segundos. Si el castellano de Qwen no te
 convence, probá `ollama pull llama3.1:8b` y cambiá `LLM_MODELO`.
 
+## 4b. Los apuntes de las clases
+
+La solapa **Aprendizaje** lee los resúmenes de tus clases de `material/`.
+Si ya los tenés en otro lado (por ejemplo, en la carpeta donde tu asistente
+deja los recaps del profe), agregá en el `.env` la ruta, y la app lee de ahí
+sin copiar nada. Solo lee: nunca escribe en esa carpeta.
+
+```
+CARPETA_CLASES=C:\ruta\a\mis\clases
+```
+
 ## 5. Tus datos
 
 `frases/`, `sesiones/` y `material/` no viajan con git. Copiá de la otra

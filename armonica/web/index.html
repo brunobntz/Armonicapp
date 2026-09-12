@@ -18,6 +18,7 @@
   <nav>
     <button class="solapa activa" data-panel="vivo">En vivo</button>
     <button class="solapa" data-panel="frases">Frases</button>
+    <button class="solapa" data-panel="aprendizaje">Aprendizaje</button>
     <button class="solapa" data-panel="historial">Historial</button>
     <button class="solapa" data-panel="teoria">Teoría</button>
     <button class="solapa" data-panel="ajustes">Ajustes</button>
@@ -137,7 +138,8 @@
 
     <!-- La corrida: la escala de referencia EN ORDEN, desde la tónica. El
          punto verde del diagrama dice qué notas; esto dice en qué orden, que
-         es lo que se practica. Se ilumina la nota que estás tocando. -->
+         es lo que se practica. Queda quieta a propósito: lo que se mueve es
+         el diagrama. -->
     <div id="corrida-vivo" class="corrida corrida-vivo" hidden></div>
     <p class="ayuda">
       Como el instrumento: agujeros 1 a 10 de izquierda a derecha. Arriba lo
@@ -376,6 +378,24 @@
     </div>
     <p id="resultado-ajustes" class="ayuda"></p>
   </section>
+
+</main>
+
+<!-- ===================== APRENDIZAJE ===================== -->
+<main id="panel-aprendizaje" class="panel" hidden>
+
+  <!-- Lo que dice el profe, leído de la carpeta de apuntes. La app solo
+       LEE esa carpeta: nunca escribe ahí. -->
+  <section>
+    <div class="controles">
+      <input id="aprendizaje-buscar" type="text" maxlength="80"
+             placeholder="buscar en las clases: bending, notas guía, tercera posición…">
+      <span id="aprendizaje-carpeta" class="ayuda"></span>
+    </div>
+    <div id="aprendizaje-resultados"></div>
+  </section>
+
+  <div id="aprendizaje-contenido"></div>
 
 </main>
 

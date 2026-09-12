@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarPendiente();
   configurarSesionPendiente();
   configurarTeoria();
+  configurarAprendizaje();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -78,7 +79,7 @@ function configurarSolapas() {
         otro.classList.toggle("activa", otro === boton));
 
       const cual = boton.dataset.panel;
-      ["vivo", "frases", "historial", "teoria", "ajustes"].forEach((nombre) => {
+      ["vivo", "frases", "aprendizaje", "historial", "teoria", "ajustes"].forEach((nombre) => {
         document.getElementById("panel-" + nombre).hidden = nombre !== cual;
       });
 
@@ -86,6 +87,7 @@ function configurarSolapas() {
       if (cual === "frases") cargarFrases();
       if (cual === "ajustes") cargarAjustes();
       if (cual === "teoria") cargarTeoria();
+      if (cual === "aprendizaje") cargarAprendizaje();
     });
   });
 }
@@ -2352,4 +2354,283 @@ async function mostrarEstadoDelCoach() {
     donde.innerHTML = "<strong>Apagado</strong>" + (proveedor ? " (" + escapar(proveedor) + ")" : "") +
       ". " + escapar(datos.motivo);
   }
+}
+
+
+/* ==========================================================================
+   La solapa Aprendizaje
+
+   Lo que dice el profe, leído de la carpeta de apuntes (material/, o la
+   que diga CARPETA_CLASES en el .env). Qué estamos viendo, qué tengo que
+   practicar y con qué parte de la app, la cronología de clases, y la
+   síntesis. La app solo LEE esa carpeta.
+   ========================================================================== */
+
+function configurarAprendizaje() {
+  const buscador = document.getElementById("aprendizaje-buscar");
+  let temporizador = null;
+  buscador.addEventListener("input", () => {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(buscarEnClases, 250);
+  });
+}
+
+
+async function cargarAprendizaje() {
+  const datos = await pedir("/api/aprendizaje");
+  const contenedor = document.getElementById("aprendizaje-contenido");
+  const carpeta = document.getElementById("aprendizaje-carpeta");
+
+  if (!datos.ok) {
+    contenedor.innerHTML = '<div class="aviso">' + escapar(datos.motivo) + "</div>";
+    return;
+  }
+
+  carpeta.textContent = datos.cantidad + (datos.cantidad === 1 ? " clase en " : " clases en ") +
+                        datos.carpeta;
+
+  if (!datos.existe || !datos.cantidad) {
+    contenedor.innerHTML = '<div class="aviso">Todavía no hay apuntes. Dejá los resúmenes ' +
+      "de tus clases (Markdown, texto o Word, con la fecha en el nombre: " +
+      "<code>2026-09-08.md</code>) en <code>material/</code>, o apuntá " +
+      "<code>CARPETA_CLASES</code> en el <code>.env</code> a la carpeta donde ya los tenés. " +
+      "La app solo lee esa carpeta: nunca escribe ahí.</div>";
+    return;
+  }
+
+  let html = "";
+
+  // --- Qué estamos viendo: la última clase con recap ---
+  if (datos.ultima) {
+    const u = datos.ultima;
+    html += "<section><h2>Qué estamos viendo <small>" + escapar(fechaLarga(u.fecha)) + "</small></h2>";
+    if (u.puntos_clave.length) {
+      html += '<div class="apunte"><ul>' +
+        u.puntos_clave.map((p) => "<li>" + escapar(p) + "</li>").join("") + "</ul></div>";
+    } else {
+      html += '<div class="apunte">' + markdownAHtml(u.texto) + "</div>";
+    }
+    if (u.temas.length) {
+      html += "<p class='ayuda'>Temas: " + u.temas.map(escapar).join(" · ") + "</p>";
+    }
+    html += "</section>";
+  }
+
+  // --- Qué tengo que practicar ---
+  html += "<section><h2>Qué tengo que practicar</h2>";
+  if (!datos.para_practicar.length) {
+    html += "<p class='ayuda'>Las últimas clases no traen próximos pasos.</p>";
+  }
+  datos.para_practicar.forEach((paso, indice) => {
+    html += '<div class="paso"><div class="quien">' +
+      escapar(paso.para || "para practicar") +
+      '<span class="fecha">' + escapar(paso.fecha) + "</span></div>" +
+      '<div class="texto">' + escapar(paso.texto) + "</div>" +
+      paso.propuestas.map((prop, j) =>
+        '<div class="propuesta"><button data-ir="' + prop.solapa + '" data-paso="' + indice +
+        '" data-prop="' + j + '">' + nombreDeSolapa(prop.solapa) + "</button><span>" +
+        escapar(prop.que) + "</span></div>").join("") +
+      "</div>";
+  });
+  html += "<p class='ayuda'>Las propuestas salen de palabras clave de cada paso: son " +
+          "una orientación, no un diagnóstico.</p></section>";
+
+  // --- La cronología ---
+  html += "<section><h2>Las clases <small>" + datos.cantidad + "</small></h2>";
+  datos.clases.forEach((c) => {
+    html += '<details class="clase-fila' + (c.con_recap ? "" : " sin-recap") +
+      '" data-archivo="' + escapar(c.archivo) + '"><summary>' +
+      '<span class="fecha">' + escapar(c.fecha || "sin fecha") + "</span>" +
+      '<span class="titulo">' + escapar(c.titulo) + (c.con_recap ? "" : " · sin recap") +
+      (c.error ? " · " + escapar(c.error) : "") + "</span>" +
+      '<span class="temas">' + c.temas.slice(0, 3).map(escapar).join(" · ") + "</span>" +
+      '</summary><div class="cuerpo apunte">…</div></details>';
+  });
+  html += "</section>";
+
+  // --- La síntesis ---
+  if (datos.sintesis) {
+    html += '<section><details class="sintesis"><summary>La síntesis (aprendizaje.md): ' +
+      "lo que sale de leer las clases juntas. Es la capa editable, y la app no la " +
+      'toca.</summary><div class="apunte">' + markdownAHtml(datos.sintesis) +
+      "</div></details></section>";
+  }
+
+  contenedor.innerHTML = html;
+
+  // Ir a la solapa que propone cada paso, con Teoría ya configurada.
+  contenedor.querySelectorAll("[data-ir]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const paso = datos.para_practicar[Number(boton.dataset.paso)];
+      const prop = paso.propuestas[Number(boton.dataset.prop)];
+      irASolapa(prop.solapa, prop.config || {});
+    });
+  });
+
+  // El texto entero de una clase se pide recién al abrirla.
+  contenedor.querySelectorAll("details.clase-fila").forEach((fila) => {
+    fila.addEventListener("toggle", async () => {
+      if (!fila.open || fila.dataset.cargada === "si") return;
+      const cuerpo = fila.querySelector(".cuerpo");
+      const respuesta = await pedir("/api/aprendizaje/clase?archivo=" +
+                                    encodeURIComponent(fila.dataset.archivo));
+      cuerpo.innerHTML = respuesta.ok ? markdownAHtml(respuesta.texto)
+                                      : "<p class='ayuda'>" + escapar(respuesta.motivo) + "</p>";
+      fila.dataset.cargada = "si";
+    });
+  });
+}
+
+
+function nombreDeSolapa(clave) {
+  return { vivo: "En vivo", frases: "Frases", teoria: "Teoría", historial: "Historial" }[clave] || clave;
+}
+
+
+function fechaLarga(iso) {
+  if (!iso) return "";
+  const [anio, mes, dia] = iso.split("-");
+  const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                 "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  return Number(dia) + " de " + meses[Number(mes) - 1] + " de " + anio;
+}
+
+
+/* Cambiar de solapa desde el código, como si hubieras clickeado. Con
+ * `config`, Teoría se abre ya en esa posición y escala. */
+function irASolapa(nombre, config) {
+  const boton = document.querySelector('.solapa[data-panel="' + nombre + '"]');
+  if (!boton) return;
+  boton.click();
+  if (nombre === "teoria" && config && (config.posicion || config.escala)) {
+    // cargarTeoria llena los selectores la primera vez; esperamos a que
+    // existan las opciones y recién ahí las cambiamos.
+    const aplicar = () => {
+      const posicion = document.getElementById("teoria-posicion");
+      const escala = document.getElementById("teoria-escala");
+      if (!posicion.options.length) { setTimeout(aplicar, 150); return; }
+      if (config.posicion) posicion.value = String(config.posicion);
+      if (config.escala) escala.value = config.escala;
+      cargarTeoria();
+    };
+    setTimeout(aplicar, 200);
+  }
+}
+
+
+async function buscarEnClases() {
+  const consulta = document.getElementById("aprendizaje-buscar").value.trim();
+  const donde = document.getElementById("aprendizaje-resultados");
+  if (!consulta) { donde.innerHTML = ""; return; }
+
+  const datos = await pedir("/api/aprendizaje/buscar?q=" + encodeURIComponent(consulta));
+  if (!datos.resultados.length) {
+    donde.innerHTML = "<p class='ayuda'>Nada con «" + escapar(consulta) + "» en las clases.</p>";
+    return;
+  }
+  const marcar = (texto) => escapar(texto).replace(
+    new RegExp(escaparRegex(escapar(consulta)), "gi"), (m) => "<mark>" + m + "</mark>");
+  donde.innerHTML = datos.resultados.map((r) =>
+    '<div class="resultado-busqueda"><span class="fecha">' + escapar(r.fecha || "—") +
+    "</span>" + escapar(r.titulo) +
+    r.pedazos.map((p) => '<div class="pedazo">' + marcar(p) + "</div>").join("") +
+    "</div>").join("");
+}
+
+
+function escaparRegex(texto) {
+  return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+
+/* Un Markdown chico: lo que traen los apuntes y nada más.
+ *
+ * Títulos, listas (con sangría), negritas, cursivas, código, tablas,
+ * citas, líneas horizontales y los enlaces [[de un cuaderno]], que se
+ * dejan como texto. Todo pasa por escapar() antes: el contenido es un
+ * archivo tuyo, pero igual no se confía en él. */
+function markdownAHtml(texto) {
+  const lineas = (texto || "").replace(/\r\n/g, "\n").split("\n");
+  let html = "";
+  let parrafo = [];
+  let listas = [];            // la pila de listas abiertas, por sangría
+  let tabla = null;
+
+  const cerrarParrafo = () => {
+    if (parrafo.length) { html += "<p>" + parrafo.join(" ") + "</p>"; parrafo = []; }
+  };
+  const cerrarListas = (hasta) => {
+    while (listas.length > hasta) { html += "</li></ul>"; listas.pop(); }
+  };
+  const cerrarTabla = () => {
+    if (tabla) { html += tabla + "</tbody></table>"; tabla = null; }
+  };
+  const cerrarTodo = () => { cerrarParrafo(); cerrarListas(0); cerrarTabla(); };
+
+  lineas.forEach((cruda) => {
+    const linea = cruda.replace(/\s+$/, "");
+
+    if (!linea.trim()) { cerrarTodo(); return; }
+
+    const titulo = linea.match(/^(#{1,3}) (.+)$/);
+    if (titulo) {
+      cerrarTodo();
+      const nivel = titulo[1].length;
+      html += "<h" + nivel + ">" + enLinea(titulo[2]) + "</h" + nivel + ">";
+      return;
+    }
+    if (/^---+$/.test(linea.trim())) { cerrarTodo(); html += "<hr>"; return; }
+
+    const item = linea.match(/^(\s*)[-*] (.+)$/);
+    if (item) {
+      cerrarParrafo(); cerrarTabla();
+      const nivel = Math.floor(item[1].length / 2) + 1;
+      if (nivel > listas.length) {
+        while (listas.length < nivel) { html += "<ul><li>"; listas.push(nivel); }
+        html += enLinea(item[2]);
+      } else {
+        cerrarListas(nivel);
+        html += "</li><li>" + enLinea(item[2]);
+      }
+      return;
+    }
+
+    if (linea.trim().startsWith("|")) {
+      cerrarParrafo(); cerrarListas(0);
+      const celdas = linea.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      if (celdas.every((c) => /^:?-+:?$/.test(c))) return;     // la línea de guiones
+      if (!tabla) {
+        tabla = "<table><thead><tr>" + celdas.map((c) => "<th>" + enLinea(c) + "</th>").join("") +
+                "</tr></thead><tbody>";
+      } else {
+        tabla += "<tr>" + celdas.map((c) => "<td>" + enLinea(c) + "</td>").join("") + "</tr>";
+      }
+      return;
+    }
+    cerrarTabla();
+
+    if (linea.startsWith("> ")) {
+      cerrarParrafo(); cerrarListas(0);
+      html += "<blockquote>" + enLinea(linea.slice(2)) + "</blockquote>";
+      return;
+    }
+
+    // Una línea suelta dentro de una lista continúa el ítem; fuera, es párrafo.
+    if (listas.length && /^\s+/.test(cruda)) { html += " " + enLinea(linea.trim()); return; }
+    cerrarListas(0);
+    parrafo.push(enLinea(linea.trim()));
+  });
+  cerrarTodo();
+  return html;
+}
+
+
+function enLinea(texto) {
+  let t = escapar(texto);
+  t = t.replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, "$1");        // [[ruta|texto]] -> texto
+  t = t.replace(/\[\[([^\]]+)\]\]/g, "$1");                // [[texto]] -> texto
+  t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+  t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  t = t.replace(/(^|[^*\w])\*([^*\n]+)\*(?![\w*])/g, "$1<em>$2</em>");
+  return t;
 }

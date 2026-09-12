@@ -1205,3 +1205,95 @@ table.guias tr.esta td { color: var(--cobre); }
 .coach-texto p:last-child { margin-bottom: 0; }
 .coach-texto.problema { border-color: rgba(232, 193, 74, 0.4); color: var(--amarillo); }
 #coach-pregunta { flex: 1; min-width: 260px; }
+
+/* --- La solapa Aprendizaje --- */
+
+#aprendizaje-buscar { flex: 1; min-width: 260px; }
+#aprendizaje-carpeta { font-family: var(--mono); font-size: 11.5px; }
+
+.paso {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 13px 16px;
+  margin-bottom: 10px;
+}
+.paso .quien {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tenue);
+  margin-bottom: 4px;
+}
+.paso .quien .fecha { font-family: var(--mono); letter-spacing: 0; margin-left: 8px; }
+.paso .texto { font-size: 15px; color: var(--texto); }
+.paso .propuesta {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 8px;
+  font-size: 13.5px;
+  color: var(--tenue);
+}
+.paso .propuesta button {
+  flex: none;
+  border: 1px solid var(--cobre);
+  background: transparent;
+  color: var(--cobre);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font: 600 12px var(--cuerpo);
+  cursor: pointer;
+}
+.paso .propuesta button:hover { background: var(--cobre); color: var(--tinta); }
+
+/* La cronologia: una fila por clase, que se abre al clickear. */
+.clase-fila {
+  border-top: 1px solid var(--borde);
+  padding: 10px 0;
+}
+.clase-fila summary {
+  cursor: pointer;
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  list-style: none;
+}
+.clase-fila summary::-webkit-details-marker { display: none; }
+.clase-fila summary .fecha { font-family: var(--mono); font-size: 13px; color: var(--cobre); min-width: 96px; }
+.clase-fila summary .titulo { flex: 1; font-size: 15px; }
+.clase-fila summary .temas { font-size: 12px; color: var(--tenue); }
+.clase-fila.sin-recap summary .titulo { color: var(--tenue); font-style: italic; }
+.clase-fila .cuerpo { margin-top: 10px; }
+
+/* Markdown renderizado: la clase entera y la sintesis. Tipografia de
+ * lectura, mas chica que la de la app. */
+.apunte {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--texto);
+  max-width: 760px;
+}
+.apunte h1, .apunte h2, .apunte h3 {
+  font-family: var(--display);
+  font-weight: 500;
+  margin: 18px 0 6px;
+  letter-spacing: -0.005em;
+}
+.apunte h1 { font-size: 22px; }
+.apunte h2 { font-size: 18px; }
+.apunte h3 { font-size: 15px; font-family: var(--cuerpo); font-weight: 600; }
+.apunte p { margin: 0 0 10px; }
+.apunte ul { margin: 0 0 10px; padding-left: 22px; }
+.apunte li { margin: 2px 0; }
+.apunte code { font-family: var(--mono); font-size: 0.92em; }
+.apunte hr { border: 0; border-top: 1px solid var(--borde); margin: 14px 0; }
+.apunte table { font-size: 13px; margin: 8px 0 12px; }
+.apunte blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--borde); color: var(--tenue); }
+
+.resultado-busqueda { border-top: 1px solid var(--borde); padding: 8px 0; font-size: 13.5px; }
+.resultado-busqueda .fecha { font-family: var(--mono); color: var(--cobre); margin-right: 10px; }
+.resultado-busqueda .pedazo { color: var(--tenue); margin: 2px 0 0 106px; }
+.resultado-busqueda .pedazo mark { background: rgba(224, 164, 88, 0.25); color: var(--texto); border-radius: 3px; }
+
+details.sintesis > summary { cursor: pointer; color: var(--tenue); font-size: 14px; }

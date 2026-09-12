@@ -20,7 +20,7 @@ from http.server import ThreadingHTTPServer
 import pytest
 
 import config
-from armonica import (audio, coach, exportacion, frases, mapeo,
+from armonica import (audio, clases, coach, exportacion, frases, mapeo,
                       segmentacion, servidor)
 from herramientas import generar_wav
 
@@ -2234,3 +2234,83 @@ def test_cuando_el_coach_no_puede_lo_dice_sin_romper(servidor_andando, monkeypat
                         "pregunta": "algo"})
     assert respuesta["ok"] is False
     assert "conexión" in respuesta["motivo"]
+
+
+# =============================================================================
+# La solapa Aprendizaje
+# =============================================================================
+
+RECAP_DE_PRUEBA = """# Clase 2026-03-04
+
+## Puntos clave
+
+- **La escala:** salió entera.
+
+## Próximos pasos
+
+- **Ana:** practicar el bend del 3.
+- **Ana:** mirar la pentatónica mayor en primera posición.
+"""
+
+
+@pytest.fixture
+def carpeta_de_clases(tmp_path, monkeypatch):
+    """Los apuntes van a una carpeta temporal, no a material/ ni al vault."""
+    (tmp_path / "2026-03-04.md").write_text(RECAP_DE_PRUEBA, encoding="utf-8")
+    (tmp_path / "2026-02-25.md").write_text("# Clase\n\nHoy vimos el bend del 2.\n",
+                                            encoding="utf-8")
+    monkeypatch.setattr(clases, "carpeta_de_clases", lambda ruta_env=None: str(tmp_path))
+    return str(tmp_path)
+
+
+def test_aprendizaje_trae_lo_que_muestra_la_solapa(servidor_andando, carpeta_de_clases):
+    datos = traer_json(servidor_andando, "/api/aprendizaje")
+
+    assert datos["ok"] is True
+    assert datos["cantidad"] == 2
+    assert datos["ultima"]["fecha"] == "2026-03-04"
+    assert datos["ultima"]["puntos_clave"] == ["La escala: salió entera."]
+    assert datos["para_practicar"][0]["texto"] == "practicar el bend del 3."
+    assert datos["para_practicar"][0]["propuestas"][0]["solapa"] == "vivo"
+    assert datos["para_practicar"][1]["propuestas"][0]["config"] == {
+        "posicion": 1, "escala": "pentatonica_mayor"}
+    assert [c["fecha"] for c in datos["clases"]] == ["2026-03-04", "2026-02-25"]
+
+
+def test_aprendizaje_sin_carpeta_no_rompe(servidor_andando, monkeypatch, tmp_path):
+    monkeypatch.setattr(clases, "carpeta_de_clases",
+                        lambda ruta_env=None: str(tmp_path / "no-existe"))
+    datos = traer_json(servidor_andando, "/api/aprendizaje")
+    assert datos["ok"] is True
+    assert datos["existe"] is False and datos["cantidad"] == 0
+
+
+def test_una_clase_entera_se_pide_por_su_archivo(servidor_andando, carpeta_de_clases):
+    datos = traer_json(servidor_andando, "/api/aprendizaje/clase?archivo=2026-02-25.md")
+    assert datos["ok"] is True
+    assert "bend del 2" in datos["texto"]
+
+
+def test_pedir_una_clase_fuera_de_la_carpeta_se_rechaza(servidor_andando, carpeta_de_clases):
+    """El nombre del archivo viene del navegador: no puede salir de la carpeta."""
+    for intento in ("..%2F..%2Fconfig.py", "..\\config.py", "%2Fetc%2Fpasswd", "no-existe.md"):
+        datos = traer_json(servidor_andando, "/api/aprendizaje/clase?archivo=" + intento)
+        assert datos["ok"] is False
+
+
+def test_buscar_en_las_clases(servidor_andando, carpeta_de_clases):
+    datos = traer_json(servidor_andando, "/api/aprendizaje/buscar?q=bend+del+2")
+    assert [r["fecha"] for r in datos["resultados"]] == ["2026-02-25"]
+    assert "bend del 2" in datos["resultados"][0]["pedazos"][0]
+
+
+def test_la_solapa_aprendizaje_nunca_escribe_en_la_carpeta(servidor_andando, carpeta_de_clases):
+    """Antes y despues de usar todas las rutas, la carpeta esta igual."""
+    antes = {n: os.path.getmtime(os.path.join(carpeta_de_clases, n))
+             for n in os.listdir(carpeta_de_clases)}
+    traer_json(servidor_andando, "/api/aprendizaje")
+    traer_json(servidor_andando, "/api/aprendizaje/clase?archivo=2026-03-04.md")
+    traer_json(servidor_andando, "/api/aprendizaje/buscar?q=bend")
+    despues = {n: os.path.getmtime(os.path.join(carpeta_de_clases, n))
+               for n in os.listdir(carpeta_de_clases)}
+    assert antes == despues

@@ -50,7 +50,7 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from armonica import (audio, coach, exportacion, frases, mapeo, posiciones,
+from armonica import (audio, clases, coach, exportacion, frases, mapeo, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
                       segmentacion, tablas, teoria, tono, transcripcion)
 
@@ -1103,6 +1103,12 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._teoria(self.path.partition("?")[2]))
         if self.path == "/api/coach":
             return self._responder_json(self._estado_del_coach())
+        if self.path == "/api/aprendizaje":
+            return self._responder_json(self._aprendizaje())
+        if self.path.startswith("/api/aprendizaje/clase"):
+            return self._responder_json(self._una_clase(self.path.partition("?")[2]))
+        if self.path.startswith("/api/aprendizaje/buscar"):
+            return self._responder_json(self._buscar_en_clases(self.path.partition("?")[2]))
         return super().do_GET()
 
     # --- POST ---
@@ -1995,6 +2001,49 @@ class Manejador(SimpleHTTPRequestHandler):
             return {"ok": True, "texto": coach.preguntar_teoria(teoria_datos, pregunta)}
         except coach.CoachNoDisponible as error:
             return {"ok": False, "motivo": str(error)}
+
+    # --- Aprendizaje: los apuntes de las clases ---
+
+    def _aprendizaje(self):
+        """
+        La solapa Aprendizaje: que estamos viendo, que practicar, la
+        cronologia y la sintesis. Todo sale de leer la carpeta de clases;
+        esa carpeta no se toca.
+        """
+        try:
+            return dict(clases.resumen(), ok=True)
+        except OSError as error:
+            return {"ok": False, "motivo": f"no pude leer la carpeta de clases: {error}"}
+
+    def _buscar_en_clases(self, consulta):
+        parametros = urllib.parse.parse_qs(consulta)
+        texto = (parametros.get("q", [""])[0] or "").strip()[:80]
+        return {"ok": True, "consulta": texto,
+                "resultados": clases.buscar(clases.listar(), texto)}
+
+    def _una_clase(self, consulta):
+        """
+        El texto entero de una clase, por el nombre de su archivo.
+
+        El nombre viene del navegador: se acepta SOLO un nombre de archivo
+        plano, sin carpetas, y se verifica que la ruta resultante siga
+        adentro de la carpeta de clases. Nada de lo que se pida puede salir
+        de ahi.
+        """
+        parametros = urllib.parse.parse_qs(consulta)
+        nombre = (parametros.get("archivo", [""])[0] or "").strip()
+        if not nombre or nombre != os.path.basename(nombre) or nombre.startswith("."):
+            return {"ok": False, "motivo": "nombre de archivo invalido"}
+
+        carpeta = os.path.abspath(clases.carpeta_de_clases())
+        ruta = os.path.abspath(os.path.join(carpeta, nombre))
+        if os.path.dirname(ruta) != carpeta or not os.path.isfile(ruta):
+            return {"ok": False, "motivo": "esa clase no esta en la carpeta"}
+
+        clase = clases.leer_clase(ruta)
+        if clase.error:
+            return {"ok": False, "motivo": clase.error}
+        return dict(clase.como_diccionario(con_texto=True), ok=True)
 
     def _resumen_actual(self):
         estado = type(self).estado

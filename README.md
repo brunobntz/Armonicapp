@@ -333,7 +333,7 @@ la mediana ni se entera.
 python main.py --web --posicion 12 --escala blues_mayor
 ```
 
-Cinco solapas. **En vivo** tiene el medidor de afinación con una aguja que se
+Seis solapas. **En vivo** tiene el medidor de afinación con una aguja que se
 mueve suave (en la terminal parpadea quince veces por segundo y no se puede
 leer mientras soplás), el diagrama de la armónica con la escala en verde, y la
 tablatura que vas tocando. **Frases** es el modo "repetí esta frase": grabás
@@ -346,7 +346,18 @@ coincidieron menos de tres notas, dice eso y no opina de ritmo ni de
 afinación. Abajo podés escuchar la referencia y tu intento uno debajo del
 otro, que es la única forma de OÍR la diferencia de ritmo que los números
 describen, y después viene el detalle nota por nota. El intento también
-puede ser un archivo, si ya lo grabaste con la grabadora de Windows. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
+puede ser un archivo, si ya lo grabaste con la grabadora de Windows.
+**Aprendizaje** lee los apuntes de tus clases y te muestra qué estamos
+viendo (los puntos clave de la última clase), qué tenés que practicar (los
+próximos pasos de las últimas clases, cada uno con un botón que te lleva a la
+parte de la app donde se trabaja: el medidor para un bend, Teoría abierta en
+la posición que nombra el recap, Frases para una frase), la cronología de
+clases y la síntesis si la tenés escrita. Lee de `material/` por defecto, o
+de la carpeta que diga `CARPETA_CLASES` en el `.env`: si un asistente ya te
+deja los resúmenes ordenados en un cuaderno, apuntás ahí y no hay copias.
+Entiende Markdown, texto y Word sin dependencias, y PDF si instalás `pypdf`.
+**La app solo lee esa carpeta**: hay un test que revisa el código y falla si
+aparece cualquier apertura para escribir. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
 los JSON que ya se guardaban. **Teoría** es lo que `teoria.py` sabía y solo
 se veía en la terminal: elegís armónica, posición y escala (las doce
 posiciones, no solo las seis con tabla) y te muestra la escala marcada en la
