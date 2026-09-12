@@ -39,8 +39,15 @@ Te dice qué número poner en `UMBRAL_VOLUMEN_RMS` dentro de `config.py`.
 Sin eso, la app puede no detectar nada (si el umbral está muy alto) o detectar
 tu respiración (si está muy bajo).
 
-Y después, la interfaz web. La forma corta es **doble clic en `Armonica.bat`**
-(o en el acceso directo del escritorio, si lo creaste): abre el navegador solo.
+Y después, la interfaz web. La forma corta es **doble clic en `Armonica.bat`**,
+o en el acceso directo del escritorio, que se crea con un comando y lleva el
+icono de la armónica:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File herramientas\acceso_directo.ps1
+```
+
+Cualquiera de los dos abre el navegador solo.
 La ventana negra que queda atrás ES el servidor, así que minimizala en vez de
 cerrarla. Para cambiar la armónica, la posición o la escala de arranque, editá
 la línea `set OPCIONES` que está adentro del `.bat`.
