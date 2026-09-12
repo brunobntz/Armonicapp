@@ -1956,6 +1956,7 @@ function dibujarNivel(estado) {
 
 async function cargarAjustes() {
   mostrarEstadoDelCoach();
+  mostrarOrigenDeLasClases();
   llenarSelector("ajuste-tonalidad",
     (inicio.tonalidades || []).map((clave) => ({ valor: clave, texto: clave })),
     inicio.tonalidad);
@@ -2386,8 +2387,8 @@ async function cargarAprendizaje() {
     return;
   }
 
-  carpeta.textContent = datos.cantidad + (datos.cantidad === 1 ? " clase en " : " clases en ") +
-                        datos.carpeta;
+  // Cuantas hay, y nada mas: la ruta de la carpeta no va a la pantalla.
+  carpeta.textContent = datos.cantidad + (datos.cantidad === 1 ? " clase" : " clases");
 
   if (!datos.existe || !datos.cantidad) {
     contenedor.innerHTML = '<div class="aviso">Todavía no hay apuntes. Dejá los resúmenes ' +
@@ -2400,10 +2401,17 @@ async function cargarAprendizaje() {
 
   let html = "";
 
+  // Cada bloque se pliega. Los dos primeros arrancan abiertos; la
+  // cronología y la síntesis, cerradas: son largas y se consultan.
+  const abrir = (titulo, abierto) =>
+    '<details class="bloque"' + (abierto ? " open" : "") + "><summary><h2>" + titulo +
+    "</h2></summary>";
+  const cerrar = "</details>";
+
   // --- Qué estamos viendo: la última clase con recap ---
   if (datos.ultima) {
     const u = datos.ultima;
-    html += "<section><h2>Qué estamos viendo <small>" + escapar(fechaLarga(u.fecha)) + "</small></h2>";
+    html += abrir("Qué estamos viendo <small>" + escapar(fechaLarga(u.fecha)) + "</small>", true);
     if (u.puntos_clave.length) {
       html += '<div class="apunte"><ul>' +
         u.puntos_clave.map((p) => "<li>" + escapar(p) + "</li>").join("") + "</ul></div>";
@@ -2413,11 +2421,11 @@ async function cargarAprendizaje() {
     if (u.temas.length) {
       html += "<p class='ayuda'>Temas: " + u.temas.map(escapar).join(" · ") + "</p>";
     }
-    html += "</section>";
+    html += cerrar;
   }
 
   // --- Qué tengo que practicar ---
-  html += "<section><h2>Qué tengo que practicar</h2>";
+  html += abrir("Qué tengo que practicar", true);
   if (!datos.para_practicar.length) {
     html += "<p class='ayuda'>Las últimas clases no traen próximos pasos.</p>";
   }
@@ -2433,27 +2441,28 @@ async function cargarAprendizaje() {
       "</div>";
   });
   html += "<p class='ayuda'>Las propuestas salen de palabras clave de cada paso: son " +
-          "una orientación, no un diagnóstico.</p></section>";
+          "una orientación, no un diagnóstico.</p>" + cerrar;
 
   // --- La cronología ---
-  html += "<section><h2>Las clases <small>" + datos.cantidad + "</small></h2>";
+  // Cada fila lleva el TEMA de la clase (el propósito de la reunión, si el
+  // recap lo trae) y no el nombre del archivo, que ya dice la fecha.
+  html += abrir("Las clases <small>" + datos.cantidad + "</small>", false);
   datos.clases.forEach((c) => {
+    const sinRecap = !c.con_recap && !/sin recap/i.test(c.titulo);
     html += '<details class="clase-fila' + (c.con_recap ? "" : " sin-recap") +
       '" data-archivo="' + escapar(c.archivo) + '"><summary>' +
       '<span class="fecha">' + escapar(c.fecha || "sin fecha") + "</span>" +
-      '<span class="titulo">' + escapar(c.titulo) + (c.con_recap ? "" : " · sin recap") +
+      '<span class="titulo">' + escapar(c.tema || c.titulo) + (sinRecap ? " · sin recap" : "") +
       (c.error ? " · " + escapar(c.error) : "") + "</span>" +
       '<span class="temas">' + c.temas.slice(0, 3).map(escapar).join(" · ") + "</span>" +
       '</summary><div class="cuerpo apunte">…</div></details>';
   });
-  html += "</section>";
+  html += cerrar;
 
   // --- La síntesis ---
   if (datos.sintesis) {
-    html += '<section><details class="sintesis"><summary>La síntesis (aprendizaje.md): ' +
-      "lo que sale de leer las clases juntas. Es la capa editable, y la app no la " +
-      'toca.</summary><div class="apunte">' + markdownAHtml(datos.sintesis) +
-      "</div></details></section>";
+    html += abrir("La síntesis <small>aprendizaje.md, la capa editable: la app no la toca</small>", false) +
+      '<div class="apunte">' + markdownAHtml(datos.sintesis) + "</div>" + cerrar;
   }
 
   contenedor.innerHTML = html;
@@ -2633,4 +2642,21 @@ function enLinea(texto) {
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/(^|[^*\w])\*([^*\n]+)\*(?![\w*])/g, "$1<em>$2</em>");
   return t;
+}
+
+
+
+/* La solapa Ajustes: de donde se leen los apuntes. Sin la ruta: puede ser
+ * el cuaderno personal de alguien y no hay por que mostrarla. */
+async function mostrarOrigenDeLasClases() {
+  const donde = document.getElementById("estado-clases");
+  if (!donde) return;
+  const datos = await pedir("/api/aprendizaje");
+  if (!datos.ok) { donde.textContent = datos.motivo; return; }
+  donde.innerHTML = (datos.origen === "configurada"
+    ? "Se leen de la carpeta configurada en <code>CARPETA_CLASES</code> del <code>.env</code>"
+    : "Se leen de <code>material/</code>, la carpeta por defecto") +
+    ": " + datos.cantidad + (datos.cantidad === 1 ? " clase" : " clases") +
+    (datos.existe ? "" : " (la carpeta no existe todavía)") +
+    ". La app solo lee esa carpeta.";
 }

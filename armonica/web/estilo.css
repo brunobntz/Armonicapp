@@ -1297,3 +1297,28 @@ table.guias tr.esta td { color: var(--cobre); }
 .resultado-busqueda .pedazo mark { background: rgba(224, 164, 88, 0.25); color: var(--texto); border-radius: 3px; }
 
 details.sintesis > summary { cursor: pointer; color: var(--tenue); font-size: 14px; }
+
+
+/* Los bloques plegables de Aprendizaje: el titulo es el resumen. */
+details.bloque { margin-bottom: 26px; }
+details.bloque > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+details.bloque > summary::-webkit-details-marker { display: none; }
+details.bloque > summary::before {
+  content: "▸";
+  color: var(--cobre);
+  font-size: 14px;
+  transition: transform 120ms;
+}
+details.bloque[open] > summary::before { content: "▾"; }
+details.bloque > summary h2 { margin: 0; }
+details.bloque > summary h2 small {
+  font-family: var(--cuerpo); font-size: 12px; color: var(--tenue); margin-left: 10px;
+  text-transform: none; letter-spacing: 0;
+}
+details.bloque > summary + * { margin-top: 12px; }

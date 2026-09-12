@@ -134,6 +134,49 @@ def test_los_pasos_anidados_por_persona_salen_uno_por_tarea(tmp_path):
     ]
 
 
+PROSA_APLANADA = """# Clase 2026-02-11
+
+**Profesor:** Alguien
+
+---
+
+Propósito de la reunión Repasar la escala de blues y el
+cambio al acorde V. Es la tercera vez.
+Puntos clave - La escala de blues: salió entera en segunda posición. - El
+cambio al V: llega tarde; anticipar un compás. Temas La escala - Se tocó
+lento. El cambio - Practicar con la pista. Próximos pasos - Ana: practicar
+el cambio al V sobre la pista. - Profe: mandar la pista nueva.
+"""
+
+
+def test_un_recap_aplanado_en_prosa_se_entiende_igual(tmp_path):
+    """
+    Las clases viejas traen el mismo recap pero pegado como un mail, sin
+    títulos ni viñetas. Las secciones y los ítems se recuperan igual, y el
+    propósito de la reunión es el tema de la clase.
+    """
+    (tmp_path / "2026-02-11.md").write_text(PROSA_APLANADA, encoding="utf-8")
+    clase = clases.listar(str(tmp_path))[0]
+
+    assert clase.tema == "Repasar la escala de blues y el cambio al acorde V"
+    assert clase.puntos_clave == [
+        "La escala de blues: salió entera en segunda posición.",
+        "El cambio al V: llega tarde; anticipar un compás.",
+    ]
+    assert clase.proximos_pasos == [
+        {"para": "Ana", "texto": "practicar el cambio al V sobre la pista."},
+        {"para": "Profe", "texto": "mandar la pista nueva."},
+    ]
+
+
+def test_el_tema_sale_del_proposito_o_del_primer_punto_clave(carpeta):
+    con_proposito = next(c for c in clases.listar(carpeta) if c.fecha == "2026-03-04")
+    assert con_proposito.tema == "Revisar el ejercicio de la semana"
+
+    prosa = next(c for c in clases.listar(carpeta) if c.fecha == "2026-02-25")
+    assert prosa.tema == ""                      # un apunte a mano no tiene tema: no se inventa
+
+
 def test_una_clase_sin_recap_se_marca_y_no_se_le_inventa_nada(carpeta):
     clase = next(c for c in clases.listar(carpeta) if c.fecha == "2026-03-11")
     assert clase.con_recap is False
@@ -251,6 +294,8 @@ def test_el_resumen_junta_todo_para_la_solapa(carpeta):
     datos = clases.resumen(carpeta)
 
     assert datos["existe"] is True
+    assert datos["origen"] == "configurada"
+    assert "carpeta" not in datos                   # la ruta no va a la pantalla
     assert datos["cantidad"] == 3
     assert datos["ultima"]["fecha"] == "2026-03-04"          # la ultima CON recap
     assert "texto" in datos["ultima"]
@@ -262,5 +307,6 @@ def test_el_resumen_junta_todo_para_la_solapa(carpeta):
 def test_el_resumen_de_una_carpeta_vacia_no_rompe():
     datos = clases.resumen(os.path.join("no", "existe"))
     assert datos["existe"] is False
+    assert clases.resumen("material")["origen"] == "material"
     assert datos["ultima"] is None
     assert datos["clases"] == [] and datos["para_practicar"] == []

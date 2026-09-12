@@ -73,6 +73,7 @@ class Clase:
     puntos_clave: list = field(default_factory=list)
     proximos_pasos: list = field(default_factory=list)   # [{"para": "Bruno", "texto": "..."}]
     temas: list = field(default_factory=list)
+    tema: str = ""                      # de qué fue la clase, en una línea
     con_recap: bool = True
     error: str = ""
 
@@ -81,6 +82,7 @@ class Clase:
             "archivo": self.archivo,
             "fecha": self.fecha,
             "titulo": self.titulo,
+            "tema": self.tema,
             "puntos_clave": self.puntos_clave,
             "proximos_pasos": self.proximos_pasos,
             "temas": self.temas,
@@ -231,10 +233,79 @@ def entender(clase):
     clase.con_recap = "sin recap" not in clase.titulo.lower()
 
     clase.secciones = _secciones(lineas)
+    if not clase.secciones:
+        # Sin títulos de Markdown. Puede ser el mismo recap pero aplanado en
+        # prosa —pasa cuando se pega un mail— o un apunte escrito a mano.
+        clase.secciones = _secciones_en_prosa(clase.texto)
+
     clase.puntos_clave = _items(clase.secciones.get("puntos_clave", ""))
     clase.temas = _subtitulos(clase.secciones.get("temas", ""))
     clase.proximos_pasos = _pasos(clase.secciones.get("proximos_pasos", ""))
+    clase.tema = _tema_principal(clase)
     return clase
+
+
+def _tema_principal(clase):
+    """
+    Una línea que diga de qué fue la clase, para la cronología.
+
+    El propósito de la reunión, si el recap lo trae: es una frase corta y
+    escrita para eso. Si no, el título del primer punto clave. Si no, nada:
+    la fila muestra el título del archivo y listo.
+    """
+    # La prosa de un mail viene cortada cada 75 caracteres: se juntan las
+    # líneas y se toma la primera oración.
+    proposito = " ".join(_limpiar(clase.secciones.get("proposito", "")).split())
+    if proposito:
+        primera_oracion = re.split(r"(?<=[.!?])\s", proposito, maxsplit=1)[0]
+        return _recortar(primera_oracion, 110)
+    if clase.puntos_clave:
+        primero = clase.puntos_clave[0]
+        return _recortar(primero.split(":")[0] if ":" in primero[:60] else primero, 110)
+    return ""
+
+
+def _recortar(texto, largo):
+    texto = texto.strip().rstrip(".")
+    return texto if len(texto) <= largo else texto[:largo - 1].rstrip() + "…"
+
+
+# Los mismos nombres de sección, pero pegados en la prosa de un mail: "...
+# Propósito de la reunión Revisar las frases. Puntos clave - Corregir ...".
+_MARCAS_EN_PROSA = [
+    ("proposito", r"prop[oó]sito de la reuni[oó]n"),
+    ("puntos_clave", r"puntos clave"),
+    ("temas", r"temas"),
+    ("proximos_pasos", r"pr[oó]ximos pasos"),
+]
+
+
+def _secciones_en_prosa(texto):
+    """
+    Corta un recap aplanado en sus secciones, buscando los nombres de
+    sección adentro del texto. Los ítems, que en el mail eran viñetas,
+    quedaron como " - " en el medio de la prosa: se vuelven a abrir.
+    """
+    posiciones = []
+    for clave, patron in _MARCAS_EN_PROSA:
+        coincidencia = re.search(r"(?<![\w])" + patron + r"\b", texto, re.IGNORECASE)
+        if coincidencia:
+            posiciones.append((coincidencia.start(), coincidencia.end(), clave))
+    if not posiciones:
+        return {}
+    posiciones.sort()
+
+    secciones = {}
+    for indice, (inicio, fin, clave) in enumerate(posiciones):
+        hasta = posiciones[indice + 1][0] if indice + 1 < len(posiciones) else len(texto)
+        cuerpo = texto[fin:hasta].strip(" :\n")
+        # " - " separaba las viñetas: cada una vuelve a ser una línea con guion.
+        cuerpo = re.sub(r"\s+-\s+", "\n- ", cuerpo)
+        if cuerpo.startswith("- ") is False and "\n- " in cuerpo and clave != "proposito":
+            # Lo que hay antes del primer guion es un título de tema, no un ítem.
+            cuerpo = "- " + cuerpo if clave in ("puntos_clave", "proximos_pasos") else cuerpo
+        secciones[clave] = cuerpo
+    return secciones
 
 
 def _pasos(texto):
@@ -466,7 +537,7 @@ def buscar(clases, consulta, contexto=70):
 # Todo junto, para la solapa
 # =============================================================================
 
-def resumen(carpeta=None, cuantas_clases_para_practicar=3):
+def resumen(carpeta=None, cuantas_clases_para_practicar=2):
     """
     Lo que muestra la solapa Aprendizaje.
 
@@ -486,8 +557,11 @@ def resumen(carpeta=None, cuantas_clases_para_practicar=3):
             paso["fecha"] = clase.fecha
             para_practicar.append(paso)
 
+    # La ruta NO va a la pantalla: puede ser el cuaderno personal de alguien
+    # y no hay motivo para mostrarla. Solo si es la carpeta por defecto o una
+    # configurada en el .env.
     return {
-        "carpeta": os.path.abspath(carpeta),
+        "origen": "material" if carpeta == CARPETA_POR_DEFECTO else "configurada",
         "existe": os.path.isdir(carpeta),
         "cantidad": len(clases),
         "ultima": ultima.como_diccionario(con_texto=True) if ultima else None,
