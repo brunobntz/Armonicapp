@@ -5,7 +5,7 @@
 # Apunta a Armonica.bat con el icono Armonica.ico, los dos en la raiz del
 # proyecto. Si ya habia un acceso directo con ese nombre, lo reemplaza.
 # El escritorio se pregunta a Windows, asi funciona igual si esta en
-# OneDrive (que es lo comun en una maquina nueva).
+# una carpeta sincronizada en la nube (que es lo comun en una maquina nueva).
 
 $proyecto = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $bat = Join-Path $proyecto "Armonica.bat"

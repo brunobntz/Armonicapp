@@ -2257,7 +2257,7 @@ RECAP_DE_PRUEBA = """# Clase 2026-03-04
 
 @pytest.fixture
 def carpeta_de_clases(tmp_path, monkeypatch):
-    """Los apuntes van a una carpeta temporal, no a material/ ni al vault."""
+    """Los apuntes van a una carpeta temporal, no a material/ ni a la carpeta de nadie."""
     (tmp_path / "2026-03-04.md").write_text(RECAP_DE_PRUEBA, encoding="utf-8")
     (tmp_path / "2026-02-25.md").write_text("# Clase\n\nHoy vimos el bend del 2.\n",
                                             encoding="utf-8")

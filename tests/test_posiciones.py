@@ -275,7 +275,7 @@ def test_nota_none_no_rompe_nada():
     assert posiciones.nota_en_escala(None, "C", 2, "blues") is False
 
 
-def test_el_dos_soplado_no_esta_en_la_doceava_y_por_eso_leandro_dice_que_lo_evites():
+def test_el_dos_soplado_no_esta_en_la_doceava_y_por_eso_el_profe_dice_que_lo_evites():
     """
     En la clase del 25/08 el profe dijo "evitar el ↑2" tocando el blues en Fa.
     El ↑2 es Mi, la séptima mayor de Fa, que choca con el Mib del acorde de Fa7.

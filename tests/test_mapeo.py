@@ -147,7 +147,7 @@ def test_los_dos_bends_soplados_del_diez():
     assert nota_dos.como_tab() == "10''"
 
 
-def test_los_tres_bends_del_tres_segun_leandro():
+def test_los_tres_bends_del_tres_segun_el_profe():
     """
     El recap del 28/07 lista los bends del 3: 1º Bb, 2º A, 3º Ab.
     Los tres tienen que dar exactamente eso.

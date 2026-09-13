@@ -11,16 +11,17 @@ Hay dos formas de tener el proyecto en la máquina nueva, y conviene elegir
 una sola.
 
 **A. Clonar desde GitHub (recomendada).** Una carpeta local, fuera de
-OneDrive, con la última versión del código. Es lo que hacen los pasos de
-abajo. Tus frases y sesiones no viajan con git: se copian aparte (paso 5).
+cualquier carpeta sincronizada en la nube, con la última versión del
+código. Es lo que hacen los pasos de abajo. Tus frases y sesiones no viajan
+con git: se copian aparte (paso 5).
 
-**B. Usar la carpeta de OneDrive directamente.** Funciona, con dos
+**B. Usar una carpeta sincronizada en la nube.** Funciona, con dos
 cuidados. Primero: la carpeta `.venv` que hay adentro es el entorno virtual
 de la OTRA máquina y no sirve acá; hay que borrarla y crear una nueva (el
-paso 2 lo hace igual). Segundo: OneDrive sincroniza todo lo que toca la app,
-incluidas las sesiones con audio, y mientras está sincronizando puede
-trabar la escritura de un archivo. Si te pasa, es eso. Con esta opción,
-salteá el `git clone` y pará la terminal en la carpeta de OneDrive.
+paso 2 lo hace igual). Segundo: la sincronización toca todo lo que la app
+escribe, incluidas las sesiones con audio, y mientras está sincronizando
+puede trabar la escritura de un archivo. Si te pasa, es eso. Con esta
+opción, salteá el `git clone` y pará la terminal en esa carpeta.
 
 ## 1. Lo que hay que tener instalado
 
@@ -96,7 +97,7 @@ https://console.anthropic.com/ en `LLM_CLAVE`.
 
 **Ollama (local, gratis, sin internet).** Con una placa de video de 8 GB
 entra entero un modelo de 7 mil millones de parámetros y contesta en pocos
-segundos. Bajalo una vez (unos 4,7 GB):
+segundos; sin placa, en minutos. Bajalo una vez (unos 4,7 GB):
 
 ```powershell
 ollama pull qwen2.5:7b
@@ -122,9 +123,9 @@ convence, probá `ollama pull llama3.1:8b` y cambiá `LLM_MODELO`.
 ## 4b. Los apuntes de las clases
 
 La solapa **Aprendizaje** lee los resúmenes de tus clases de `material/`.
-Si ya los tenés en otro lado (por ejemplo, en la carpeta donde tu asistente
-deja los recaps del profe), agregá en el `.env` la ruta, y la app lee de ahí
-sin copiar nada. Solo lee: nunca escribe en esa carpeta.
+Si ya los tenés en otro lado (por ejemplo, en un cuaderno de notas donde
+guardás los resúmenes que manda el profe), agregá en el `.env` la ruta, y la
+app lee de ahí sin copiar nada. Solo lee: nunca escribe en esa carpeta.
 
 ```
 CARPETA_CLASES=C:\ruta\a\mis\clases
@@ -133,12 +134,13 @@ CARPETA_CLASES=C:\ruta\a\mis\clases
 ## 5. Tus datos
 
 `frases/`, `sesiones/` y `material/` no viajan con git. Copiá de la otra
-máquina (o de la carpeta de OneDrive) lo que quieras tener acá:
+máquina lo que quieras tener acá:
 
-- `frases/` entera: los `.json` y los `_audio.wav`, y `_listas.json` con
-  tus listas de reproducción.
+- `frases/` entera: los `.json`, los `_audio.wav`, `_listas.json` con tus
+  listas de reproducción y `_intentos.json` con el historial de prácticas.
 - `sesiones/` si te importa el historial de bends.
-- `material/` con los apuntes y audios de las clases.
+- `material/` con los apuntes y audios de las clases, y `_plan.json` si ya
+  armaste un plan.
 
 ## 6. Verificar
 
@@ -151,19 +153,19 @@ coach. Si las dos cosas andan, está todo.
 ## El prompt para Claude Code
 
 Abrí Claude Code en la carpeta del proyecto en la máquina nueva y pegale
-esto, cambiando lo que corresponda:
+esto, completando lo que va entre corchetes:
 
-> Acabo de clonar este repositorio en una laptop nueva (Windows 11, placa
-> NVIDIA RTX 5050 de 8 GB, 32 GB de RAM). Leé `README.md`,
-> `CONTRIBUTING.md` y `EMPEZAR_EN_OTRA_MAQUINA.md` antes de hacer nada, y
-> seguí esa guía en orden: verificá qué falta instalar (Python, ffmpeg,
-> Ollama), armá el entorno virtual, corré los tests, creá el acceso directo
-> del escritorio con `herramientas\acceso_directo.ps1`, ayudame a elegir el
-> micrófono y a calibrar el umbral, bajá el modelo `qwen2.5:7b`, dejá el
-> `.env` con `LLM_PROVEEDOR=ollama`, y probá una devolución del coach de
-> punta a punta. Antes de cada paso que cambie algo en la máquina, decime qué
-> vas a hacer. Al final contame qué quedó configurado y cuánto tardó la
-> primera respuesta del coach.
+> Acabo de clonar este repositorio en una máquina nueva ([Windows 11, placa
+> de video y memoria que tenga]). Leé `README.md`, `CONTRIBUTING.md` y
+> `EMPEZAR_EN_OTRA_MAQUINA.md` antes de hacer nada, y seguí esa guía en
+> orden: verificá qué falta instalar (Python, ffmpeg, Ollama), armá el
+> entorno virtual, corré los tests, creá el acceso directo del escritorio con
+> `herramientas\acceso_directo.ps1`, ayudame a elegir el micrófono y a
+> calibrar el umbral, bajá el modelo `qwen2.5:7b`, dejá el `.env` con
+> `LLM_PROVEEDOR=ollama` [y `CARPETA_CLASES` apuntando a mi carpeta de
+> apuntes], y probá una devolución del coach de punta a punta. Antes de cada
+> paso que cambie algo en la máquina, decime qué vas a hacer. Al final contame
+> qué quedó configurado y cuánto tardó la primera respuesta del coach.
 
 Si en vez de Ollama querés Claude, cambiá la última parte por: "dejá el
 `.env` con `LLM_PROVEEDOR=claude` y decime dónde pegar mi clave; no la

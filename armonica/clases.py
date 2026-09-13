@@ -28,7 +28,7 @@ la biblioteca estándar). PDF solo si está instalado `pypdf`, que es opcional.
 
 El nombre del archivo da la fecha si empieza con AAAA-MM-DD. Adentro, si
 hay secciones en Markdown ("## Puntos clave", "## Próximos pasos"), se usan;
-si no, el archivo es prosa y se muestra entero. Los recaps de Fathom traen
+si no, el archivo es prosa y se muestra entero. Los recaps automáticos traen
 justo esas secciones, y un apunte escrito a mano no necesita traerlas.
 """
 
