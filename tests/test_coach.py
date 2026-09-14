@@ -121,6 +121,40 @@ def test_el_prompt_de_teoria_lleva_lo_que_esta_en_pantalla_y_la_pregunta():
     assert "¿por qué evito el 2 soplado?" in prompt
 
 
+def test_el_prompt_de_teoria_dice_que_acorde_va_en_cada_compas():
+    # Encontrado probando con qwen2.5:7b y llama3.1:8b: a "como aterrizo en
+    # la 3ra del compas 5" cada modelo contestaba una nota distinta (D, A,
+    # Ab). No era el modelo: el prompt mandaba los tres acordes sueltos y
+    # nunca decia cual va en el compas 5. La pantalla si lo sabe.
+    teoria = {
+        "tonalidad": "C", "nombre_posicion": "12a posicion", "tono": "F",
+        "nombre_escala": "Escala de blues mayor", "notas": [], "tonica": "F",
+        "corrida": [], "evitar": [], "posiciones_utiles": [],
+        "acordes": [{"nombre": "F7"}, {"nombre": "Bb7"}, {"nombre": "C7"}],
+        "progresion": [
+            {"compas": 1, "grado": "I", "acorde": "F7", "cambia": True},
+            {"compas": 2, "grado": "IV", "acorde": "Bb7", "cambia": True},
+            {"compas": 3, "grado": "I", "acorde": "F7", "cambia": True},
+            {"compas": 4, "grado": "I", "acorde": "F7", "cambia": False},
+            {"compas": 5, "grado": "IV", "acorde": "Bb7", "cambia": True},
+        ],
+    }
+    prompt = coach.prompt_de_teoria(teoria, "como aterrizo en la 3ra del compas 5")
+
+    assert "compas 5: Bb7" in prompt
+
+
+def test_el_prompt_de_teoria_pide_nombrar_nota_y_agujero_no_octavas():
+    # Con los mismos datos, los modelos contestaban "de F4 a G4", que en la
+    # armonica no dice nada: lo que el alumno necesita es "D, 4 aspirado".
+    teoria = {"tonalidad": "C", "corrida": [], "acordes": [], "evitar": [],
+              "posiciones_utiles": []}
+    prompt = coach.prompt_de_teoria(teoria, "que toco?")
+
+    assert "4 aspirado (↓4)" in prompt      # el ejemplo de como nombrar
+    assert "F4" in prompt and "G4" in prompt   # y el ejemplo de como no
+
+
 # =============================================================================
 # Las dos preguntas, con la llamada falsa
 # =============================================================================

@@ -327,6 +327,12 @@ def prompt_de_teoria(teoria, pregunta):
         "notas_de_la_escala": teoria.get("notas"),
         "tonica": teoria.get("tonica"),
         "corrida": [n.get("tab") + " " + n.get("nombre", "") for n in teoria.get("corrida", [])],
+        # Que acorde va en cada compas. Sin esto, "la 3ra del compas 5" era
+        # imposible de contestar: los acordes iban sueltos y cada modelo
+        # elegia uno distinto. La pantalla lo muestra; el coach tambien lo
+        # tiene que ver.
+        "doce_compases": [f"compas {c.get('compas')}: {c.get('acorde')} ({c.get('grado')})"
+                          for c in teoria.get("progresion", [])],
         "acordes_del_blues": teoria.get("acordes"),
         "evitar": teoria.get("evitar"),
         "posiciones_utiles": teoria.get("posiciones_utiles"),
@@ -336,9 +342,13 @@ def prompt_de_teoria(teoria, pregunta):
         "tiene en pantalla, calculado por la app, en JSON:\n\n"
         + json.dumps(datos, ensure_ascii=False, indent=1) +
         "\n\nSu pregunta es:\n\n" + pregunta.strip() +
-        "\n\nContestá apoyándote en esos datos. Si la pregunta se va de lo que "
-        "hay en pantalla, contestá igual como profe, pero avisá que eso no "
-        "está calculado por la app."
+        "\n\nContestá apoyándote en esos datos. Cada nota que nombres, decila "
+        "como se toca en la armónica: la nota, el agujero y si es soplado o "
+        "aspirado, con la tab entre paréntesis, por ejemplo \"D, 4 aspirado "
+        "(↓4)\". Nunca por octava como \"F4\" o \"G4\": eso no le dice al "
+        "alumno qué agujero tocar. Si la pregunta se va de lo que hay en "
+        "pantalla, contestá igual como profe, pero avisá que eso no está "
+        "calculado por la app."
     )
 
 
