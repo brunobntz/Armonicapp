@@ -155,6 +155,19 @@ def test_el_prompt_de_teoria_pide_nombrar_nota_y_agujero_no_octavas():
     assert "F4" in prompt and "G4" in prompt   # y el ejemplo de como no
 
 
+def test_el_prompt_de_teoria_aclara_que_la_3ra_es_un_grado_y_no_una_posicion():
+    # Preguntando por "la 3ra de Bb7", qwen2.5:7b acertaba la nota 4 de 4
+    # veces y en 3 de 4 mandaba al alumno a "la 3ra posicion (slant harp)":
+    # confundia el grado del acorde con la posicion. El alumno esta en la
+    # posicion de la pantalla y no la cambia.
+    teoria = {"tonalidad": "C", "nombre_posicion": "12a posicion", "corrida": [],
+              "acordes": [], "evitar": [], "posiciones_utiles": []}
+    prompt = coach.prompt_de_teoria(teoria, "como aterrizo en la 3ra de Bb7")
+
+    assert "grado del acorde, no de una posición" in prompt
+    assert "ya está en la 12a posicion y no la cambia" in prompt
+
+
 # =============================================================================
 # Las dos preguntas, con la llamada falsa
 # =============================================================================

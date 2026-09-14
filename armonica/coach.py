@@ -346,9 +346,13 @@ def prompt_de_teoria(teoria, pregunta):
         "como se toca en la armónica: la nota, el agujero y si es soplado o "
         "aspirado, con la tab entre paréntesis, por ejemplo \"D, 4 aspirado "
         "(↓4)\". Nunca por octava como \"F4\" o \"G4\": eso no le dice al "
-        "alumno qué agujero tocar. Si la pregunta se va de lo que hay en "
-        "pantalla, contestá igual como profe, pero avisá que eso no está "
-        "calculado por la app."
+        "alumno qué agujero tocar. Cuando el alumno dice \"la 3ra\", \"la 5ta\" "
+        "o \"la 7ma\" habla de un grado del acorde, no de una posición de la "
+        "armónica: el alumno ya está en la "
+        + str(teoria.get("nombre_posicion") or "posición de la pantalla") +
+        " y no la cambia, así que no le digas que se ponga en otra. Si la "
+        "pregunta se va de lo que hay en pantalla, contestá igual como profe, "
+        "pero avisá que eso no está calculado por la app."
     )
 
 
