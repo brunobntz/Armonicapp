@@ -8,6 +8,8 @@ diga exactamente 100 ms.
 Cómo correrlos:   python -m pytest tests/test_frases.py -v
 """
 
+import os
+
 import pytest
 
 from armonica import frases, mapeo, segmentacion
@@ -637,3 +639,33 @@ def test_la_correccion_se_guarda_y_se_vuelve_a_cargar_con_su_original(tmp_path):
     cargada = frases.cargar(ruta)
     assert cargada.tablatura() == ["-2", "4"]
     assert [n.tab for n in cargada.notas_originales] == ["-2", "8"]
+
+
+
+# =============================================================================
+# Renombrar
+# =============================================================================
+
+def test_renombrar_mueve_el_json_el_audio_y_los_intentos(tmp_path):
+    frase = frase_de(["-2", "4"], nombre="clase tramo 3")
+    ruta = frases.guardar(frase, str(tmp_path))
+    (tmp_path / (os.path.splitext(os.path.basename(ruta))[0] + "_audio.wav")).write_bytes(b"RIFF")
+    intento_con(frase, ["-2", "4"], carpeta=str(tmp_path))
+
+    frases.renombrar("clase tramo 3", "lick del turnaround", str(tmp_path))
+
+    assert [n for n, _ in frases.listar(str(tmp_path))] == ["lick del turnaround"]
+    assert (tmp_path / "lick_del_turnaround_audio.wav").is_file()
+    assert not (tmp_path / "clase_tramo_3.json").exists()
+    assert len(frases.intentos_de("lick del turnaround", str(tmp_path))) == 1
+    assert frases.intentos_de("clase tramo 3", str(tmp_path)) == []
+
+
+def test_renombrar_no_pisa_otra_frase_ni_acepta_vacio(tmp_path):
+    frases.guardar(frase_de(["-2"], nombre="una"), str(tmp_path))
+    frases.guardar(frase_de(["4"], nombre="otra"), str(tmp_path))
+    with pytest.raises(ValueError):
+        frases.renombrar("una", "otra", str(tmp_path))
+    with pytest.raises(ValueError):
+        frases.renombrar("una", "   ", str(tmp_path))
+    assert sorted(n for n, _ in frases.listar(str(tmp_path))) == ["otra", "una"]

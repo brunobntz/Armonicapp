@@ -1140,6 +1140,47 @@ def intentos_de(nombre, carpeta=None):
     return list(_leer_intentos(carpeta).get(nombre, []))
 
 
+def renombrar(nombre, nuevo, carpeta=None):
+    """
+    Cambia el nombre de una frase: el JSON, el audio y sus intentos.
+
+    Al importar una clase entera las frases quedan como "clase tramo 3", y
+    recien despues de escucharlas sabes como se llaman. Devuelve la frase
+    renombrada. ValueError si no existe, si el nombre nuevo esta vacio o si
+    ya hay otra frase con ese nombre: pisar seria perder una grabacion.
+    """
+    if carpeta is None:
+        carpeta = CARPETA_POR_DEFECTO
+    nuevo = " ".join((nuevo or "").split())[:60]
+    if not nuevo:
+        raise ValueError("Ponele un nombre a la frase.")
+
+    frase = buscar(nombre, carpeta)
+    if frase is None:
+        raise ValueError(f"No encontre la frase {nombre!r}.")
+    if nuevo == frase.nombre:
+        return frase
+    if _nombre_de_archivo(nuevo) != _nombre_de_archivo(frase.nombre) and buscar(nuevo, carpeta) is not None:
+        raise ValueError(f"Ya hay una frase que se llama {nuevo!r}.")
+
+    ruta_vieja = os.path.join(carpeta, _nombre_de_archivo(frase.nombre))
+    audio_viejo = os.path.splitext(ruta_vieja)[0] + "_audio.wav"
+
+    frase.nombre = nuevo
+    ruta_nueva = guardar(frase, carpeta)
+    if ruta_nueva != ruta_vieja and os.path.isfile(ruta_vieja):
+        os.remove(ruta_vieja)
+    audio_nuevo = os.path.splitext(ruta_nueva)[0] + "_audio.wav"
+    if audio_viejo != audio_nuevo and os.path.isfile(audio_viejo):
+        os.replace(audio_viejo, audio_nuevo)
+
+    por_frase = _leer_intentos(carpeta)
+    if nombre in por_frase:
+        por_frase[nuevo] = por_frase.pop(nombre)
+        _escribir_intentos(por_frase, carpeta)
+    return frase
+
+
 def borrar_intentos(nombre, carpeta=None):
     """Al borrar una frase se van sus intentos: sin la frase no dicen nada."""
     por_frase = _leer_intentos(carpeta)

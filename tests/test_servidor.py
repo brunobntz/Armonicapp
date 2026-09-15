@@ -2512,3 +2512,12 @@ def test_una_correccion_invalida_no_toca_la_frase(servidor_andando, carpeta_de_f
     assert respuesta["ok"] is False
     assert "nota 2" in respuesta["motivo"]
     assert frases.buscar("intacta").tablatura() == ["-2", "4"]
+
+
+
+def test_renombrar_desde_la_pantalla(servidor_andando, carpeta_de_frases):
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4"]), "clase tramo 1"))
+    respuesta = mandar(servidor_andando, "/api/frases/renombrar",
+                       {"nombre": "clase tramo 1", "nuevo": "el lick de la 3a"})
+    assert respuesta == {"ok": True, "nombre": "el lick de la 3a"}
+    assert [f["nombre"] for f in traer_json(servidor_andando, "/api/frases")["frases"]] == ["el lick de la 3a"]

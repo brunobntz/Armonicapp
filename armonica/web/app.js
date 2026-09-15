@@ -1633,11 +1633,19 @@ function dibujarListaDeFrases() {
         escapar(frase.nombre) + '"></label>' +
       '<button class="como-viene" data-historial="' + escapar(frase.nombre) + '">Cómo viene</button>' +
       '<button class="como-viene" data-editar="' + escapar(frase.nombre) + '">Corregir</button>' +
+      '<button class="como-viene" data-renombrar="' + escapar(frase.nombre) + '">Renombrar</button>' +
       '<button class="borrar" data-borrar="' + escapar(frase.nombre) + '">Borrar</button>' +
       '<div class="historial-frase" hidden></div>' +
       '<div class="editor-frase" hidden></div>' +
     "</div>"
   ).join("");
+
+  contenedor.querySelectorAll("[data-renombrar]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const tarjeta = boton.closest(".frase");
+      abrirRenombrar(boton.dataset.renombrar, tarjeta.querySelector(".editor-frase"));
+    });
+  });
 
   contenedor.querySelectorAll("[data-editar]").forEach((boton) => {
     boton.addEventListener("click", () => {
@@ -3040,4 +3048,41 @@ async function abrirEditorDeFrase(nombre, donde) {
   };
 
   dibujar();
+}
+
+
+
+/* Renombrar una frase desde su tarjeta. Al importar una clase entera las
+ * frases quedan como "clase tramo 3", y recien despues de escucharlas
+ * sabes como se llaman. */
+function abrirRenombrar(nombre, donde) {
+  donde.hidden = false;
+  donde.dataset.abierto = "si";
+  donde.innerHTML = '<div class="controles">' +
+    '<input type="text" maxlength="60" data-nuevo-nombre value="' + escapar(nombre) + '">' +
+    '<button class="principal" data-guardar-nombre>Guardar el nombre</button>' +
+    '<button class="secundario" data-cancelar>Cancelar</button>' +
+    '<span class="ayuda" data-estado></span></div>';
+  const campo = donde.querySelector("[data-nuevo-nombre]");
+  campo.focus();
+  campo.select();
+
+  const guardar = async () => {
+    const estado = donde.querySelector("[data-estado]");
+    const respuesta = await pedir("/api/frases/renombrar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre: nombre, nuevo: campo.value }),
+    });
+    if (!respuesta.ok) { estado.textContent = respuesta.motivo; return; }
+    donde.hidden = true;
+    donde.dataset.abierto = "no";
+    avisarFrase("Ahora se llama «" + respuesta.nombre + "».");
+    cargarFrases();
+  };
+  donde.querySelector("[data-guardar-nombre]").addEventListener("click", guardar);
+  campo.addEventListener("keydown", (evento) => { if (evento.key === "Enter") guardar(); });
+  donde.querySelector("[data-cancelar]").addEventListener("click", () => {
+    donde.hidden = true;
+    donde.dataset.abierto = "no";
+  });
 }

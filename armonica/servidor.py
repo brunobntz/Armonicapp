@@ -1161,6 +1161,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._editar_frase(cuerpo))
         if self.path == "/api/frases/restaurar":
             return self._responder_json(self._restaurar_frase(cuerpo))
+        if self.path == "/api/frases/renombrar":
+            return self._responder_json(self._renombrar_frase(cuerpo))
         if self.path == "/api/coach/devolucion":
             return self._responder_json(self._coach_devolucion())
         if self.path == "/api/coach/teoria":
@@ -1934,6 +1936,15 @@ class Manejador(SimpleHTTPRequestHandler):
         frases.restaurar_notas(frase)
         frases.guardar(frase)
         return {"ok": True, "tab": frase.tablatura(), "notas": frase.cantidad, "editada": False}
+
+    def _renombrar_frase(self, peticion):
+        peticion = peticion or {}
+        try:
+            frase = frases.renombrar((peticion.get("nombre") or "").strip(),
+                                     (peticion.get("nuevo") or "").strip())
+        except ValueError as error:
+            return {"ok": False, "motivo": str(error)}
+        return {"ok": True, "nombre": frase.nombre}
 
     def _notas_de_frase(self, consulta):
         """Las notas de una frase con sus tiempos, para el editor."""

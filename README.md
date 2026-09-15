@@ -228,8 +228,9 @@ arrastra para moverte dentro del tramo. Se reproduce desde el archivo que
 elegiste, en el navegador, sin pasar por el servidor. Y si querés todos,
 **"Importar los N como frases"** guarda cada tramo como una frase, con su
 recorte de audio, en una lista con el nombre del archivo; los que no pasan
-el control de monofonía se guardan igual con el motivo en la descripción,
-y después borrás los que no sirvan.
+el control de monofonía se guardan igual con el motivo en la descripción.
+Quedan como "archivo tramo 3": después de escucharlas les ponés nombre con
+"Renombrar" en cada tarjeta, y borrás las que no sirvan.
 
 **La transcripción se puede corregir.** El detector se equivoca a veces y
 vos lo sabés mejor: un ↑8 que era un ↑4, o tres ↑4 seguidos que eran una
