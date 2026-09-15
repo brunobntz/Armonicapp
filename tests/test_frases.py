@@ -574,3 +574,66 @@ def test_la_tendencia_compara_los_primeros_con_los_ultimos():
 def test_un_archivo_de_intentos_roto_no_rompe(tmp_path):
     (tmp_path / "_intentos.json").write_text("{esto no es json", encoding="utf-8")
     assert frases.intentos_de("x", str(tmp_path)) == []
+
+
+# =============================================================================
+# Corregir la transcripción
+# =============================================================================
+
+def test_corregir_una_nota_y_volver_a_la_original():
+    frase = frase_de(["-2", "8", "-4"])          # el 8 era un 4
+
+    frases.editar_notas(frase, [n.como_diccionario() | ({"tab": "4"} if n.tab == "8" else {})
+                               for n in frase.notas])
+
+    assert frase.tablatura() == ["-2", "4", "-4"]
+    assert [n.tab for n in frase.notas_originales] == ["-2", "8", "-4"]
+
+    frases.restaurar_notas(frase)
+    assert frase.tablatura() == ["-2", "8", "-4"]
+    assert frase.notas_originales == []
+
+
+def test_la_segunda_correccion_no_pisa_la_original():
+    frase = frase_de(["-2", "8"])
+    frases.editar_notas(frase, [{"tab": "-2", "inicio_seg": 0, "duracion_seg": 0.3},
+                               {"tab": "4", "inicio_seg": 0.5, "duracion_seg": 0.3}])
+    frases.editar_notas(frase, [{"tab": "-2", "inicio_seg": 0, "duracion_seg": 0.3},
+                               {"tab": "5", "inicio_seg": 0.5, "duracion_seg": 0.3}])
+    assert frase.tablatura() == ["-2", "5"]
+    assert [n.tab for n in frase.notas_originales] == ["-2", "8"]   # la del detector
+
+
+def test_una_tablatura_que_no_existe_se_rechaza_y_no_se_guarda_nada():
+    frase = frase_de(["-2", "4"])
+    with pytest.raises(ValueError) as error:
+        frases.editar_notas(frase, [{"tab": "-2", "inicio_seg": 0, "duracion_seg": 0.3},
+                                   {"tab": "4'''", "inicio_seg": 0.5, "duracion_seg": 0.3}])
+    assert "nota 2" in str(error.value)
+    assert frase.tablatura() == ["-2", "4"]
+    assert frase.notas_originales == []
+
+
+def test_las_dos_notaciones_se_aceptan_y_se_guarda_la_de_la_app():
+    frase = frase_de(["-2"])
+    frases.editar_notas(frase, [{"tab": "↓3''", "inicio_seg": 0, "duracion_seg": 0.3}])
+    assert frase.tablatura() == [mapeo.tab_a_nota("-3''", "C").como_tab()]
+
+
+def test_unir_las_repetidas_deja_una_nota_que_dura_hasta_el_final():
+    frase = frase_de(["4", "4", "4", "-4"], paso=0.5)      # tres ↑4 cortados: una sola sostenida
+    unidas = frases.unir_repetidas(frase.notas)
+    assert [n.tab for n in unidas] == ["4", "-4"]
+    assert unidas[0].inicio_seg == 0.0
+    assert unidas[0].duracion_seg == pytest.approx(1.0 + 0.3)   # hasta donde terminaba la tercera
+
+
+def test_la_correccion_se_guarda_y_se_vuelve_a_cargar_con_su_original(tmp_path):
+    frase = frase_de(["-2", "8"])
+    frases.editar_notas(frase, [{"tab": "-2", "inicio_seg": 0, "duracion_seg": 0.3},
+                               {"tab": "4", "inicio_seg": 0.5, "duracion_seg": 0.3}])
+    ruta = frases.guardar(frase, str(tmp_path))
+
+    cargada = frases.cargar(ruta)
+    assert cargada.tablatura() == ["-2", "4"]
+    assert [n.tab for n in cargada.notas_originales] == ["-2", "8"]

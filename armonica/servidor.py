@@ -1113,6 +1113,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._mandar_audio_del_intento()
         if self.path.startswith("/api/frases/intentos"):
             return self._responder_json(self._intentos_de_frase(self.path.partition("?")[2]))
+        if self.path.startswith("/api/frases/notas"):
+            return self._responder_json(self._notas_de_frase(self.path.partition("?")[2]))
         if self.path.startswith("/api/frases/audio"):
             return self._mandar_audio_de_frase(self.path.partition("?")[2])
         if self.path == "/api/resumen":
@@ -1144,6 +1146,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._importar_frase(consulta))
         if ruta == "/api/frases/intento":
             return self._responder_json(self._intento_de_archivo(consulta))
+        if ruta == "/api/frases/importar-todos":
+            return self._responder_json(self._importar_todos(consulta))
 
         cuerpo = self._leer_cuerpo()
 
@@ -1153,6 +1157,10 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._terminar())
         if self.path == "/api/frases/borrar":
             return self._responder_json(self._borrar_frase(cuerpo))
+        if self.path == "/api/frases/editar":
+            return self._responder_json(self._editar_frase(cuerpo))
+        if self.path == "/api/frases/restaurar":
+            return self._responder_json(self._restaurar_frase(cuerpo))
         if self.path == "/api/coach/devolucion":
             return self._responder_json(self._coach_devolucion())
         if self.path == "/api/coach/teoria":
@@ -1224,6 +1232,8 @@ class Manejador(SimpleHTTPRequestHandler):
             # Sin esto se guarda el archivo entero.
             "desde": _numero(parametros.get("desde", [""])[0]),
             "hasta": _numero(parametros.get("hasta", [""])[0]),
+            # La lista en la que guardar, al importar todos los tramos.
+            "lista": (parametros.get("lista", [""])[0] or "").strip(),
         }
 
         largo = int(self.headers.get("Content-Length") or 0)
@@ -1761,6 +1771,7 @@ class Manejador(SimpleHTTPRequestHandler):
                 "hay_audio": os.path.isfile(
                     os.path.splitext(ruta)[0] + "_audio.wav"),
                 "progreso": frases.progreso(frases.intentos_de(nombre)),
+                "editada": bool(frase.notas_originales),
             })
         return {"frases": salida, "listas": frases.listar_listas()}
 
@@ -1824,6 +1835,116 @@ class Manejador(SimpleHTTPRequestHandler):
         intentos = frases.intentos_de(nombre)
         return {"ok": True, "nombre": nombre, "intentos": intentos,
                 "progreso": frases.progreso(intentos)}
+
+    def _importar_todos(self, consulta):
+        """
+        Guarda TODOS los tramos con armonica de un audio, cada uno como una
+        frase, en una lista con el nombre del archivo.
+
+        Es lo que hace falta con una clase entera: ocho frases del profe en
+        un solo audio, y elegirlas de a una era ocho subidas. Cada tramo se
+        recorta y analiza igual que si lo eligieras solo. Los que no pasan
+        el control de monofonia se guardan igual, con el motivo anotado en
+        la descripcion: la decision de tirarlos es tuya, mirando la
+        tablatura.
+        """
+        estado = type(self).estado
+        _, ruta_temporal, opciones, error = self._leer_audio_subido(consulta)
+        if error:
+            return {"ok": False, "motivo": error}
+
+        tonalidad = opciones["tonalidad"] or estado.tonalidad
+        if tonalidad not in tablas.TONALIDADES:
+            os.remove(ruta_temporal)
+            return {"ok": False, "motivo": f"no conozco la armonica {tonalidad!r}"}
+
+        try:
+            try:
+                resultado = transcripcion.desde_archivo(
+                    ruta_temporal, tonalidad, estado.posicion, estado.escala)
+            except ValueError:
+                return {"ok": False, "motivo": NO_ES_UN_WAV}
+        finally:
+            os.remove(ruta_temporal)
+
+        base = (opciones["archivo"] or "audio").replace("_", " ").strip()[:40]
+        lista = frases.limpiar_nombre_de_lista(opciones["lista"] or base)
+
+        guardadas = []
+        salteadas = []
+        for tramo in frases.detectar_tramos(resultado.eventos):
+            recortado = transcripcion.recortar(
+                resultado, tramo.desde_seg, tramo.hasta_seg,
+                tonalidad, estado.posicion, estado.escala)
+            if not recortado.reconocidas:
+                continue
+
+            nombre = f"{base} tramo {tramo.numero}"
+            if frases.buscar(nombre) is not None:
+                salteadas.append({"nombre": nombre, "motivo": "ya existe una frase con ese nombre"})
+                continue
+
+            sirve, motivo, _ = transcripcion.revisar(recortado, tonalidad)
+            comentario = (f"tramo {tramo.numero} de {opciones['archivo'] or 'un audio'}, "
+                          f"de {tramo.desde_seg:.1f} a {tramo.hasta_seg:.1f} s")
+            if not sirve and motivo:
+                comentario += " · no paso el control de monofonia: " + motivo
+
+            frase = frases.desde_eventos(
+                recortado.eventos, nombre, tonalidad, estado.posicion, estado.escala,
+                comentario=comentario[:400], lista=lista)
+            ruta = frases.guardar(frase)
+            if recortado.muestras is not None and len(recortado.muestras):
+                audio.escribir_wav(os.path.splitext(ruta)[0] + "_audio.wav",
+                                   recortado.muestras, recortado.frecuencia_muestreo)
+            guardadas.append({"nombre": nombre, "notas": frase.cantidad,
+                              "tab": frase.tablatura(), "sirve": sirve})
+
+        if lista and guardadas:
+            frases.crear_lista(lista)
+
+        if not guardadas and not salteadas:
+            return {"ok": False, "motivo": "no encontre ningun tramo con armonica en ese audio"}
+        return {"ok": True, "lista": lista, "guardadas": guardadas, "salteadas": salteadas}
+
+    def _editar_frase(self, peticion):
+        """Reemplaza las notas de una frase por las corregidas a mano."""
+        peticion = peticion or {}
+        nombre = (peticion.get("nombre") or "").strip()
+        frase = frases.buscar(nombre)
+        if frase is None:
+            return {"ok": False, "motivo": f"no encontre la frase {nombre!r}"}
+        notas = peticion.get("notas")
+        if not isinstance(notas, list):
+            return {"ok": False, "motivo": "faltan las notas"}
+        try:
+            frases.editar_notas(frase, notas)
+        except ValueError as error:
+            return {"ok": False, "motivo": str(error)}
+        frases.guardar(frase)
+        return {"ok": True, "tab": frase.tablatura(), "notas": frase.cantidad,
+                "editada": bool(frase.notas_originales)}
+
+    def _restaurar_frase(self, peticion):
+        """Vuelve a la transcripcion del detector."""
+        nombre = ((peticion or {}).get("nombre") or "").strip()
+        frase = frases.buscar(nombre)
+        if frase is None:
+            return {"ok": False, "motivo": f"no encontre la frase {nombre!r}"}
+        frases.restaurar_notas(frase)
+        frases.guardar(frase)
+        return {"ok": True, "tab": frase.tablatura(), "notas": frase.cantidad, "editada": False}
+
+    def _notas_de_frase(self, consulta):
+        """Las notas de una frase con sus tiempos, para el editor."""
+        parametros = urllib.parse.parse_qs(consulta)
+        nombre = (parametros.get("nombre", [""])[0] or "").strip()
+        frase = frases.buscar(nombre)
+        if frase is None:
+            return {"ok": False, "motivo": f"no encontre la frase {nombre!r}"}
+        return {"ok": True, "nombre": frase.nombre, "tonalidad": frase.tonalidad,
+                "notas": [n.como_diccionario() for n in frase.notas],
+                "editada": bool(frase.notas_originales)}
 
     def _listar_dispositivos(self):
         """

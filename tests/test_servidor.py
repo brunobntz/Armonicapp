@@ -2444,3 +2444,71 @@ def test_el_coach_ve_los_intentos_anteriores_como_datos(servidor_andando, carpet
 
     assert "intentos_anteriores" in recibido["usuario"]
     assert '"intentos": 2' in recibido["usuario"]
+
+
+# =============================================================================
+# Importar todos los tramos, y corregir la transcripcion
+# =============================================================================
+
+def test_importar_todos_los_tramos_guarda_una_frase_por_tramo_en_una_lista(
+        servidor_andando, carpeta_de_frases, tmp_path):
+    """Una clase con dos frases separadas por silencio: dos frases guardadas."""
+    muestras_a, _ = generar_wav.generar_secuencia(["-2", "4", "-4", "5"], "C", 0.4)
+    muestras_b, _ = generar_wav.generar_secuencia(["6", "-6", "6"], "C", 0.4)
+    silencio = generar_wav.generar_silencio(2.5)
+    import numpy as np
+    muestras = np.concatenate([silencio, muestras_a, silencio, muestras_b, silencio])
+    ruta = tmp_path / "clase_martes.wav"
+    audio.escribir_wav(str(ruta), muestras, 44100)
+
+    respuesta = subir(servidor_andando, "/api/frases/importar-todos", "", ruta.read_bytes(),
+                      archivo="clase_martes.wav", tonalidad="C")
+
+    assert respuesta["ok"] is True
+    assert respuesta["lista"] == "clase martes"
+    nombres = [g["nombre"] for g in respuesta["guardadas"]]
+    assert nombres == ["clase martes tramo 1", "clase martes tramo 2"]
+    assert respuesta["guardadas"][0]["tab"] == ["-2", "4", "-4", "5"]
+    assert respuesta["guardadas"][1]["tab"] == ["6", "-6", "6"]
+
+    lista = traer_json(servidor_andando, "/api/frases")
+    assert [f["nombre"] for f in lista["frases"]] == nombres
+    assert all(f["hay_audio"] for f in lista["frases"])            # cada una con su recorte
+    assert all(f["lista"] == "clase martes" for f in lista["frases"])
+    assert "tramo 1 de clase_martes" in lista["frases"][0]["comentario"]
+
+    # Importar de nuevo no pisa nada: se saltean las que ya existen.
+    otra_vez = subir(servidor_andando, "/api/frases/importar-todos", "", ruta.read_bytes(),
+                     archivo="clase_martes.wav", tonalidad="C")
+    assert otra_vez["guardadas"] == []
+    assert len(otra_vez["salteadas"]) == 2
+
+
+def test_corregir_la_transcripcion_desde_la_pantalla(servidor_andando, carpeta_de_frases):
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "8", "4", "4", "4"]), "corregible"))
+
+    notas = traer_json(servidor_andando, "/api/frases/notas?nombre=corregible")["notas"]
+    notas[1]["tab"] = "4"                                          # el 8 era un 4
+    respuesta = mandar(servidor_andando, "/api/frases/editar",
+                       {"nombre": "corregible", "notas": notas})
+
+    assert respuesta["ok"] is True
+    assert respuesta["tab"] == ["-2", "4", "4", "4", "4"]
+    assert respuesta["editada"] is True
+    assert traer_json(servidor_andando, "/api/frases")["frases"][0]["editada"] is True
+
+    # Y restaurar vuelve a lo del detector.
+    vuelta = mandar(servidor_andando, "/api/frases/restaurar", {"nombre": "corregible"})
+    assert vuelta["tab"] == ["-2", "8", "4", "4", "4"]
+    assert vuelta["editada"] is False
+
+
+def test_una_correccion_invalida_no_toca_la_frase(servidor_andando, carpeta_de_frases):
+    frases.guardar(frases.desde_eventos(eventos_de(["-2", "4"]), "intacta"))
+    respuesta = mandar(servidor_andando, "/api/frases/editar", {
+        "nombre": "intacta",
+        "notas": [{"tab": "-2", "inicio_seg": 0, "duracion_seg": 0.3},
+                  {"tab": "-11", "inicio_seg": 0.5, "duracion_seg": 0.3}]})
+    assert respuesta["ok"] is False
+    assert "nota 2" in respuesta["motivo"]
+    assert frases.buscar("intacta").tablatura() == ["-2", "4"]

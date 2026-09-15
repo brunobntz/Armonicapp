@@ -225,7 +225,20 @@ pregunta nada y lo guarda.
 Antes de elegir, **podés escuchar cada tramo**: cada fila tiene un botón de
 reproducir y pausar, y una línea abajo que se llena mientras suena y se
 arrastra para moverte dentro del tramo. Se reproduce desde el archivo que
-elegiste, en el navegador, sin pasar por el servidor.
+elegiste, en el navegador, sin pasar por el servidor. Y si querés todos,
+**"Importar los N como frases"** guarda cada tramo como una frase, con su
+recorte de audio, en una lista con el nombre del archivo; los que no pasan
+el control de monofonía se guardan igual con el motivo en la descripción,
+y después borrás los que no sirvan.
+
+**La transcripción se puede corregir.** El detector se equivoca a veces y
+vos lo sabés mejor: un ↑8 que era un ↑4, o tres ↑4 seguidos que eran una
+sola nota sostenida. "Corregir" en la tarjeta de la frase abre cada nota
+como una casilla editable, con × para borrarla y ⟶ para pegarla con la
+siguiente (queda durando hasta donde terminaba la otra), más "Unir las
+repetidas" para el caso común. Se acepta cualquiera de las dos notaciones y
+se rechaza un tab que no exista en esa armónica. La primera corrección guarda
+la transcripción original, y "Restaurar" vuelve a ella.
 
 **El recorte se hace sobre el audio, no sobre la lista de notas.** Es más
 trabajo y vale la pena: así todo lo que se mide después —la monofonía, la

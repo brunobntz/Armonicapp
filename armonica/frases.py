@@ -45,6 +45,8 @@ import json
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from armonica import mapeo
 from difflib import SequenceMatcher
 from statistics import mean, median, pstdev
 
@@ -92,6 +94,10 @@ class Frase:
     # de mostrar, y es como se usa: la frase de la clase del martes va a la
     # lista de la clase del martes.
     lista: str = ""
+
+    # La transcripcion del detector, si la corregiste a mano. Vacia si no.
+    # Ver editar_notas() y restaurar_notas().
+    notas_originales: list = field(default_factory=list)
 
     @property
     def cantidad(self):
@@ -818,6 +824,7 @@ def guardar(frase, carpeta=None):
         "posicion": frase.posicion,
         "escala": frase.escala,
         "notas": [nota.como_diccionario() for nota in frase.notas],
+        "notas_originales": [nota.como_diccionario() for nota in frase.notas_originales],
     }
 
     with io.open(ruta, "w", encoding="utf-8", newline="") as archivo:
@@ -841,15 +848,18 @@ def cargar(ruta):
         # "bolsa" fue el nombre de este campo durante un dia. Se sigue
         # leyendo para no perder lo que se haya guardado con el.
         lista=datos.get("lista", datos.get("bolsa", "")),
-        notas=[
-            NotaDeFrase(
-                tab=nota["tab"],
-                inicio_seg=nota["inicio_seg"],
-                duracion_seg=nota["duracion_seg"],
-                cents=nota.get("cents", 0.0),
-            )
-            for nota in datos.get("notas", [])
-        ],
+        notas=[_nota_desde_diccionario(nota) for nota in datos.get("notas", [])],
+        notas_originales=[_nota_desde_diccionario(nota)
+                          for nota in datos.get("notas_originales", [])],
+    )
+
+
+def _nota_desde_diccionario(nota):
+    return NotaDeFrase(
+        tab=nota["tab"],
+        inicio_seg=nota["inicio_seg"],
+        duracion_seg=nota["duracion_seg"],
+        cents=nota.get("cents", 0.0),
     )
 
 
@@ -1175,3 +1185,83 @@ def progreso(intentos):
 
     return {"intentos": cantidad, "ultimo": ultimo, "mejor": mejor,
             "tendencia": tendencia, "veredicto": veredicto}
+
+
+# =============================================================================
+# Corregir la transcripción de una frase
+# =============================================================================
+#
+# El detector se equivoca a veces, y vos lo sabés mejor que él: un ↑8 que
+# era un ↑4, o tres ↑4 seguidos que eran una sola nota sostenida. La frase
+# guardada se puede corregir a mano, y la primera vez que se corrige queda
+# guardada la transcripción original, para poder volver.
+
+def editar_notas(frase, notas_nuevas):
+    """
+    Reemplaza las notas de la frase por `notas_nuevas`, validadas.
+
+    Cada nota es un diccionario {"tab", "inicio_seg", "duracion_seg",
+    "cents"}. La tablatura se acepta en cualquiera de las dos notaciones y
+    se guarda en la de la app; si un tab no existe en esa armónica (un bend
+    que el agujero no tiene, un número fuera de rango), se rechaza con
+    ValueError y no se guarda nada.
+
+    Devuelve la frase, lista para guardar().
+    """
+    if not notas_nuevas:
+        raise ValueError("Una frase tiene que tener al menos una nota.")
+
+    limpias = []
+    anterior = -1.0
+    for posicion, nota in enumerate(notas_nuevas, start=1):
+        try:
+            nota_real = mapeo.tab_a_nota(str(nota.get("tab", "")), frase.tonalidad)
+        except ValueError as error:
+            raise ValueError(f"La nota {posicion} ({nota.get('tab', '')!r}) no existe en una "
+                             f"armónica en {frase.tonalidad}: {error}")
+        try:
+            inicio = float(nota.get("inicio_seg", 0.0))
+            duracion = float(nota.get("duracion_seg", 0.0))
+            cents = float(nota.get("cents", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            raise ValueError(f"La nota {posicion} tiene tiempos que no son números.")
+        if inicio < anterior:
+            raise ValueError(f"La nota {posicion} empieza antes que la anterior.")
+        if duracion <= 0:
+            raise ValueError(f"La nota {posicion} tiene duración cero.")
+        anterior = inicio
+        limpias.append(NotaDeFrase(tab=nota_real.como_tab(), inicio_seg=inicio,
+                                   duracion_seg=duracion, cents=cents))
+
+    # La primera corrección guarda el original. Las siguientes no lo pisan:
+    # "original" es lo que salió del detector, no la corrección anterior.
+    if not frase.notas_originales:
+        frase.notas_originales = list(frase.notas)
+    frase.notas = limpias
+    return frase
+
+
+def restaurar_notas(frase):
+    """Vuelve a la transcripción del detector, si hubo correcciones."""
+    if frase.notas_originales:
+        frase.notas = list(frase.notas_originales)
+        frase.notas_originales = []
+    return frase
+
+
+def unir_repetidas(notas):
+    """
+    Junta las notas seguidas con la misma tablatura en una sola, que dura
+    hasta donde terminaba la última. Es la corrección más común: una nota
+    sostenida que el detector cortó en pedazos.
+    """
+    unidas = []
+    for nota in notas:
+        if unidas and unidas[-1].tab == nota.tab:
+            previa = unidas[-1]
+            fin = max(previa.inicio_seg + previa.duracion_seg, nota.inicio_seg + nota.duracion_seg)
+            unidas[-1] = NotaDeFrase(tab=previa.tab, inicio_seg=previa.inicio_seg,
+                                     duracion_seg=fin - previa.inicio_seg, cents=previa.cents)
+        else:
+            unidas.append(nota)
+    return unidas

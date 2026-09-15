@@ -1367,3 +1367,55 @@ table.intentos { font-size: 13px; max-width: 620px; }
 /* En la devolucion: este intento respecto de los anteriores. */
 .intento-numero { font-size: 13.5px; color: var(--tenue); margin: -6px 0 14px; }
 .intento-numero strong { color: var(--texto); }
+
+/* --- Corregir la transcripcion de una frase --- */
+
+.editor-frase {
+  flex-basis: 100%;
+  border-top: 1px solid var(--borde);
+  margin-top: 6px;
+  padding-top: 10px;
+}
+.editor-notas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.nota-editable {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.nota-editable input {
+  width: 58px;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 6px 6px;
+  font-family: var(--mono);
+  font-size: 14px;
+  text-align: center;
+}
+.nota-editable input:focus { box-shadow: none; background: rgba(224, 164, 88, 0.1); }
+.nota-editable button {
+  border: 0;
+  border-left: 1px solid var(--borde);
+  background: transparent;
+  color: var(--tenue);
+  padding: 6px 7px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.nota-editable button:hover { color: var(--cobre); background: rgba(224, 164, 88, 0.08); }
+.frase .etiqueta-editada {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--aguja);
+  border: 1px solid rgba(185, 166, 255, 0.4);
+  border-radius: 999px;
+  padding: 2px 9px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.tramo-todos { margin: 0 0 10px; }

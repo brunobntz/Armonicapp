@@ -213,6 +213,10 @@ function mostrarTramos(respuesta, archivo) {
     "hablando, o la base sola. Escuchá cada uno y elegí cuál importar: la " +
     "grabación entera no sirve de referencia porque los silencios " +
     "también contarían.</p>" +
+    '<div class="controles tramo-todos"><button class="principal" data-importar-todos>' +
+      "Importar los " + respuesta.tramos.length + " como frases</button>" +
+      "<span class='ayuda'>Cada tramo queda como una frase en una lista con el nombre " +
+      "del archivo. Después borrás las que no sirvan.</span></div>" +
     respuesta.tramos.map((tramo) =>
       '<div class="tramo" data-fila="' + tramo.numero + '">' +
         '<button class="reproducir" data-escuchar="' + tramo.numero +
@@ -240,6 +244,11 @@ function mostrarTramos(respuesta, archivo) {
       });
       importar(archivo, tramo);
     });
+  });
+
+  contenedor.querySelector("[data-importar-todos]").addEventListener("click", () => {
+    contenedor.querySelectorAll("button").forEach((otro) => { otro.disabled = true; });
+    importarTodos(archivo, respuesta);
   });
 
   prepararReproductor(archivo, respuesta.tramos, contenedor);
@@ -1600,7 +1609,9 @@ function dibujarListaDeFrases() {
         "<h3>" + escapar(frase.nombre) +
           (frase.lista && listaElegida === ""
             ? ' <span class="etiqueta-lista">' + escapar(frase.lista) + "</span>"
-            : "") + "</h3>" +
+            : "") +
+          (frase.editada ? '<span class="etiqueta-editada" title="transcripción corregida a mano">corregida</span>' : "") +
+          "</h3>" +
         (frase.comentario
           ? '<div class="descripcion">' + escapar(frase.comentario) + "</div>"
           : "") +
@@ -1621,10 +1632,19 @@ function dibujarListaDeFrases() {
         '<input type="file" accept=".wav,audio/wav" data-intento="' +
         escapar(frase.nombre) + '"></label>' +
       '<button class="como-viene" data-historial="' + escapar(frase.nombre) + '">Cómo viene</button>' +
+      '<button class="como-viene" data-editar="' + escapar(frase.nombre) + '">Corregir</button>' +
       '<button class="borrar" data-borrar="' + escapar(frase.nombre) + '">Borrar</button>' +
       '<div class="historial-frase" hidden></div>' +
+      '<div class="editor-frase" hidden></div>' +
     "</div>"
   ).join("");
+
+  contenedor.querySelectorAll("[data-editar]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const tarjeta = boton.closest(".frase");
+      abrirEditorDeFrase(boton.dataset.editar, tarjeta.querySelector(".editor-frase"));
+    });
+  });
 
   contenedor.querySelectorAll("[data-historial]").forEach((boton) => {
     boton.addEventListener("click", () => {
@@ -2882,4 +2902,142 @@ function htmlDeHistorialDeFrase(datos) {
       "<td>" + escapar(it.calidad || "") + "</td></tr>").join("") +
     "</tbody></table></div>";
   return html;
+}
+
+
+/* ==========================================================================
+   Importar todos los tramos de una vez
+
+   Una clase entera son ocho frases del profe en un audio. Elegirlas de a
+   una era ocho subidas. Esto las guarda todas, en una lista con el nombre
+   del archivo, y despues borras las que no sirvan.
+   ========================================================================== */
+
+async function importarTodos(archivo, respuesta) {
+  limpiarTramos();
+  avisarFrase("");
+  const resultado = await subir("/api/frases/importar-todos", archivo, {}, "",
+                                "Importando los " + respuesta.tramos.length + " tramos de " +
+                                archivo.name);
+  if (!resultado.ok) {
+    avisarFrase(resultado.motivo || "no pude importar los tramos");
+    return;
+  }
+  const dudosas = resultado.guardadas.filter((g) => !g.sirve).length;
+  avisarFrase("Guardadas " + resultado.guardadas.length + " frases en la lista «" +
+    resultado.lista + "»" +
+    (dudosas ? ". " + dudosas + " no pasaron el control de monofonía: lo dice su descripción" : "") +
+    (resultado.salteadas.length ? ". Salteadas " + resultado.salteadas.length + " que ya existían" : "") +
+    ".");
+  listaElegida = resultado.lista;
+  cargarFrases();
+}
+
+
+/* ==========================================================================
+   Corregir la transcripcion de una frase
+
+   El detector se equivoca a veces y vos lo sabes mejor: un ↑8 que era un
+   ↑4, o tres ↑4 seguidos que eran una sola nota sostenida. El editor
+   muestra cada nota como una casilla editable, con "×" para borrarla y
+   "unir" para pegarla con la siguiente. La primera correccion guarda el
+   original, y "Restaurar" vuelve a el.
+   ========================================================================== */
+
+async function abrirEditorDeFrase(nombre, donde) {
+  if (donde.dataset.abierto === "si") {
+    donde.hidden = true;
+    donde.dataset.abierto = "no";
+    return;
+  }
+  const datos = await pedir("/api/frases/notas?nombre=" + encodeURIComponent(nombre));
+  if (!datos.ok) { avisarFrase(datos.motivo); return; }
+
+  let notas = datos.notas.map((n) => Object.assign({}, n));
+  donde.hidden = false;
+  donde.dataset.abierto = "si";
+
+  const dibujar = () => {
+    donde.innerHTML =
+      '<div class="editor-notas">' +
+      notas.map((n, i) =>
+        '<span class="nota-editable">' +
+          '<input type="text" value="' + escapar(n.tab) + '" data-i="' + i + '" size="4" ' +
+            'title="' + n.inicio_seg.toFixed(2) + ' s, dura ' + n.duracion_seg.toFixed(2) + ' s">' +
+          (i < notas.length - 1
+            ? '<button data-unir="' + i + '" title="Unir con la siguiente: una sola nota sostenida">⟶</button>'
+            : "") +
+          '<button data-borrar-nota="' + i + '" title="Borrar esta nota">×</button>' +
+        "</span>").join("") +
+      "</div>" +
+      '<div class="controles">' +
+        '<button class="secundario" data-unir-todas>Unir las repetidas</button>' +
+        '<button class="principal" data-guardar-notas>Guardar la corrección</button>' +
+        (datos.editada ? '<button class="secundario" data-restaurar>Restaurar la original</button>' : "") +
+        '<button class="secundario" data-cancelar>Cancelar</button>' +
+        '<span class="ayuda" data-estado></span>' +
+      "</div>" +
+      "<p class='ayuda'>Escribí la tablatura como quieras (↑4 o 4, ↓3'' o -3''). " +
+      "⟶ pega una nota con la siguiente y la deja durando hasta donde terminaba la otra.</p>";
+
+    donde.querySelectorAll("input[data-i]").forEach((campo) => {
+      campo.addEventListener("input", () => { notas[Number(campo.dataset.i)].tab = campo.value; });
+    });
+    donde.querySelectorAll("[data-unir]").forEach((boton) => {
+      boton.addEventListener("click", () => { unir(Number(boton.dataset.unir)); dibujar(); });
+    });
+    donde.querySelectorAll("[data-borrar-nota]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        notas.splice(Number(boton.dataset.borrarNota), 1); dibujar();
+      });
+    });
+    donde.querySelector("[data-unir-todas]").addEventListener("click", () => {
+      for (let i = 0; i < notas.length - 1;) {
+        if (notas[i].tab.trim() === notas[i + 1].tab.trim()) unir(i); else i += 1;
+      }
+      dibujar();
+    });
+    donde.querySelector("[data-guardar-notas]").addEventListener("click", async () => {
+      const estado = donde.querySelector("[data-estado]");
+      estado.textContent = "Guardando...";
+      const respuesta = await pedir("/api/frases/editar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: nombre, notas: notas }),
+      });
+      if (!respuesta.ok) { estado.textContent = respuesta.motivo; return; }
+      donde.hidden = true;
+      donde.dataset.abierto = "no";
+      avisarFrase("Corregida «" + nombre + "»: " + respuesta.notas + " notas.");
+      cargarFrases();
+    });
+    const restaurar = donde.querySelector("[data-restaurar]");
+    if (restaurar) {
+      restaurar.addEventListener("click", async () => {
+        const respuesta = await pedir("/api/frases/restaurar", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nombre: nombre }),
+        });
+        if (!respuesta.ok) { avisarFrase(respuesta.motivo); return; }
+        donde.hidden = true;
+        donde.dataset.abierto = "no";
+        avisarFrase("«" + nombre + "» volvió a la transcripción original.");
+        cargarFrases();
+      });
+    }
+    donde.querySelector("[data-cancelar]").addEventListener("click", () => {
+      donde.hidden = true;
+      donde.dataset.abierto = "no";
+    });
+  };
+
+  // Pegar la nota i con la i+1: una sola, que dura hasta donde terminaba la otra.
+  const unir = (i) => {
+    const a = notas[i], b = notas[i + 1];
+    if (!b) return;
+    const fin = Math.max(a.inicio_seg + a.duracion_seg, b.inicio_seg + b.duracion_seg);
+    notas.splice(i, 2, { tab: a.tab, inicio_seg: a.inicio_seg, duracion_seg: fin - a.inicio_seg,
+                         cents: a.cents });
+  };
+
+  dibujar();
 }
