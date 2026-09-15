@@ -1,0 +1,78 @@
+# Próximos pasos
+
+Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
+la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-15:
+repo público en GitHub, 793 tests, todo lo listado en el README está hecho.
+
+## Cómo trabajamos
+
+- Un paso por vez, un commit por paso, y para los pasos grandes: plan
+  primero, ok después.
+- Todo con test, y los tests nunca abren el micrófono ni tocan la red.
+- Nada personal en el repo: ni nombres de terceros (se dice "el profe"), ni
+  rutas de una máquina, ni servicios de nube. Los datos viven en `material/`,
+  `frases/`, `sesiones/` y el `.env`, que git ignora.
+- La carpeta de clases (`CARPETA_CLASES`) es solo lectura. Hay tests que lo
+  garantizan; no se rompen.
+- El coach explica números que la app midió. Nunca inventa notas, agujeros ni
+  cents. Cuando no hay datos, la app se calla.
+- Después de cada cambio de código, reiniciar el servidor: Python no recarga
+  solo.
+
+## Pendientes que dependen de datos del usuario
+
+1. **Ollama en la laptop.** Ya instalado. Falta contar cuánto tarda la
+   primera respuesta y las siguientes, y si el castellano de `qwen2.5:7b`
+   convence; si no, probar `llama3.1:8b` cambiando `LLM_MODELO`.
+2. **El "8 soplado".** El detector muestra ↑8 donde el usuario cree que hay
+   ↑4. Medido sobre los audios de clase: en esos instantes suena un Mi6 real
+   (1336 Hz), sin energía una octava abajo, o sea NO es un error de octava
+   del detector. Falta que el usuario escuche el segundo audio de clase en
+   25,0 s y diga si es un 8 de verdad o algo raro de la grabación. Si es un
+   4, investigar la grabación (teléfono, códec), no el detector.
+
+## Issues abiertos en GitHub, en el orden sugerido
+
+3. **#3 Ejercicios generados desde Teoría.** Teoría ya sabe las notas guía de
+   cada acorde y en qué agujero se agarran. Falta un botón "armar ejercicio"
+   que genere una frase sintética (por ejemplo, la 3ª de cada acorde en el
+   tiempo 1 de cada compás, a un BPM dado), con audio
+   (`herramientas/generar_wav.py` tiene la base) y la guarde en Frases para
+   practicarla como cualquier otra. Es lo que el plan del coach recomienda y
+   la app hoy no puede dar.
+4. **#2 Band-in-a-Box.** Primer paso sin código: exportar una base en cada
+   formato que ofrezca y ver qué trae. Si el tempo y los acordes salen, la
+   sesión se guarda con el BPM sin tipearlo y la devolución sabe en qué
+   compás cayó cada nota.
+5. **#5 Filtros en Historial** por armónica, posición y lista, cuando se
+   llene.
+6. **#6 La guitarra** como instrumento hermano, en `guitarra/`, reutilizando
+   `tono.py`, `ritmo.py` y la interfaz web. Cuando haya interés.
+
+## Ideas nuevas, de más útil a más lejana
+
+- **Sesión guiada.** "Practicar el plan": recorrer las recomendaciones del
+  coach una por una, abriendo la frase o el ejercicio, y una devolución de
+  la sesión entera al final.
+- **Metrónomo con conteo de entrada** en En vivo, a N BPM, con un compás de
+  conteo antes de grabar. Sin base no hay ritmo medible; con esto lo hay.
+- **Loop de un tramo a menor velocidad** en el reproductor de tramos:
+  repetir y tocar al 75 % sin cambiar el tono (el navegador lo soporta:
+  `preservesPitch`). Para sacar una frase de oído antes de practicarla.
+- **Comparar dos intentos de oído.** Guardar el wav de cada práctica y poder
+  escuchar dos intentos seguidos desde el historial de la frase.
+- **Resumen semanal del coach.** Sesiones, prácticas y plan de la semana en
+  tres líneas. Con Ollama no cuesta nada.
+- **Exportar un resumen al cuaderno.** La app escribe Markdown en
+  `material/` (nunca en la carpeta de clases) para que el usuario lo lleve a
+  su cuaderno.
+- **Overblows**, si el profe los sigue trayendo: una tabla más en
+  `tablas.py` y que el detector los acepte. Hoy están fuera de alcance a
+  propósito.
+
+## Limpieza menor
+
+- En la máquina de desarrollo original hay una etiqueta git local,
+  `respaldo-antes-de-reescribir`, con el historial anterior a la reescritura
+  de mensajes. Borrarla cuando el usuario esté tranquilo:
+  `git tag -d respaldo-antes-de-reescribir`.
