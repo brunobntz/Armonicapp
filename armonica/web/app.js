@@ -3311,7 +3311,8 @@ function htmlDelReproductorDeBase(ficha, opciones) {
       : "") +
     '<label class="con-titulo">tempo ' +
       '<input type="range" class="tempo-base" min="40" max="150" value="100" step="5">' +
-      '<span class="bpm-base">' + ficha.bpm + " BPM</span></label>" +
+      '<input type="number" class="bpm-base" min="' + Math.round(ficha.bpm * 0.4) + '" max="' +
+      Math.round(ficha.bpm * 1.5) + '" step="1" value="' + ficha.bpm + '" inputmode="numeric"> BPM</label>' +
     (ficha.tiene_melodia
       ? '<label class="casilla opcion-melodia"' + (conAudio ? " hidden" : "") +
         '><input type="checkbox" class="melodia-base"> melodía</label>'
@@ -3375,10 +3376,24 @@ function conectarReproductorDeBase(caja, ficha, avisos, cancion) {
       boton.textContent = "■ Parar";
     }
   });
+  // El tempo se mueve con la barra o se escribe en BPM: las dos cosas son el
+  // mismo numero, y una sigue a la otra.
+  const aplicarTempo = () => {
+    if (reproductor._audio) reproductor._audio.playbackRate = reproductor.porcentaje / 100;
+  };
   tempo.addEventListener("input", () => {
     reproductor.porcentaje = Number(tempo.value);
-    bpmTexto.textContent = reproductor.bpm() + " BPM";
-    if (reproductor._audio) reproductor._audio.playbackRate = reproductor.porcentaje / 100;
+    bpmTexto.value = reproductor.bpm();
+    aplicarTempo();
+  });
+  bpmTexto.addEventListener("change", () => {
+    const pedido = Number(bpmTexto.value);
+    if (!pedido) { bpmTexto.value = reproductor.bpm(); return; }
+    const porcentaje = Math.max(40, Math.min(150, Math.round(pedido / ficha.bpm * 100)));
+    reproductor.porcentaje = porcentaje;
+    tempo.value = String(porcentaje);
+    bpmTexto.value = reproductor.bpm();
+    aplicarTempo();
   });
   if (melodia) melodia.addEventListener("change", () => { reproductor.conMelodia = melodia.checked; });
   repetir.addEventListener("change", () => {

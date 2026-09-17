@@ -1344,7 +1344,7 @@ table.guias tr.esta td { color: var(--cobre); }
 }
 .reproductor-base .con-titulo { display: inline-flex; align-items: center; gap: 8px; }
 .reproductor-base input[type="range"] { width: 120px; accent-color: var(--cobre); }
-.reproductor-base .bpm-base { font-family: var(--mono); font-size: 13px; min-width: 64px; }
+.reproductor-base .bpm-base { font-family: var(--mono); font-size: 13px; width: 64px; }
 .reproductor-base .casilla { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
 .reproductor-base .casilla input { accent-color: var(--cobre); }
 .reproductor-base select { max-width: 260px; }
