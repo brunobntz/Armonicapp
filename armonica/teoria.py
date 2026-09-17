@@ -578,3 +578,88 @@ if __name__ == "__main__":
         print(f"\nDIFERENCIA con la tabla escrita a mano:")
         print(f"  solo en el calculo: {sobran}")
         print(f"  solo en la tabla:   {faltan}\n")
+
+
+# =============================================================================
+# El círculo de quintas, por posiciones
+# =============================================================================
+
+# El modo que resulta en cada posición cuando se toca la escala mayor de la
+# armónica desde otra tónica. Las posiciones 7 a 11 caen fuera de la escala
+# de la armónica: no tienen un modo diatónico, y se dejan vacías a propósito.
+MODOS_POR_POSICION = {
+    1: "jónico (straight harp)",
+    2: "mixolidio (cross harp)",
+    3: "dórico",
+    4: "eólico",
+    5: "frigio",
+    6: "locrio",
+    12: "lidio",
+}
+
+
+def circulo_de_quintas(tonalidad_armonica):
+    """
+    Las doce posiciones de una armónica, en orden, con el tono en que se toca
+    en cada una y su relativa menor. Es el círculo de quintas leído desde la
+    armónica: cada posición es un paso de quinta, y por eso el mismo dibujo
+    sirve para cualquier armónica, girado.
+    """
+    if tonalidad_armonica not in tablas.TONALIDADES:
+        raise ValueError(f"No conozco la armonica en {tonalidad_armonica!r}")
+    clase_armonica = tablas.TONALIDADES[tonalidad_armonica] % 12
+    sectores = []
+    for posicion in sorted(tablas.POSICIONES):
+        desplazamiento = tablas.POSICIONES[posicion]
+        clase_tono = (clase_armonica + desplazamiento) % 12
+        sectores.append({
+            "posicion": posicion,
+            "nombre": tablas.NOMBRES_POSICIONES[posicion],
+            "desplazamiento": desplazamiento,
+            "tono": notas.nombre_de_clase(clase_tono),
+            "relativa_menor": notas.nombre_de_clase((clase_tono - 3) % 12) + "m",
+            "modo": MODOS_POR_POSICION.get(posicion, ""),
+            "con_tabla": posicion in tablas.POSICIONES_CON_TABLA,
+        })
+    return sectores
+
+
+def armonica_para(tono_cancion, posicion):
+    """
+    Qué armónica hace falta para tocar una canción en ese tono en esa
+    posición: la del tono, bajada el desplazamiento de la posición. Una
+    canción en Sol en 2a posición pide armónica en Do; en 12a, en Re.
+    """
+    if posicion not in tablas.POSICIONES:
+        raise ValueError(f"La posicion {posicion} no existe")
+    clase = (_clase_de_nombre(tono_cancion) - tablas.POSICIONES[posicion]) % 12
+    return nombre_de_armonica(clase)
+
+
+def nombre_de_armonica(clase):
+    """El nombre de la armónica de esa clase, como figura en tablas.TONALIDADES."""
+    for nombre, midi in tablas.TONALIDADES.items():
+        if midi % 12 == clase % 12:
+            return nombre
+    return notas.nombre_de_clase(clase)
+
+
+def circulo_para_cancion(tono_cancion):
+    """
+    Las doce posiciones para una canción en ese tono: qué armónica pide cada
+    una, y si es de las que el usuario tiene (tablas.TONALIDADES_DISPONIBLES).
+    """
+    _clase_de_nombre(tono_cancion)  # valida el nombre
+    sectores = []
+    for posicion in sorted(tablas.POSICIONES):
+        armonica = armonica_para(tono_cancion, posicion)
+        sectores.append({
+            "posicion": posicion,
+            "nombre": tablas.NOMBRES_POSICIONES[posicion],
+            "desplazamiento": tablas.POSICIONES[posicion],
+            "armonica": armonica,
+            "la_tenes": armonica in tablas.TONALIDADES_DISPONIBLES,
+            "modo": MODOS_POR_POSICION.get(posicion, ""),
+            "con_tabla": posicion in tablas.POSICIONES_CON_TABLA,
+        })
+    return sectores

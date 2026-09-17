@@ -345,6 +345,26 @@
 
   <div id="teoria-contenido"></div>
 
+  <!-- El círculo de quintas leído desde la armónica: cada posición es una
+       quinta más. Con "tono de la canción" se da vuelta la pregunta: qué
+       armónica pide cada posición. -->
+  <section id="teoria-quintas">
+    <h2>El círculo de quintas</h2>
+    <p class="ayuda">
+      Cada posición es un paso de quinta desde la armónica: por eso la misma
+      rueda sirve para todas, girada. Elegí de qué tono partís y tocá un
+      sector para abrir esa posición arriba.
+    </p>
+    <div class="controles">
+      <div class="conmutador" id="quintas-modo">
+        <button data-modo="armonica" class="activo">Tono de la armónica</button>
+        <button data-modo="cancion">Tono de la canción</button>
+      </div>
+      <div id="quintas-notas" class="teclas-de-notas"></div>
+    </div>
+    <div id="quintas-rueda"></div>
+  </section>
+
 </main>
 
 <!-- ===================== AJUSTES ===================== -->

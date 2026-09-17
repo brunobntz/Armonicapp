@@ -500,7 +500,14 @@ conviene esa escala. **Cada bloque dice de dónde sale el dato**: del
 cálculo, de la tabla escrita a mano (y si las dos coinciden, que es la
 conciliación de los tests mostrada en pantalla), o de una clase, de la que
 solo se cita la fecha. Los selectores de Teoría no cambian lo que la app
-tiene puesto: podés estudiar la 3ª sin dejar de tocar en 12ª. Y **Ajustes**
+tiene puesto: podés estudiar la 3ª sin dejar de tocar en 12ª. Y Y al pie de Teoría, **el círculo de quintas** leído desde la armónica:
+tres anillos (la posición con su modo, el tono mayor en que se toca, su
+relativa menor), con las posiciones fijas y las notas girando según la
+armónica que elijas. Con "tono de la canción" se da vuelta la pregunta: qué
+armónica pide cada posición para esa canción, y en verde las que tenés.
+Tocar un sector abre esa posición arriba. Los datos son los de
+`tablas.POSICIONES`, que un test concilia con la fórmula de las quintas.
+**Ajustes**
 tiene el micrófono y la configuración: la armónica que tenés en la mano, la
 posición y la escala de referencia se cambian ahí, sin reiniciar nada.
 
@@ -644,7 +651,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 919 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 925 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

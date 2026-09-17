@@ -1134,6 +1134,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._buscar_en_clases(self.path.partition("?")[2]))
         if self.path == "/api/aprendizaje/plan":
             return self._responder_json(self._plan())
+        if self.path.startswith("/api/quintas"):
+            return self._responder_json(self._quintas(self.path.partition("?")[2]))
         if self.path == "/api/canciones":
             return self._responder_json(self._canciones())
         if self.path.startswith("/api/canciones/archivo"):
@@ -2265,6 +2267,26 @@ class Manejador(SimpleHTTPRequestHandler):
         if clase.error:
             return {"ok": False, "motivo": clase.error}
         return dict(clase.como_diccionario(con_texto=True), ok=True)
+
+    def _quintas(self, consulta):
+        """
+        El circulo de quintas de Teoria. Con `armonica` (o lo que tenes
+        puesto), las doce posiciones y en que tono cae cada una; con
+        `cancion`, que armonica pide cada posicion para ese tono.
+        """
+        parametros = urllib.parse.parse_qs(consulta)
+        cancion = (parametros.get("cancion", [""])[0] or "").strip()
+        armonica = (parametros.get("armonica", [""])[0] or self.estado.tonalidad).strip()
+        try:
+            if cancion:
+                return {"ok": True, "modo": "cancion", "tono": cancion,
+                        "sectores": teoria.circulo_para_cancion(cancion),
+                        "disponibles": list(tablas.TONALIDADES_DISPONIBLES)}
+            return {"ok": True, "modo": "armonica", "tono": armonica,
+                    "sectores": teoria.circulo_de_quintas(armonica),
+                    "disponibles": list(tablas.TONALIDADES_DISPONIBLES)}
+        except ValueError as error:
+            return {"ok": False, "motivo": str(error)}
 
     # --- Las canciones: una carpeta por cancion, con su base y sus audios ---
 

@@ -476,3 +476,56 @@ def test_un_acorde_por_grado_sin_repetir():
     evitar = teoria.notas_a_evitar("C", 12)
     assert [e["acorde"] for e in evitar] == ["F7", "Bb7", "C7"]
     assert [e["grado"] for e in evitar] == ["I", "IV", "V"]
+
+
+# =============================================================================
+# El círculo de quintas
+# =============================================================================
+
+def test_el_circulo_de_una_armonica_en_do():
+    """
+    Lo que dice cualquier rueda de posiciones: en Do, 1a es Do, 2a Sol, 3a
+    Re, 4a La, 5a Mi, 6a Si, 12a Fa. Y la relativa menor de cada uno.
+    """
+    sectores = teoria.circulo_de_quintas("C")
+    por_posicion = {s["posicion"]: s for s in sectores}
+    assert [s["posicion"] for s in sectores] == list(range(1, 13))
+    assert {p: por_posicion[p]["tono"] for p in (1, 2, 3, 4, 5, 6, 12)} == {
+        1: "C", 2: "G", 3: "D", 4: "A", 5: "E", 6: "B", 12: "F"}
+    assert por_posicion[1]["relativa_menor"] == "Am"
+    assert por_posicion[2]["relativa_menor"] == "Em"
+    assert por_posicion[12]["relativa_menor"] == "Dm"
+    assert por_posicion[2]["modo"].startswith("mixolidio")
+    assert por_posicion[3]["modo"] == "dórico"
+    assert por_posicion[8]["modo"] == ""
+    assert por_posicion[12]["con_tabla"] is True and por_posicion[7]["con_tabla"] is False
+
+
+def test_el_circulo_es_el_mismo_dibujo_girado():
+    """Cada posición es una quinta más: las tonalidades de la 2a a la 12a van de quinta en quinta."""
+    for armonica in ("C", "G", "D", "A"):
+        sectores = teoria.circulo_de_quintas(armonica)
+        clases = [tablas.NOMBRES_NOTAS.index(s["tono"]) for s in sectores]
+        for anterior, siguiente in zip(clases, clases[1:]):
+            assert (siguiente - anterior) % 12 == 7
+
+
+def test_que_armonica_para_una_cancion():
+    """Una canción en Sol: en 2a pide armónica en Do; en 12a, en Re; en 1a, en Sol."""
+    assert teoria.armonica_para("G", 2) == "C"
+    assert teoria.armonica_para("G", 12) == "D"
+    assert teoria.armonica_para("G", 1) == "G"
+    assert teoria.armonica_para("F", 12) == "C"
+    assert teoria.armonica_para("B", 2) == "E"
+    assert teoria.armonica_para("C", 7) == "F#"     # se nombra como la armónica, no como Solb
+
+
+def test_el_circulo_para_una_cancion_dice_que_armonicas_tenes():
+    sectores = {s["posicion"]: s for s in teoria.circulo_para_cancion("F")}
+    assert sectores[12]["armonica"] == "C" and sectores[12]["la_tenes"] is True
+    assert sectores[2]["armonica"] == "Bb" and sectores[2]["la_tenes"] is False
+
+
+def test_una_armonica_desconocida_en_el_circulo():
+    with pytest.raises(ValueError):
+        teoria.circulo_de_quintas("H")

@@ -2173,6 +2173,138 @@ async function cargarTeoria() {
   }
 
   dibujarTeoria(datos);
+  // La rueda sigue a la posicion elegida: se redibuja con cada carga.
+  cargarQuintas();
+}
+
+
+/* ==========================================================================
+   El circulo de quintas
+
+   Tres anillos: afuera la posicion con su modo, en el medio el tono mayor,
+   adentro la relativa menor. Las posiciones estan fijas (la 1a arriba, y de
+   ahi en el sentido del reloj); lo que gira al cambiar de armonica son las
+   notas. Con "tono de la cancion", el anillo del medio dice que armonica
+   pide cada posicion, y las que tenes van claras.
+   ========================================================================== */
+
+const quintas = { modo: "armonica", tono: null };
+const NOTAS_DE_LA_RUEDA = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+
+async function cargarQuintas() {
+  const rueda = document.getElementById("quintas-rueda");
+  if (!rueda) return;
+  if (quintas.tono === null) {
+    quintas.tono = document.getElementById("teoria-tonalidad").value || inicio.tonalidad;
+    document.querySelectorAll("#quintas-modo button").forEach((b) => {
+      b.addEventListener("click", () => {
+        quintas.modo = b.dataset.modo;
+        document.querySelectorAll("#quintas-modo button").forEach((o) =>
+          o.classList.toggle("activo", o === b));
+        cargarQuintas();
+      });
+    });
+  }
+  const teclas = document.getElementById("quintas-notas");
+  teclas.innerHTML = NOTAS_DE_LA_RUEDA.map((n) =>
+    '<button class="tecla' + (n === quintas.tono ? " activa" : "") + '" data-nota="' + n + '">' +
+    escapar(n) + "</button>").join("");
+  teclas.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    quintas.tono = b.dataset.nota;
+    cargarQuintas();
+  }));
+
+  const consulta = quintas.modo === "cancion"
+    ? "?cancion=" + encodeURIComponent(quintas.tono)
+    : "?armonica=" + encodeURIComponent(quintas.tono);
+  const datos = await pedir("/api/quintas" + consulta);
+  if (!datos.ok) {
+    rueda.innerHTML = '<div class="aviso">' + escapar(datos.motivo) + "</div>";
+    return;
+  }
+  const posicionActual = Number(document.getElementById("teoria-posicion").value);
+  rueda.innerHTML = svgDeLaRueda(datos, posicionActual);
+  rueda.querySelectorAll("[data-posicion]").forEach((sector) => {
+    sector.addEventListener("click", () => {
+      document.getElementById("teoria-posicion").value = sector.dataset.posicion;
+      if (datos.modo === "cancion") {
+        // En modo cancion el sector dice que armonica: si la app la conoce,
+        // Teoria se abre con esa armonica y esa posicion.
+        const armonica = sector.dataset.armonica;
+        const selector = document.getElementById("teoria-tonalidad");
+        if ([...selector.options].some((o) => o.value === armonica)) selector.value = armonica;
+      } else {
+        document.getElementById("teoria-tonalidad").value = datos.tono;
+      }
+      cargarTeoria();
+      document.getElementById("teoria-contenido").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+
+function svgDeLaRueda(datos, posicionActual) {
+  const centro = 250, radioExterno = 240, radioMedio = 168, radioInterno = 104, radioCentro = 52;
+  const sectores = datos.sectores;
+  const paso = (2 * Math.PI) / sectores.length;
+  const polar = (radio, angulo) => [centro + radio * Math.sin(angulo), centro - radio * Math.cos(angulo)];
+  const arco = (r1, r2, desde, hasta) => {
+    const [x1, y1] = polar(r2, desde), [x2, y2] = polar(r2, hasta);
+    const [x3, y3] = polar(r1, hasta), [x4, y4] = polar(r1, desde);
+    return "M" + x1.toFixed(1) + " " + y1.toFixed(1) + " A" + r2 + " " + r2 + " 0 0 1 " +
+      x2.toFixed(1) + " " + y2.toFixed(1) + " L" + x3.toFixed(1) + " " + y3.toFixed(1) +
+      " A" + r1 + " " + r1 + " 0 0 0 " + x4.toFixed(1) + " " + y4.toFixed(1) + " Z";
+  };
+  const texto = (radio, angulo, contenido, clase, rotar) => {
+    const [x, y] = polar(radio, angulo);
+    const grados = (angulo * 180 / Math.PI);
+    // El texto del anillo de afuera sigue la curva: derecho arriba, dado
+    // vuelta abajo para que no quede cabeza abajo.
+    const giro = rotar ? (grados > 90 && grados < 270 ? grados + 180 : grados) : 0;
+    return '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" class="' + clase +
+      '" transform="rotate(' + giro.toFixed(1) + " " + x.toFixed(1) + " " + y.toFixed(1) + ')">' +
+      escapar(contenido) + "</text>";
+  };
+
+  // Primero todos los sectores (los que se clickean), despues todos los
+  // textos en un grupo aparte que no recibe clics: asi ningun relleno
+  // puede tapar una letra, pase lo que pase con el orden de dibujo.
+  let sectoresSvg = "", textosSvg = "";
+  sectores.forEach((s, i) => {
+    const desde = i * paso - paso / 2, hasta = desde + paso, medio = i * paso;
+    const esActual = s.posicion === posicionActual;
+    const clases = "sector" + (esActual ? " actual" : "") + (s.con_tabla ? " con-tabla" : "") +
+      (datos.modo === "cancion" ? (s.la_tenes ? " la-tenes" : " no-la-tenes") : "");
+    const ordinal = s.posicion + "ª";
+    const titulo = datos.modo === "cancion"
+      ? ordinal + " posición: armónica en " + s.armonica + (s.la_tenes ? " (la tenés)" : "") +
+        (s.modo ? " · " + s.modo : "")
+      : ordinal + " posición: tocás en " + s.tono + " (relativa " + s.relativa_menor + ")" +
+        (s.modo ? " · " + s.modo : "");
+    sectoresSvg += '<g class="' + clases + '" data-posicion="' + s.posicion + '"' +
+      (datos.modo === "cancion" ? ' data-armonica="' + escapar(s.armonica) + '"' : "") + ">" +
+      "<title>" + escapar(titulo) + "</title>" +
+      '<path class="aro externo" d="' + arco(radioMedio, radioExterno, desde, hasta) + '"/>' +
+      '<path class="aro medio" d="' + arco(radioInterno, radioMedio, desde, hasta) + '"/>' +
+      '<path class="aro interno" d="' + arco(radioCentro, radioInterno, desde, hasta) + '"/>' +
+      "</g>";
+    textosSvg += '<g class="' + clases + '">' +
+      texto(radioExterno - 22, medio, ordinal, "posicion", true) +
+      (s.modo ? texto(radioExterno - 46, medio, s.modo.replace(/ \(.*\)/, ""), "modo", true) : "") +
+      texto(radioMedio - 34, medio, datos.modo === "cancion" ? s.armonica : s.tono, "tono", false) +
+      // En modo cancion, el anillo de adentro solo marca las armonicas que
+      // tenes: un tilde, que en ese espacio "la tenes" se pisaba.
+      texto(radioInterno - 28, medio, datos.modo === "cancion" ? (s.la_tenes ? "✓" : "")
+                                                              : s.relativa_menor, "relativa", false) +
+      "</g>";
+  });
+  return '<svg viewBox="0 0 500 500" class="rueda-quintas" role="img" aria-label="círculo de quintas">' +
+    sectoresSvg +
+    '<circle cx="' + centro + '" cy="' + centro + '" r="' + radioCentro + '" class="centro"/>' +
+    '<g class="textos">' + textosSvg +
+    '<text x="' + centro + '" y="' + (centro + 6) + '" class="centro-texto">' +
+    escapar(datos.modo === "cancion" ? "canción en " + datos.tono : "armónica en " + datos.tono) +
+    "</text></g></svg>";
 }
 
 

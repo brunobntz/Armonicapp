@@ -2,7 +2,7 @@
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
 la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-17:
-repo público en GitHub, 919 tests, todo lo listado en el README está hecho.
+repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 
@@ -73,6 +73,10 @@ repo público en GitHub, 919 tests, todo lo listado en el README está hecho.
      del micrófono; `ritmo.ajustar_offset` la corrige con lo tocado, pero
      hay que ver cuánto da en la máquina del usuario (mirar `offset_seg`
      en el JSON de la sesión contra lo que se escucha en el wav).
+   - **El círculo de quintas en Teoría.** Hecho (2026-09-17): rueda SVG
+     con posiciones fijas y notas que giran, modo "tono de la canción"
+     (qué armónica pide cada posición), clic abre la posición
+     (`teoria.circulo_de_quintas`, `/api/quintas`).
    - **La tablatura del profe, leída de la foto.** Renglón por renglón,
      en una tarjeta que se corrige como las frases (el profe anota los
      bends distinto). Es lectura de una imagen escrita a mano: la hace el

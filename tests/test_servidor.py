@@ -2762,3 +2762,18 @@ def test_el_coach_explica_la_base_y_queda_guardada(servidor_andando, carpeta_de_
     assert datos["canciones"][0]["ajustes"]["explicacion"] is None
 
     assert mandar(servidor_andando, "/api/canciones/explicar", {"cancion": "otra"})["ok"] is False
+
+
+def test_el_circulo_de_quintas_por_armonica_y_por_cancion(servidor_andando):
+    datos = traer_json(servidor_andando, "/api/quintas?armonica=C")
+    assert datos["ok"] and datos["modo"] == "armonica"
+    assert [s["tono"] for s in datos["sectores"]][:3] == ["C", "G", "D"]
+
+    datos = traer_json(servidor_andando, "/api/quintas?cancion=G")
+    assert datos["modo"] == "cancion"
+    assert next(s for s in datos["sectores"] if s["posicion"] == 2)["armonica"] == "C"
+    assert datos["disponibles"] == ["C", "G", "D", "A"]
+
+    # Sin parametros usa la armonica puesta.
+    assert traer_json(servidor_andando, "/api/quintas")["tono"] == "C"
+    assert traer_json(servidor_andando, "/api/quintas?armonica=H")["ok"] is False

@@ -1413,6 +1413,50 @@ table.guias tr.esta td { color: var(--cobre); }
 .clase-fila.sin-recap summary .titulo { color: var(--tenue); font-style: italic; }
 .clase-fila .cuerpo { margin-top: 10px; }
 
+/* --- El circulo de quintas --- */
+
+.conmutador { display: inline-flex; border: 1px solid var(--borde); border-radius: 999px; overflow: hidden; }
+.conmutador button {
+  background: transparent; border: 0; color: var(--tenue);
+  padding: 8px 14px; font: 500 13px var(--cuerpo); cursor: pointer;
+}
+.conmutador button.activo { background: var(--panel-alto); color: var(--texto); }
+
+.teclas-de-notas { display: flex; flex-wrap: wrap; gap: 4px; }
+.teclas-de-notas .tecla {
+  min-width: 36px; padding: 6px 8px;
+  background: var(--panel); border: 1px solid var(--borde); border-radius: 8px;
+  color: var(--texto); font: 500 14px var(--mono); cursor: pointer;
+}
+.teclas-de-notas .tecla.activa { background: var(--cobre); color: var(--tinta); border-color: var(--cobre); }
+
+#quintas-rueda { max-width: 560px; margin: 16px auto 0; }
+.rueda-quintas { width: 100%; height: auto; display: block; }
+/* Los aros apenas se distinguen del fondo a proposito: lo que se lee son
+ * las letras. Los trazos si se ven, para que los sectores se cuenten.
+ * (Se llaman "aro" y no "anillo" porque .anillo ya es el spinner de
+ * espera, que gira: los sectores heredaban la animacion.) */
+.rueda-quintas .aro { fill: var(--panel); stroke: rgba(154, 145, 135, 0.35); stroke-width: 1; }
+.rueda-quintas .aro.medio { fill: var(--panel-alto); }
+.rueda-quintas .aro.interno { fill: var(--fondo); }
+.rueda-quintas .sector { cursor: pointer; }
+.rueda-quintas .textos { pointer-events: none; }
+.rueda-quintas .sector:hover .aro { stroke: var(--tenue); }
+.rueda-quintas .sector.actual .aro { stroke: var(--cobre); stroke-width: 2; fill: rgba(224, 164, 88, 0.08); }
+.rueda-quintas .sector.actual .tono { fill: var(--cobre); }
+.rueda-quintas text { fill: var(--texto); text-anchor: middle; dominant-baseline: middle; font-family: var(--cuerpo); }
+.rueda-quintas .posicion { font-family: var(--display); font-size: 22px; font-weight: 500; }
+.rueda-quintas .modo { font-size: 9px; fill: var(--tenue); letter-spacing: 0.04em; }
+.rueda-quintas .tono { font-family: var(--display); font-size: 26px; font-weight: 500; }
+.rueda-quintas .relativa { font-family: var(--mono); font-size: 13px; fill: var(--tenue); }
+.rueda-quintas .sector.con-tabla .posicion { fill: var(--texto); }
+.rueda-quintas .sector:not(.con-tabla) .posicion { fill: var(--tenue); }
+.rueda-quintas .sector.no-la-tenes .tono { fill: var(--tenue); opacity: 0.6; }
+.rueda-quintas .sector.la-tenes .tono { fill: var(--verde); }
+.rueda-quintas .sector.la-tenes .relativa { fill: var(--verde); font-size: 18px; }
+.rueda-quintas .centro { fill: var(--fondo); stroke: var(--borde); }
+.rueda-quintas .centro-texto { font-size: 11px; fill: var(--tenue); }
+
 /* Markdown renderizado: la clase entera y la sintesis. Tipografia de
  * lectura, mas chica que la de la app. */
 .apunte {
