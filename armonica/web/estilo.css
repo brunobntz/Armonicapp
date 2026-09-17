@@ -13,7 +13,7 @@
  *
  *   cobre    → soplado (y el acento de la app)
  *   azul     → aspirado
- *   lavanda  → la aguja del bend
+ *   lavanda  → la aguja del bend, y el acorde que suena
  *   verde    → afinada / en la escala
  *   amarillo → cerca, o un aviso
  *   rojo     → lejos, o grabando
@@ -1323,9 +1323,10 @@ table.guias tr.esta td { color: var(--cobre); }
 .reproductor-base button.chico { padding: 6px 12px; font-size: 13px; }
 .reproductor-base .nota-fuente { flex-basis: 100%; }
 
-/* Lo que esta sonando. */
-.cifrado .compas.sonando { border-color: var(--cobre); background: var(--panel-alto); }
-.cifrado .acorde.sonando { color: var(--cobre); font-weight: 600; }
+/* Lo que esta sonando: en lavanda, el color de "donde estas ahora", igual
+ * que la aguja del bend. El cobre queda para los cambios de acorde. */
+.cifrado .compas.sonando { border-color: var(--aguja); background: var(--panel-alto); }
+.cifrado .acorde.sonando { color: var(--aguja); font-weight: 600; }
 
 /* La base en En vivo: el acorde actual grande, y sus notas guia en el
  * diagrama con un aro cobre, como la tonica en Teoria. */
