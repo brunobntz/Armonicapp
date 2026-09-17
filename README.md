@@ -94,6 +94,7 @@ valor por defecto, así que después de la primera vez son cuatro Enter.
 | Practicar contra esa frase | `python main.py --practicar "lick de 3a"` (o la solapa **Frases** de la web) |
 | Practicar con un audio ya grabado | `python main.py --practicar "lick de 3a" --wav mi_intento.wav` |
 | Saber con qué armónica se grabó algo | `python main.py --wav ajeno.wav --que-tono` |
+| Ver qué trae una base de Band-in-a-Box | `python main.py --base "Georgia.MGU" --tonalidad C` |
 | Medir el ruido de fondo | `python main.py --calibrar` |
 
 Y para analizar el ritmo, agregale a cualquier modo el BPM de tu base:
@@ -106,6 +107,15 @@ La `--subdivision` dice contra qué figura medir: `1` negras, `2` corcheas
 rectas, `3` tresillos. Si tu base es de estilo `sw8` (corcheas con swing), va
 `3`. Si medís corcheas con swing contra corcheas rectas, la mitad de tus notas
 aparecen con medio pulso de desvío y el reporte no sirve.
+
+**Las bases de Band-in-a-Box se leen directo**, sin abrir el programa: de un
+`.sgu` o `.mgu` salen el tono, el tempo, el compás, si el estilo lleva swing
+(y entonces la subdivisión correcta), el cifrado compás por compás y, si el
+archivo trae melodía, esa melodía pasada a la tablatura de tu armónica. El
+formato es binario y sin documentación; `armonica/bandinabox.py` es un port a
+Python puro del lector de MuseScore, verificado contra una base real. No trae
+el arreglo (eso lo inventa el programa al reproducir), así que para escuchar
+la base hace falta el audio que exporta Band-in-a-Box.
 
 ---
 
@@ -311,6 +321,7 @@ una versión web o de teléfono.
 | `posiciones.py` | Tonalidad por posición, pertenencia a escalas. Lee las tablas escritas a mano. |
 | `teoria.py` | Lo mismo, pero **calculado**. Cubre las 12 posiciones, acordes y arpegios. |
 | `tonalidad.py` | Deduce qué armónica y en qué tono se grabó algo. |
+| `bandinabox.py` | Lee una base de Band-in-a-Box (`.sgu`/`.mgu`): tono, tempo, acordes y melodía. |
 | `transcripcion.py` | La cadena de un `.wav` a notas, y si ese audio sirve. |
 | `ritmo.py` | Desvío respecto del pulso, y si la medición es confiable. |
 | `tono.py` | El detector YIN, escrito a mano en numpy. |
@@ -544,7 +555,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 684 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 814 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

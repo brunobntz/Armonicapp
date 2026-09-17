@@ -37,6 +37,7 @@ from armonica import (afinador, audio, exportacion, frases, mapeo, menu,
                       tablas, tonalidad as modulo_tonalidad, tono,
                       transcripcion)
 from armonica.consola import preparar_consola
+from armonica import bandinabox
 
 
 def transcribir_archivo(ruta, tonalidad, posicion=None, escala=None,
@@ -642,7 +643,7 @@ def _sin_argumentos(argumentos):
                     argumentos.teoria, argumentos.afinador, argumentos.acorde,
                     argumentos.frases, argumentos.grabar_frase,
                     argumentos.practicar, argumentos.web,
-                    argumentos.tramos])
+                    argumentos.tramos, argumentos.base])
 
 
 def _desde_el_menu(argumentos):
@@ -1137,6 +1138,66 @@ def modo_tramos(argumentos):
     return 0
 
 
+def modo_base(ruta, tonalidad_armonica):
+    """
+    Muestra lo que trae una base de Band-in-a-Box: tono, tempo, compas, el
+    cifrado compas por compas y, si el archivo tiene melodia, esa melodia en
+    la tablatura de tu armonica.
+
+    Es el primer paso para practicar sobre una base sin tipear el BPM: lo que
+    se imprime aca es lo que la app va a saber de la base cuando la cargues.
+    """
+    try:
+        base = bandinabox.leer(ruta)
+    except FileNotFoundError:
+        print(f"No encontre el archivo {ruta}")
+        return 1
+    except ValueError as error:
+        print(f"No pude leer la base: {error}")
+        return 1
+
+    print()
+    print(f"  {base.titulo}")
+    print(f"  {base.tonalidad} {base.modo}, {base.bpm} BPM, {base.pulsos_por_compas}/4, "
+          f"estilo {base.estilo}" + (" (con swing: medir en tresillos)" if base.con_swing else ""))
+    print(f"  {base.compases} compases; el coro va del {base.coro_desde} al "
+          f"{base.coro_hasta}, {base.vueltas} vueltas.")
+    for aviso in base.avisos:
+        print(f"  ! {aviso}")
+    print()
+
+    cifrado = base.cifrado()
+    ancho = max(len(fila) for fila in cifrado) if cifrado else 0
+    for numero, fila in enumerate(cifrado, 1):
+        print(f"  {numero:>3} | {fila:<{ancho}} |", end="")
+        acorde = base.acorde_en(numero)
+        familia = acorde.familia() if acorde else None
+        print(f"  {tablas.NOMBRES_ACORDES[familia]}" if familia else "")
+
+    if not base.melodia:
+        print()
+        print("  Sin melodia (las bases .sgu no la traen; las .mgu si).")
+        return 0
+
+    print()
+    print(f"  MELODIA en armonica de {tonalidad_armonica} ({len(base.melodia)} notas)")
+    print("  Un punto es una nota que esa armonica no tiene.")
+    tabla = mapeo.construir_tabla_inversa(tonalidad_armonica)
+    por_compas = {}
+    pulso = 60.0 / base.bpm
+    for nota in base.melodia:
+        compas = int(nota.inicio_seg // (pulso * base.pulsos_por_compas)) + 1
+        forma = tabla.get(nota.midi)
+        por_compas.setdefault(compas, []).append(forma.como_tab() if forma else "·")
+    fuera = sum(1 for tabs in por_compas.values() for t in tabs if t == "·")
+    if fuera:
+        print(f"  {fuera} de {len(base.melodia)} notas quedan fuera de esta armonica; "
+              "proba con --tonalidad otra.")
+    for compas in sorted(por_compas):
+        print(f"  {compas:>3} | {' '.join(por_compas[compas])}")
+    return 0
+
+
 def modo_listar_frases():
     """Las frases guardadas."""
     guardadas = frases.listar()
@@ -1295,6 +1356,9 @@ def crear_parser():
                         help="mide si un .wav se puede transcribir")
     parser.add_argument("--que-tono", action="store_true",
                         help="deduce la armonica y el tono de un .wav")
+    parser.add_argument("--base", default=None, metavar="ARCHIVO",
+                        help="lee una base de Band-in-a-Box (.sgu o .mgu): tono, "
+                             "tempo, acordes y, si trae, la melodia en tablatura")
     parser.add_argument("--web", action="store_true",
                         help="abre la interfaz en el navegador")
     parser.add_argument("--puerto", type=int, default=8000,
@@ -1360,6 +1424,9 @@ def main():
             print("Para medir la monofonia hace falta --wav <archivo>.")
             return 1
         return modo_monofonia(argumentos.wav)
+
+    if argumentos.base:
+        return modo_base(argumentos.base, argumentos.tonalidad)
 
     if argumentos.tramos:
         if not argumentos.wav:

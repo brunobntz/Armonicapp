@@ -1,8 +1,8 @@
 # Próximos pasos
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
-la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-15:
-repo público en GitHub, 793 tests, todo lo listado en el README está hecho.
+la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-16:
+repo público en GitHub, 814 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 
@@ -40,10 +40,31 @@ repo público en GitHub, 793 tests, todo lo listado en el README está hecho.
    (`herramientas/generar_wav.py` tiene la base) y la guarde en Frases para
    practicarla como cualquier otra. Es lo que el plan del coach recomienda y
    la app hoy no puede dar.
-4. **#2 Band-in-a-Box.** Primer paso sin código: exportar una base en cada
-   formato que ofrezca y ver qué trae. Si el tempo y los acordes salen, la
-   sesión se guarda con el BPM sin tipearlo y la devolución sabe en qué
-   compás cayó cada nota.
+4. **#2 Band-in-a-Box.** Hecho el primer paso (2026-09-16):
+   `armonica/bandinabox.py` lee el `.sgu`/`.mgu` directo y `--base` lo
+   muestra: tono, tempo, compás, swing, cifrado y melodía en tablatura. Lo
+   que sigue, en orden:
+   - **Canciones.** Una carpeta por canción en `material/canciones/<nombre>/`
+     con la base, los audios que exporta Band-in-a-Box o manda el profe
+     (m4a, mp3, mp4: el navegador los reproduce solos) y la tablatura en
+     foto. Una sección en la web con la ficha (lo que da `--base`), los
+     audios reproducibles, y botones a "importar tramos" del audio y a
+     "practicar sobre esta base". Las fotos `.HEIC` no las muestra ningún
+     navegador: hace falta `pillow-heif` como dependencia opcional, con
+     caché de JPG fuera de la carpeta de clases.
+   - **La tablatura del profe, leída de la foto.** Renglón por renglón,
+     en una tarjeta que se corrige como las frases (el profe anota los
+     bends distinto). Es lectura de una imagen escrita a mano: la hace el
+     coach con visión (Claude, o un modelo local con imágenes en Ollama),
+     y queda marcada como "leída de la foto, sin verificar" hasta que el
+     usuario la revisa. Aviso igual que con el plan: la foto sale de la
+     máquina si el coach es Claude.
+   - **Tocar sobre la base.** El navegador reproduce el audio de la base y
+     le dice al servidor cuándo arrancó; con el tempo y los acordes de la
+     base, En vivo muestra el acorde que suena y sus notas guía en el
+     diagrama, la sesión se guarda con el BPM y la subdivisión sin
+     tipearlos, y la devolución dice en qué compás y sobre qué acorde cayó
+     cada nota. Medir primero el desfasaje navegador↔Python.
 5. **#5 Filtros en Historial** por armónica, posición y lista, cuando se
    llene.
 6. **#6 La guitarra** como instrumento hermano, en `guitarra/`, reutilizando
