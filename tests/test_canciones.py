@@ -257,14 +257,62 @@ def test_cada_acorde_de_la_ficha_trae_sus_notas_y_sus_guias(carpeta):
     assert all(set(g) >= {"agujero", "direccion", "bend", "tab"} for g in f7["guias"])
 
 
-def test_un_acorde_que_la_app_no_calcula_tiene_notas_pero_no_guias():
+def test_un_acorde_que_las_tablas_no_tienen_igual_trae_sus_notas_y_sus_guias():
+    """
+    Un Em7b5 no está en tablas.ACORDES_INTERVALOS, pero su cifrado dice qué
+    notas tiene (Mi Sol Sib Re), y de ahí salen la 3a (Sol) y la 7a (Re).
+    """
     base = blues_en_fa()
     base.acordes = [bandinabox.Acorde(1, 1, "E", "m7b5", numero_tipo=32)]
     base.compases = 1
     ficha = canciones.ficha(bandinabox.interpretar(bandinabox.escribir(base)), "C")
     acorde = ficha["cifrado"][0]["acordes"][0]
+    assert acorde["familia"] is None
     assert acorde["clases"] == [4, 7, 10, 2]
-    assert acorde["guias"] == []
+    assert [n["nota"] for n in acorde["notas"]] == ["E", "G", "Bb", "D"]
+    assert [n["es_guia"] for n in acorde["notas"]] == [False, True, False, True]
+    assert {g["nota"] for g in acorde["guias"]} == {"G", "D"}
+
+
+def test_cada_nota_del_acorde_trae_su_agujero_mas_comodo():
+    """
+    F7 en armónica de Do: Fa, La, Do, Mib. El Fa más cómodo es el ↓5 (el
+    ↓2'' es un bend); el La, el ↓6 (el ↓3'' es un bend); el Do, el ↑4; el
+    Mib solo existe como bend soplado del 8 (↑8').
+    """
+    base = blues_en_fa()
+    base.compases = 1
+    ficha = canciones.ficha(bandinabox.interpretar(bandinabox.escribir(base)), "C")
+    f7 = ficha["cifrado"][0]["acordes"][0]
+    facil = {n["nota"]: n["facil"] for n in f7["notas"]}
+    assert facil == {"F": "-5", "A": "-6", "C": "4", "Eb": "8'"}
+    grados = {n["nota"]: n["grado"] for n in f7["notas"]}
+    assert grados == {"F": "tonica", "A": "3a mayor", "C": "5a", "Eb": "7a menor"}
+    fa = next(n for n in f7["notas"] if n["nota"] == "F")
+    assert "-2''" in fa["formas"] and "-5" in fa["formas"]
+
+
+def test_las_notas_a_evitar_son_las_naturales_medio_tono_arriba_de_una_del_acorde():
+    """
+    Sobre F7 (Fa La Do Mib), medio tono arriba de cada nota: Solb, Sib, Reb
+    y Mi. En una armónica en Do, la única natural de esas es el Mi: choca
+    con la 7a. Y se dice por qué.
+    """
+    base = blues_en_fa()
+    base.compases = 1
+    ficha = canciones.ficha(bandinabox.interpretar(bandinabox.escribir(base)), "C")
+    a_evitar = ficha["cifrado"][0]["acordes"][0]["a_evitar"]
+    assert {e["nota"] for e in a_evitar} == {"E"}
+    assert {e["tab"] for e in a_evitar} == {"2", "5", "8"}
+    assert all(e["porque"] == "medio tono arriba de la 7a menor (Eb)" for e in a_evitar)
+
+
+def test_sin_armonica_no_hay_notas_ni_guias():
+    base = blues_en_fa()
+    base.compases = 1
+    ficha = canciones.ficha(bandinabox.interpretar(bandinabox.escribir(base)), None)
+    acorde = ficha["cifrado"][0]["acordes"][0]
+    assert acorde["notas"] == [] and acorde["guias"] == [] and acorde["a_evitar"] == []
 
 
 def test_la_melodia_cruda_viaja_para_el_reproductor():

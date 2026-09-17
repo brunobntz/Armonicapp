@@ -26,7 +26,7 @@ navegador no sabe mostrar— va a una caché aparte (ver imagenes.py).
 import os
 from dataclasses import dataclass, field
 
-from armonica import bandinabox, mapeo, teoria
+from armonica import bandinabox, mapeo, notas, tablas, teoria
 from armonica.coach import leer_env
 
 CARPETA_POR_DEFECTO = os.path.join("material", "canciones")
@@ -181,10 +181,11 @@ def ficha(base, tonalidad_armonica=None):
 def _acorde_para_la_pantalla(acorde, tonalidad_armonica):
     """
     Un acorde con lo que el navegador necesita: el nombre para escribirlo,
-    las clases de nota para que el reproductor lo toque, y —si la app sabe
-    calcular ese tipo de acorde y se sabe la armónica— las notas guía (la 3a
-    y la 7a) con los agujeros donde se agarran, para iluminarlas en el
-    diagrama mientras suena.
+    las clases de nota para que el reproductor lo toque y, si se sabe la
+    armónica, cada nota del acorde con el agujero donde se agarra (`notas`),
+    las notas guía con todas sus formas para iluminarlas en el diagrama
+    (`guias`), y las notas naturales de la armónica que chocan con el
+    acorde (`a_evitar`).
     """
     datos = {
         "tiempo": acorde.tiempo,
@@ -193,20 +194,89 @@ def _acorde_para_la_pantalla(acorde, tonalidad_armonica):
         "raiz": acorde.clase_raiz(),
         "bajo": acorde.clase_bajo(),
         "clases": acorde.clases(),
+        "notas": [],
         "guias": [],
+        "a_evitar": [],
     }
-    if acorde.familia() and tonalidad_armonica:
-        arpegio = teoria.arpegio(tonalidad_armonica, acorde.raiz, acorde.familia())
-        for grado in arpegio.grados:
-            if not grado.es_guia:
-                continue
+    if not tonalidad_armonica:
+        return datos
+    for grado in notas_del_acorde(acorde, tonalidad_armonica):
+        facil = grado.el_mas_facil()
+        datos["notas"].append({
+            "intervalo": grado.intervalo,
+            "grado": grado.nombre_grado,
+            "nota": grado.nombre_nota,
+            "es_guia": grado.es_guia,
+            "facil": facil.como_tab() if facil else None,
+            "formas": [nota.como_tab() for nota in grado.agujeros],
+        })
+        if grado.es_guia:
             for nota in grado.agujeros:
                 datos["guias"].append({
                     "agujero": nota.agujero, "direccion": nota.direccion,
                     "bend": nota.bend, "tab": nota.como_tab(),
                     "grado": grado.nombre_grado, "nota": grado.nombre_nota,
                 })
+    datos["a_evitar"] = notas_a_evitar(acorde, tonalidad_armonica)
     return datos
+
+
+def notas_del_acorde(acorde, tonalidad_armonica):
+    """
+    Las notas del acorde (las de su cifrado: tríada y séptima o sexta),
+    cada una con todas las formas de tocarla en esa armónica, como
+    GradoDelAcorde. Es el mismo cálculo que teoria.arpegio, pero sobre los
+    intervalos que deduce bandinabox del cifrado, así cubre también los
+    acordes que las tablas de la app no tienen (un Em7b5, un C7#5).
+    """
+    formas = mapeo.todas_las_formas(tonalidad_armonica)
+    raiz = acorde.clase_raiz()
+    grados = []
+    for intervalo in acorde.intervalos():
+        clase = (raiz + intervalo) % 12
+        agujeros = [nota for midi in sorted(formas) if midi % 12 == clase
+                    for nota in formas[midi]]
+        grados.append(teoria.GradoDelAcorde(
+            intervalo=intervalo,
+            nombre_grado=tablas.NOMBRES_GRADOS.get(intervalo, f"{intervalo} semitonos"),
+            nombre_nota=notas.nombre_de_clase(clase),
+            agujeros=agujeros,
+            es_guia=intervalo in tablas.GRADOS_GUIA,
+        ))
+    return grados
+
+
+def notas_a_evitar(acorde, tonalidad_armonica):
+    """
+    Las notas NATURALES de la armónica (sin bend: las que salen solas) que
+    están medio tono arriba de una nota del acorde y no son del acorde. Es
+    la regla clásica de las notas a evitar: a medio tono por encima de una
+    nota del acorde, chocan con ella. Sobre F7, el Mi (medio tono arriba
+    de la 7a, Mib) y el Sib no: el Sib no es natural en una armónica en Do.
+    La app dice la regla, no el gusto: una nota de paso puede ser esa.
+    """
+    raiz = acorde.clase_raiz()
+    clases_del_acorde = set(acorde.clases())
+    chocan = {}
+    for intervalo in acorde.intervalos():
+        clase = (raiz + intervalo) % 12
+        arriba = (clase + 1) % 12
+        if arriba not in clases_del_acorde:
+            chocan[arriba] = tablas.NOMBRES_GRADOS.get(intervalo, f"{intervalo} semitonos"), \
+                notas.nombre_de_clase(clase)
+    resultado = []
+    for midi, formas in sorted(mapeo.todas_las_formas(tonalidad_armonica).items()):
+        clase = midi % 12
+        if clase not in chocan:
+            continue
+        for nota in formas:
+            if nota.bend == 0:
+                grado, nombre = chocan[clase]
+                resultado.append({
+                    "nota": notas.nombre_de_clase(clase), "tab": nota.como_tab(),
+                    "porque": f"medio tono arriba de la {grado} ({nombre})",
+                })
+    return resultado
 
 
 def melodia_en_tablatura(base, tonalidad_armonica):

@@ -1278,8 +1278,29 @@ table.guias tr.esta td { color: var(--cobre); }
   position: absolute; top: 3px; left: 8px;
   font-size: 10px; color: var(--tenue); letter-spacing: 0.08em;
 }
-.cifrado .acorde.sin-familia { color: var(--tenue); }
 .cifrado .acorde.repite { color: var(--tenue); }
+
+/* Cada acorde con su linea de notas debajo: la nota y el agujero mas comodo,
+ * las guias en cobre. Con varios acordes en el compas, uno al lado del otro. */
+.cifrado .compas { align-items: flex-start; gap: 4px 14px; }
+.cifrado .acorde-bloque { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.cifrado .notas-acorde {
+  display: flex; flex-wrap: wrap; gap: 2px 8px;
+  font-size: 11px; line-height: 1.3; color: var(--tenue);
+  transform-origin: left top;
+  transition: transform 0.25s ease, color 0.25s ease;
+}
+.cifrado .nota-acorde { white-space: nowrap; cursor: help; }
+.cifrado .nota-acorde.guia { color: var(--cobre); }
+.cifrado .nota-acorde.no-esta { opacity: 0.5; }
+.cifrado.sin-notas .notas-acorde { display: none; }
+
+/* El que suena: su linea de notas se agranda un poco y se aclara. El que
+ * viene: en lavanda tenue, para anticiparlo. */
+.cifrado .acorde-bloque.sonando .notas-acorde { transform: scale(1.12); color: var(--texto); }
+.cifrado .acorde-bloque.sonando .nota-acorde.guia { color: var(--cobre); font-weight: 600; }
+.cifrado .acorde.proximo { color: var(--aguja); opacity: 0.75; }
+.base-en-vivo .acorde-actual .proximo { color: var(--aguja); opacity: 0.75; font-size: 15px; }
 
 .cancion-audio {
   display: grid;

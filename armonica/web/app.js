@@ -2750,23 +2750,85 @@ function urlDeArchivo(cancion, nombre) {
  * reproductor los pueda iluminar. */
 function dibujarCifrado(ficha) {
   const cambios = new Set(ficha.compases_de_cambio);
-  const familias = { mayor: "mayor", menor: "menor", dominante: "7", menor7: "m7",
-                     mayor7: "maj7", disminuido7: "dim7" };
-  let html = '<div class="cifrado">';
+  const conNotas = mostrarNotasDelCifrado();
+  let html = '<div class="cifrado' + (conNotas ? "" : " sin-notas") + '">';
   ficha.cifrado.forEach((compas) => {
     const acordes = compas.acordes.length
       ? compas.acordes.map((a) =>
-          '<span class="acorde' + (a.familia ? "" : " sin-familia") + '" data-compas="' +
-          compas.compas + '" data-tiempo="' + a.tiempo + '" title="' +
-          (a.familia ? "la app sabe calcular este acorde: " + familias[a.familia]
-                     : "acorde que la app no sabe calcular: se muestra, no se opina") +
-          '">' + escapar(a.nombre) + "</span>").join(" ")
-      : '<span class="acorde repite">%</span>';
+          '<span class="acorde-bloque" data-compas="' + compas.compas + '" data-tiempo="' + a.tiempo + '">' +
+          '<span class="acorde" data-compas="' + compas.compas + '" data-tiempo="' + a.tiempo +
+          '" title="' + escapar(explicacionDelAcorde(a)) + '">' + escapar(a.nombre) + "</span>" +
+          lineaDeNotas(a) + "</span>").join("")
+      : '<span class="acorde-bloque"><span class="acorde repite">%</span></span>';
     html += '<div class="compas' + (cambios.has(compas.compas) ? " cambio" : "") +
       '" data-compas="' + compas.compas + '">' +
       '<span class="numero">' + compas.compas + "</span>" + acordes + "</div>";
   });
   return html + "</div>";
+}
+
+
+/* Las notas del acorde, cada una con su agujero mas comodo. Las guias (la
+ * 3a y la 7a) en cobre. Al pasar el mouse, el porque: que grado es, todas
+ * las formas de agarrarla. */
+function lineaDeNotas(acorde) {
+  if (!acorde.notas || !acorde.notas.length) return "";
+  return '<span class="notas-acorde">' + acorde.notas.map((n) =>
+    '<span class="nota-acorde' + (n.es_guia ? " guia" : "") + (n.facil ? "" : " no-esta") +
+    '" title="' + escapar(explicacionDeLaNota(n, acorde)) + '">' +
+    escapar(n.nota) + " " + escapar(n.facil || "—") + "</span>").join("") + "</span>";
+}
+
+
+function nombreDelGrado(grado) {
+  return grado.replace("tonica", "tónica").replace("3a mayor", "3ª").replace("3a menor", "3ª menor")
+    .replace("7a menor", "7ª").replace("7a mayor", "7ª mayor").replace(/^(\d)a\b/, "$1ª");
+}
+
+
+function explicacionDeLaNota(n, acorde) {
+  let texto = n.nota + " es la " + nombreDelGrado(n.grado) + " de " + acorde.nombre +
+    (n.es_guia ? ": nota guía, de las que definen el acorde." : ".");
+  if (n.formas && n.formas.length) {
+    texto += " Se agarra en " + n.formas.join(" ") +
+      (n.formas.length > 1 ? "; el más cómodo, " + n.facil + "." : ".");
+  } else {
+    texto += " Esta armónica no la tiene.";
+  }
+  return texto;
+}
+
+
+function explicacionDelAcorde(a) {
+  if (!a.notas || !a.notas.length) {
+    return a.familia ? "" : "acorde que la app no sabe calcular: se muestra, no se opina";
+  }
+  let texto = a.nombre + ": " + a.notas.map((n) => n.nota).join(" ") + ".";
+  const guias = a.notas.filter((n) => n.es_guia);
+  if (guias.length) {
+    texto += " Notas guía: " + guias.map((n) => n.nota + " (" + nombreDelGrado(n.grado) + ")").join(", ") +
+      ": son las que definen el acorde, y donde conviene aterrizar en el tiempo 1.";
+  }
+  if (a.a_evitar && a.a_evitar.length) {
+    const porNota = {};
+    a.a_evitar.forEach((e) => { porNota[e.nota] = porNota[e.nota] || { tabs: [], porque: e.porque }; porNota[e.nota].tabs.push(e.tab); });
+    texto += " A evitar: " + Object.entries(porNota).map(([nota, e]) =>
+      nota + " (" + e.tabs.join(" ") + "), " + e.porque).join("; ") +
+      ". Es la regla, no el gusto: como nota de paso puede ir.";
+  }
+  return texto;
+}
+
+
+/* Si se muestran o no las notas bajo los acordes. Se recuerda en el
+ * navegador: es una preferencia de lectura, no un dato. */
+function mostrarNotasDelCifrado(valor) {
+  try {
+    if (valor !== undefined) localStorage.setItem("cifrado-con-notas", valor ? "si" : "no");
+    return localStorage.getItem("cifrado-con-notas") !== "no";
+  } catch (e) {
+    return true;
+  }
 }
 
 
@@ -2818,7 +2880,7 @@ function ponerBaseEnVivo(nombre, ficha, cancion) {
   document.getElementById("base-en-vivo-cifrado").innerHTML = dibujarCifrado(ficha);
 
   const reproductor = conectarReproductorDeBase(seccion, ficha, {
-    alAcorde: (acorde, compas) => mostrarAcordeEnVivo(acorde, compas),
+    alAcorde: (acorde, compas, tiempo, proximo) => mostrarAcordeEnVivo(acorde, compas, proximo),
     alTerminar: () => {
       marcarGuiasEnDiagrama([]);
       document.getElementById("base-en-vivo-acorde").textContent = "";
@@ -2861,20 +2923,14 @@ function quitarBaseEnVivo() {
 }
 
 
-function mostrarAcordeEnVivo(acorde, compas) {
+function mostrarAcordeEnVivo(acorde, compas, proximo) {
   const donde = document.getElementById("base-en-vivo-acorde");
-  const guias = acorde.guias || [];
-  const vistas = new Set();
-  const lista = guias.filter((g) => {
-    const clave = g.tab + "|" + g.grado;
-    if (vistas.has(clave)) return false;
-    vistas.add(clave);
-    return true;
-  }).map((g) => g.tab + " (" + g.grado.replace(" mayor", "").replace(" menor", "") + ")");
+  const guias = (acorde.notas || []).filter((n) => n.es_guia && n.facil)
+    .map((n) => n.nota + " " + n.facil + " (" + nombreDelGrado(n.grado) + ")");
   donde.innerHTML = "compás " + compas + " · <strong>" + escapar(acorde.nombre) + "</strong>" +
-    (lista.length ? "<small>notas guía: " + escapar(lista.join("  ")) + "</small>"
-                  : (acorde.familia ? "" : "<small>acorde que la app no calcula</small>"));
-  marcarGuiasEnDiagrama(guias);
+    (proximo ? '<span class="proximo"> → luego ' + escapar(proximo.nombre) + "</span>" : "") +
+    (guias.length ? "<small>guías: " + escapar(guias.join("  ")) + "</small>" : "");
+  marcarGuiasEnDiagrama(acorde.guias || []);
 }
 
 
@@ -3024,6 +3080,9 @@ function htmlDelReproductorDeBase(ficha, opciones) {
         '><input type="checkbox" class="melodia-base"> melodía</label>'
       : "") +
     '<label class="casilla"><input type="checkbox" class="repetir-base" checked> repetir</label>' +
+    '<label class="casilla" title="las notas de cada acorde con su agujero, bajo el cifrado">' +
+    '<input type="checkbox" class="notas-cifrado"' + (mostrarNotasDelCifrado() ? " checked" : "") +
+    "> notas</label>" +
     fuente +
     '<span class="ayuda nota-fuente">' + (conAudio
       ? "el audio de la carpeta; el cifrado lo sigue desde el compás 1"
@@ -3051,6 +3110,7 @@ function conectarReproductorDeBase(caja, ficha, avisos, cancion) {
   const melodia = caja.querySelector(".melodia-base");
   const repetir = caja.querySelector(".repetir-base");
   const fuente = caja.querySelector(".fuente-base");
+  const notasCifrado = caja.querySelector(".notas-cifrado");
   const compas1 = caja.querySelector(".compas1-base");
   const marcar = caja.querySelector(".boton-marcar-compas1");
   if (!boton) return null;
@@ -3088,6 +3148,14 @@ function conectarReproductorDeBase(caja, ficha, avisos, cancion) {
     reproductor.repetir = repetir.checked;
     if (reproductor._audio) reproductor._audio.loop = repetir.checked;
   });
+  if (notasCifrado) {
+    notasCifrado.addEventListener("change", () => {
+      mostrarNotasDelCifrado(notasCifrado.checked);
+      document.querySelectorAll(".cifrado").forEach((c) =>
+        c.classList.toggle("sin-notas", !notasCifrado.checked));
+      document.querySelectorAll(".notas-cifrado").forEach((otra) => { otra.checked = notasCifrado.checked; });
+    });
+  }
 
   // El audio real, si hay. Lo que se elige y el compas 1 se guardan por
   // cancion en el servidor (material/_canciones.json).
@@ -3150,7 +3218,8 @@ function conectarReproductorDeBase(caja, ficha, avisos, cancion) {
 
 
 function iluminarCompas(caja, compas, tiempo) {
-  caja.querySelectorAll(".cifrado .sonando").forEach((e) => e.classList.remove("sonando"));
+  caja.querySelectorAll(".cifrado .sonando, .cifrado .proximo").forEach((e) =>
+    e.classList.remove("sonando", "proximo"));
   if (!compas) return;
   const celda = caja.querySelector('.cifrado .compas[data-compas="' + compas + '"]');
   if (celda) celda.classList.add("sonando");
@@ -3166,7 +3235,17 @@ function iluminarCompas(caja, compas, tiempo) {
       if (de.length) actual = de[de.length - 1];
     }
   }
-  if (actual) actual.classList.add("sonando");
+  if (!actual) return;
+  actual.classList.add("sonando");
+  actual.closest(".acorde-bloque").classList.add("sonando");
+  // Y el que viene, para anticiparlo: el siguiente en el cifrado, dando la
+  // vuelta al principio si es el ultimo.
+  const todos = [...caja.querySelectorAll(".cifrado .acorde:not(.repite)")];
+  const proximo = todos[(todos.indexOf(actual) + 1) % todos.length];
+  if (proximo && proximo !== actual) {
+    proximo.classList.add("proximo");
+    proximo.closest(".acorde-bloque").classList.add("proximo");
+  }
 }
 
 
@@ -3213,6 +3292,11 @@ function crearReproductorDeBase(ficha, avisos) {
       else break;
     }
     return actual;
+  }
+
+  function acordeSiguiente(acorde) {
+    const indice = acordes.indexOf(acorde);
+    return acordes.length > 1 ? acordes[(indice + 1) % acordes.length] : null;
   }
 
   function pulsoDelSiguienteAcorde(pulso) {
@@ -3287,8 +3371,9 @@ function crearReproductorDeBase(ficha, avisos) {
           colchon(ctx, acorde, t, (hasta - pulso) * r.segundosPorPulso() - 0.03);
           r._acordeSonando = acorde;
           const acordeAhora = acorde;
-          setTimeout(() => { if (avisos.alAcorde) avisos.alAcorde(acordeAhora, compas, tiempo); },
-                     Math.max(0, (t - ctx.currentTime) * 1000));
+          setTimeout(() => {
+            if (avisos.alAcorde) avisos.alAcorde(acordeAhora, compas, tiempo, acordeSiguiente(acordeAhora));
+          }, Math.max(0, (t - ctx.currentTime) * 1000));
         }
         if (tiempo === 1 || tiempo === 3) bajo(ctx, acorde, t);
       }
@@ -3380,7 +3465,7 @@ function crearReproductorDeBase(ficha, avisos) {
           const acorde = acordeEn((compas - 1) * pulsosPorCompas + tiempo - 1);
           if (acorde && acorde !== r._acordeSonando) {
             r._acordeSonando = acorde;
-            if (avisos.alAcorde) avisos.alAcorde(acorde, compas, tiempo);
+            if (avisos.alAcorde) avisos.alAcorde(acorde, compas, tiempo, acordeSiguiente(acorde));
           }
         }
       }

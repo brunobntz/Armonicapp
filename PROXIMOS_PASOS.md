@@ -1,8 +1,8 @@
 # Próximos pasos
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
-la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-16:
-repo público en GitHub, 909 tests, todo lo listado en el README está hecho.
+la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-17:
+repo público en GitHub, 913 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 
@@ -56,6 +56,11 @@ repo público en GitHub, 909 tests, todo lo listado en el README está hecho.
      compás 1, que la app mide escuchando dónde entra el bajo
      (`compas_uno.py`), o se marca con un botón, y queda en
      `material/_canciones.json` (`canciones_ajustes.py`).
+   - **Las notas de cada acorde en el cifrado.** Hecho (2026-09-17): nota
+     y agujero más cómodo bajo cada acorde, guías en cobre, hover con el
+     porqué y las notas a evitar (regla: medio tono arriba de una nota del
+     acorde), zoom del acorde que suena y el que viene en lavanda. Y la
+     tablatura en una ventana aparte (`tablatura.html`).
    - **Tocar sobre la base.** Hecho (2026-09-16): "Practicar sobre esta
      base" la lleva a En vivo; al grabar hay un compás de conteo, el acorde
      y sus notas guía se ven en pantalla y en el diagrama, la sesión se

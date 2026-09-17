@@ -446,10 +446,25 @@ quieras. Exportar desde Band-in-a-Box: *Archivo → Guardar especial →
 Guardar canción como archivo de audio*, en WAV, a la carpeta de la
 canción.
 
+**Las notas de cada acorde, en el cifrado.** Debajo de cada acorde va una
+línea con sus notas y el agujero más cómodo para cada una en la armónica
+que tenés puesta: bajo FMaj7 en Do, "F ↓5 · A ↓6 · C ↑4 · E ↑5", con las
+guías (la 3ª y la 7ª) en cobre. Al pasar el mouse por una nota, qué grado
+es y todas las formas de agarrarla; por el nombre del acorde, sus notas,
+las guías y las **notas a evitar**, que son las naturales de la armónica a
+medio tono por encima de una nota del acorde (sobre F7, el Mi). La app dice
+la regla, no el gusto: como nota de paso puede ir. Sale del cifrado de cada
+acorde, así que cubre también los que las tablas de la app no tienen, como
+un Em7b5. Mientras suena la base, la línea del acorde que suena se agranda
+un poco y el acorde que viene queda en lavanda tenue, para anticiparlo. La
+casilla "notas" pliega las líneas cuando querés el cifrado limpio.
+
 **Practicar sobre la base.** El botón "Practicar sobre esta base" de la
 ficha la lleva a **En vivo**: arriba queda la base con sus controles y su
-cifrado, y el acorde que suena se ve grande con sus notas guía, que además
-se marcan con un aro en el diagrama de la armónica. Al apretar Grabar, la
+cifrado plegado, y el acorde que suena se ve grande con sus notas guía y
+el acorde que sigue, y las guías además se marcan con un aro en el diagrama
+de la armónica. "Ver la tablatura" abre las fotos de la canción en una
+ventana aparte, para tenerla al costado o en otro monitor mientras tocás. Al apretar Grabar, la
 base arranca con un compás de conteo, y como la app la toca ella misma
 sabe en qué segundo de la grabación cayó el compás 1. Al terminar, el BPM y
 la figura ya están puestos, el ritmo se mide con los compases de cambio de
@@ -616,7 +631,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 909 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 913 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 
