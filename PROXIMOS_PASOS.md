@@ -77,7 +77,8 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
      con posiciones fijas y notas que giran, modo "tono de la canción"
      (qué armónica pide cada posición), clic abre la posición
      (`teoria.circulo_de_quintas`, `/api/quintas`).
-   - **La tablatura del profe, leída de la foto.** Renglón por renglón,
+   - **La tablatura del profe, leída de la foto.** DESCARTADO POR AHORA
+     (2026-09-17, el usuario no lo ve pertinente). Queda la idea: renglón por renglón,
      en una tarjeta que se corrige como las frases (el profe anota los
      bends distinto). Es lectura de una imagen escrita a mano: la hace el
      coach con visión (Claude, o un modelo local con imágenes en Ollama),
