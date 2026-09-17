@@ -418,8 +418,9 @@ audio, trae el cifrado; la app lo toca ella misma con Web Audio: un click
 por pulso con acento en el 1, el acorde como colchón, el bajo en el 1 y el
 3, y la melodía si la base la trae y la pedís. No suena a banda, suena a lo
 que hace falta para practicar los cambios, y mientras suena el compás y el
-acorde se iluminan en el cifrado. Tiene tempo (hasta el 40 % del original,
-sin cambiar el tono porque no hay audio que estirar) y repetición del coro.
+acorde se iluminan en el cifrado. Tiene tempo (del 40 % al 150 % del
+original, en las dos direcciones y sin cambiar el tono, porque no hay audio
+que estirar) y repetición del coro.
 Lo que importa no es el sonido sino el reloj: como la app genera el audio,
 sabe al milisegundo sobre qué acorde estás, y eso es lo que permite
 practicar sobre la base en En vivo.

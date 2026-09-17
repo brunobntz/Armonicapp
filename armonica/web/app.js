@@ -2957,7 +2957,7 @@ function htmlDelReproductorDeBase(ficha, conPracticar) {
       ? '<button class="secundario boton-practicar-base">Practicar sobre esta base</button>'
       : "") +
     '<label class="con-titulo">tempo ' +
-      '<input type="range" class="tempo-base" min="40" max="100" value="100" step="5">' +
+      '<input type="range" class="tempo-base" min="40" max="150" value="100" step="5">' +
       '<span class="bpm-base">' + ficha.bpm + " BPM</span></label>" +
     (ficha.tiene_melodia
       ? '<label class="casilla"><input type="checkbox" class="melodia-base"> melodía</label>'
