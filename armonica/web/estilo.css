@@ -1330,8 +1330,8 @@ table.guias tr.esta td { color: var(--cobre); }
 
 /* La base en En vivo: el acorde actual grande, y sus notas guia en el
  * diagrama con un aro cobre, como la tonica en Teoria. */
-.base-en-vivo { border-left: 2px solid var(--cobre); }
 .base-en-vivo h2 { margin: 0 0 4px; }
+.base-en-vivo .controles { margin-top: 8px; }
 .base-en-vivo .acorde-actual {
   font-family: var(--mono);
   font-size: 18px;

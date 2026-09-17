@@ -98,8 +98,15 @@ def test_sirve_el_estilo_y_el_javascript(servidor_andando):
 
 def test_los_archivos_de_la_web_existen_en_el_disco():
     """Un test barato que atrapa un archivo renombrado o borrado."""
-    for archivo in ("index.html", "estilo.css", "app.js"):
+    for archivo in ("index.html", "estilo.css", "app.js", "tablatura.html"):
         assert os.path.exists(os.path.join(servidor.CARPETA_WEB, archivo))
+
+
+def test_la_ventana_de_la_tablatura_se_sirve(servidor_andando):
+    """La pagina aparte con las fotos de una cancion, para tener al costado."""
+    codigo, cuerpo = traer(servidor_andando, "/tablatura.html?cancion=Georgia")
+    assert codigo == 200
+    assert b"api/canciones" in cuerpo
 
 
 # =============================================================================

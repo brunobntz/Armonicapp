@@ -2660,7 +2660,11 @@ async function cargarCanciones() {
     }
 
     // --- Las fotos: la tablatura del profe, una al lado de la otra ---
-    html += "<h3>Tablatura y apuntes en foto</h3>";
+    html += "<h3>Tablatura y apuntes en foto" +
+      (cancion.imagenes.length
+        ? ' <button class="secundario chico boton-tablatura" title="en una ventana aparte, ' +
+          'para tenerla al costado mientras tocás">Ver en otra ventana</button>'
+        : "") + "</h3>";
     if (!cancion.imagenes.length) {
       html += '<p class="ayuda">Todavía no hay ninguna foto en la carpeta. Dejá ahí la ' +
         "tablatura (jpg, png o HEIC del iPhone) y aparece acá; si hay varias, van una " +
@@ -2721,6 +2725,10 @@ async function cargarCanciones() {
     const caja = contenedor.querySelector('.cancion[data-cancion="' +
       cancion.nombre.replace(/"/g, '\\"') + '"]');
     conectarReproductorDeBase(caja, cancion.ficha, null, cancion);
+    const botonTablatura = caja.querySelector(".boton-tablatura");
+    if (botonTablatura) {
+      botonTablatura.addEventListener("click", () => abrirTablatura(cancion.nombre));
+    }
     caja.querySelector(".boton-practicar-base").addEventListener("click", () => {
       if (caja.reproductorDeBase) caja.reproductorDeBase.parar();
       ponerBaseEnVivo(cancion.nombre, cancion.ficha, cancion);
@@ -2817,7 +2825,28 @@ function ponerBaseEnVivo(nombre, ficha, cancion) {
     },
   }, cancion);
   baseEnVivo = { nombre: nombre, ficha: ficha, reproductor: reproductor, grabacion: null };
+  const botonTablatura = document.getElementById("base-en-vivo-tablatura");
+  botonTablatura.hidden = !(cancion && cancion.imagenes && cancion.imagenes.length);
+  botonTablatura.onclick = () => abrirTablatura(nombre);
   seccion.hidden = false;
+}
+
+
+/* La tablatura en una ventana aparte, chica, para arrastrarla al costado o a
+ * otro monitor y tenerla a la vista mientras la app sigue en la principal.
+ * Un pop-up adentro de la pagina taparia el medidor o el diagrama, que es
+ * justo lo que hay que mirar. Como la abre un clic, el navegador la deja. */
+let ventanaDeTablatura = null;
+
+function abrirTablatura(nombre) {
+  const url = "tablatura.html?cancion=" + encodeURIComponent(nombre);
+  if (ventanaDeTablatura && !ventanaDeTablatura.closed) {
+    ventanaDeTablatura.location = url;
+    ventanaDeTablatura.focus();
+    return;
+  }
+  ventanaDeTablatura = window.open(url, "tablatura",
+    "width=520,height=760,menubar=no,toolbar=no,location=no,status=no");
 }
 
 

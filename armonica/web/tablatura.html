@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Tablatura</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icono.png">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  /* Una ventana chica, aparte, con las fotos de la tablatura de una cancion
+   * para tener al costado mientras tocas en la principal. Sin solapas, sin
+   * nada mas: lo unico que hace es mostrar las fotos una debajo de la otra. */
+  body { padding: 12px 14px 30px; }
+  h1 { font-size: 18px; margin: 0 0 10px; }
+  .foto { margin: 0 0 14px; }
+  .foto img { width: 100%; display: block; border-radius: 8px; border: 1px solid var(--borde); }
+  .foto figcaption { margin-top: 4px; font-size: 12px; color: var(--tenue); }
+</style>
+</head>
+<body>
+<h1 id="titulo">Tablatura</h1>
+<div id="fotos"></div>
+<script>
+(async () => {
+  const nombre = new URLSearchParams(location.search).get("cancion") || "";
+  document.title = "Tablatura · " + nombre;
+  document.getElementById("titulo").textContent = nombre || "Tablatura";
+  const datos = await fetch("/api/canciones").then((r) => r.json());
+  const cancion = (datos.canciones || []).find((c) => c.nombre === nombre);
+  const donde = document.getElementById("fotos");
+  const escapar = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  if (!cancion || !cancion.imagenes.length) {
+    donde.innerHTML = '<p class="ayuda">Esta canción no tiene fotos en su carpeta.</p>';
+    return;
+  }
+  donde.innerHTML = cancion.imagenes.map((foto) => {
+    const url = "/api/canciones/archivo?cancion=" + encodeURIComponent(nombre) +
+      "&nombre=" + encodeURIComponent(foto);
+    return '<figure class="foto"><img src="' + url + '" alt="' + escapar(foto) + '">' +
+      "<figcaption>" + escapar(foto) + "</figcaption></figure>";
+  }).join("");
+})();
+</script>
+</body>
+</html>

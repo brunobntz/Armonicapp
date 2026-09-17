@@ -34,17 +34,16 @@
        instante: lo ilumina en el cifrado y marca sus notas guía en el
        diagrama. Al grabar, arranca con un compás de conteo. -->
   <section id="base-en-vivo" class="base-en-vivo" hidden>
-    <div class="fila-arriba">
-      <div>
-        <h2 id="base-en-vivo-titulo"></h2>
-        <p id="base-en-vivo-acorde" class="acorde-actual"></p>
-      </div>
-      <button id="base-en-vivo-quitar" class="secundario">Quitar la base</button>
-    </div>
+    <h2 id="base-en-vivo-titulo"></h2>
+    <p id="base-en-vivo-acorde" class="acorde-actual"></p>
     <div id="base-en-vivo-controles"></div>
-    <p class="ayuda">Con auriculares: si la base entra por el micrófono, el
-      detector no puede medir nada. Al grabar hay un compás de conteo.</p>
-    <details id="base-en-vivo-cifrado-caja" open><summary>El cifrado</summary>
+    <div class="controles">
+      <button id="base-en-vivo-tablatura" class="secundario" hidden>Ver la tablatura</button>
+      <button id="base-en-vivo-quitar" class="secundario">Quitar la base</button>
+      <span class="ayuda">Con auriculares: si la base entra por el micrófono, el
+        detector no mide nada. Al grabar hay un compás de conteo.</span>
+    </div>
+    <details id="base-en-vivo-cifrado-caja"><summary>El cifrado</summary>
       <div id="base-en-vivo-cifrado"></div>
     </details>
   </section>
