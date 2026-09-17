@@ -421,7 +421,24 @@ acorde se iluminan en el cifrado. Tiene tempo (hasta el 40 % del original,
 sin cambiar el tono porque no hay audio que estirar) y repetición del coro.
 Lo que importa no es el sonido sino el reloj: como la app genera el audio,
 sabe al milisegundo sobre qué acorde estás, y eso es lo que permite
-practicar sobre la base en En vivo. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
+practicar sobre la base en En vivo.
+
+**Practicar sobre la base.** El botón "Practicar sobre esta base" de la
+ficha la lleva a **En vivo**: arriba queda la base con sus controles y su
+cifrado, y el acorde que suena se ve grande con sus notas guía, que además
+se marcan con un aro en el diagrama de la armónica. Al apretar Grabar, la
+base arranca con un compás de conteo, y como la app la toca ella misma
+sabe en qué segundo de la grabación cayó el compás 1. Al terminar, el BPM y
+la figura ya están puestos, el ritmo se mide con los compases de cambio de
+esa base, y el resumen suma un bloque **Sobre la base**: cuántas notas eran
+del acorde que sonaba y, en los compases de cambio, cuántas veces la primera
+nota fue una nota guía en el tiempo 1 (el ejercicio del profe), más la
+lista compás por compás. Cuenta, no opina: una nota de paso también cuenta
+como fuera del acorde, y con menos de tres notas no dice nada. El instante
+del compás 1 trae adentro la latencia del micrófono; se corrige con la fase
+que mejor explica lo tocado, sin moverse más de medio paso de grilla
+(`ritmo.ajustar_offset`). Auriculares, siempre: si la base entra por el
+micrófono, el detector no mide nada. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
 los JSON que ya se guardaban. **Teoría** es lo que `teoria.py` sabía y solo
 se veía en la terminal: elegís armónica, posición y escala (las doce
 posiciones, no solo las seis con tabla) y te muestra la escala marcada en la
@@ -576,7 +593,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 877 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 890 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

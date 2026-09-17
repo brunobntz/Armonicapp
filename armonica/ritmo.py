@@ -284,6 +284,31 @@ def estimar_offset(eventos, bpm, subdivision=1, candidatos=200):
     return mejor_offset
 
 
+def ajustar_offset(offset_medido, eventos, bpm, subdivision=1):
+    """
+    Corrige un offset MEDIDO con la fase que mejor explica lo tocado.
+
+    Cuando la app toca la base ella misma, sabe en qué instante arrancó el
+    compás 1 respecto de la grabación: ese es el offset medido. Pero trae un
+    error chico y constante, la latencia del micrófono y del navegador, que
+    en esta máquina anda por las decenas de milisegundos. Sin corregirlo,
+    todos los desvíos saldrían corridos por igual.
+
+    `estimar_offset` encuentra la fase (dónde cae el pulso, módulo un paso de
+    grilla) pero no sabe cuál es el compás 1. Acá se juntan las dos cosas:
+    se toma la fase estimada y, de todos los instantes que tienen esa fase,
+    el más cercano al medido. Así el número de compás lo pone la medición y
+    los milisegundos los pone lo tocado, y la corrección nunca se aleja más
+    de medio paso de grilla del valor medido.
+    """
+    if not eventos:
+        return offset_medido
+    paso = paso_de_grilla(bpm, subdivision)
+    fase = estimar_offset(eventos, bpm, subdivision)
+    vueltas = round((offset_medido - fase) / paso)
+    return fase + vueltas * paso
+
+
 def estimar_bpm(eventos, bpm_minimo=45.0, bpm_maximo=200.0, subdivision=1,
                 paso_bpm=0.5):
     """
@@ -326,7 +351,7 @@ def estimar_bpm(eventos, bpm_minimo=45.0, bpm_maximo=200.0, subdivision=1,
 
 
 def analizar(eventos, bpm, compas=4, subdivision=1, offset_seg=None,
-             compases_de_cambio=None):
+             compases_de_cambio=None, compases_por_vuelta=12):
     """
     El análisis completo. Devuelve un AnalisisRitmico.
 
@@ -335,6 +360,8 @@ def analizar(eventos, bpm, compas=4, subdivision=1, offset_seg=None,
     `offset_seg` dónde cae el primer pulso; si no lo pasás, se estima.
     `compases_de_cambio` en qué compases cambia el acorde, para poder comparar
         esos momentos contra el resto. Por defecto, los del blues de doce.
+    `compases_por_vuelta` cada cuántos compases se repite la progresión: doce
+        en el blues, lo que dure el coro en una base de Band-in-a-Box.
     """
     if not eventos:
         return AnalisisRitmico(bpm=bpm, compas=compas, subdivision=subdivision,
@@ -363,8 +390,8 @@ def analizar(eventos, bpm, compas=4, subdivision=1, offset_seg=None,
         punto_en_compas = indice % puntos_por_compas
         tiempo_del_compas = punto_en_compas // subdivision + 1
 
-        # Los compases de cambio se repiten cada doce, como la vuelta del blues.
-        compas_en_la_vuelta = (numero_compas - 1) % 12 + 1
+        # Los compases de cambio se repiten cada vuelta: cada doce en el blues.
+        compas_en_la_vuelta = (numero_compas - 1) % compases_por_vuelta + 1
 
         desvios.append(DesvioNota(
             evento=evento,

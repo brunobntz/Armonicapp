@@ -112,6 +112,7 @@ function configurarBotones() {
       // quince veces por segundo mientras se guarda.
       grabar.dataset.guardando = "si";
       grabar.textContent = "Terminando...";
+      pararBaseAlTerminar();
       const respuesta = await pedir("/api/terminar", { method: "POST" });
       delete grabar.dataset.guardando;
       // Terminar ya no guarda: muestra lo que grabaste y ahi decidis. El
@@ -125,11 +126,14 @@ function configurarBotones() {
       document.getElementById("seccion-resumen").hidden = true;
       document.getElementById("aviso-guardado").textContent = "";
       ocultarSesionPendiente();
-      await comenzar({ modo: "sesion" });
+      const respuesta = await comenzar({ modo: "sesion" });
+      if (respuesta.ok) arrancarBaseParaGrabar();
     }
 
     grabar.disabled = false;
   });
+
+  document.getElementById("base-en-vivo-quitar").addEventListener("click", quitarBaseEnVivo);
 
   // --- Los de la solapa Frases ---
   //
@@ -958,6 +962,11 @@ function mostrarSesionPendiente(pendiente) {
   // tenes que escribirlo cada vez.
   document.getElementById("sesion-subdivision").value =
     String(inicio.subdivision_ritmo || 2);
+  // Sobre una base que la app toco, el BPM y la figura los sabe ella.
+  if (baseEnVivo && baseEnVivo.grabacion) {
+    document.getElementById("sesion-bpm").value = String(baseEnVivo.grabacion.bpm);
+    document.getElementById("sesion-subdivision").value = String(baseEnVivo.ficha.subdivision);
+  }
 
   panel.hidden = false;
   panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1008,6 +1017,9 @@ async function guardarSesion() {
       comentario: document.getElementById("sesion-descripcion").value,
       bpm: bpm ? Number(bpm) : null,
       subdivision: Number(document.getElementById("sesion-subdivision").value),
+      base: (baseEnVivo && baseEnVivo.grabacion)
+        ? { cancion: baseEnVivo.nombre, offset_seg: baseEnVivo.grabacion.offsetSeg }
+        : null,
     }),
   });
 
@@ -1015,6 +1027,7 @@ async function guardarSesion() {
     estado.textContent = respuesta.motivo || "no se pudo guardar";
     return;
   }
+  if (baseEnVivo) baseEnVivo.grabacion = null;
 
   ocultarSesionPendiente();
   mostrarResumen(respuesta);
@@ -1135,6 +1148,7 @@ function mostrarResumen(respuesta) {
   });
 
   if (respuesta.ritmo) html += htmlDeRitmo(respuesta.ritmo);
+  if (respuesta.sobre_la_base) html += htmlSobreLaBase(respuesta.sobre_la_base);
 
   if (respuesta.guardado && Object.keys(respuesta.guardado).length) {
     html += "<p class='ayuda'>Guardado en sesiones/: " +
@@ -2641,7 +2655,7 @@ async function cargarCanciones() {
         (f.con_swing ? " · el ritmo se mide en tresillos" : " · el ritmo se mide en corcheas") +
         "</p>";
       f.avisos.forEach((aviso) => { html += '<div class="aviso">' + escapar(aviso) + "</div>"; });
-      html += htmlDelReproductorDeBase(f);
+      html += htmlDelReproductorDeBase(f, true);
       html += dibujarCifrado(f);
     }
 
@@ -2710,6 +2724,11 @@ async function cargarCanciones() {
     const caja = contenedor.querySelector('.cancion[data-cancion="' +
       cancion.nombre.replace(/"/g, '\\"') + '"]');
     conectarReproductorDeBase(caja, cancion.ficha);
+    caja.querySelector(".boton-practicar-base").addEventListener("click", () => {
+      if (caja.reproductorDeBase) caja.reproductorDeBase.parar();
+      ponerBaseEnVivo(cancion.nombre, cancion.ficha);
+      irASolapa("vivo");
+    });
   });
 }
 
@@ -2770,6 +2789,145 @@ async function importarAudioDeCancion(cancion, nombre) {
 
 
 /* ==========================================================================
+   Practicar sobre la base, en En vivo
+
+   Desde Canciones, "Practicar sobre esta base" trae la base a En vivo. Ahi
+   el mismo reproductor la toca; al grabar arranca con un compas de conteo,
+   y como la app genera el audio sabe en que instante de la grabacion cayo
+   el compas 1: ese es el offset que va con la sesion, y con el la
+   devolucion puede decir sobre que acorde cayo cada nota.
+   ========================================================================== */
+
+let baseEnVivo = null;
+
+function ponerBaseEnVivo(nombre, ficha) {
+  quitarBaseEnVivo();
+  const seccion = document.getElementById("base-en-vivo");
+  document.getElementById("base-en-vivo-titulo").textContent =
+    "Sobre la base: " + nombre;
+  document.getElementById("base-en-vivo-acorde").textContent =
+    ficha.tonalidad + (ficha.modo === "menor" ? "m" : "") + " · " + ficha.bpm + " BPM · " +
+    ficha.pulsos_por_compas + "/4" + (ficha.con_swing ? " con swing" : "");
+  document.getElementById("base-en-vivo-controles").innerHTML = htmlDelReproductorDeBase(ficha);
+  document.getElementById("base-en-vivo-cifrado").innerHTML = dibujarCifrado(ficha);
+
+  const reproductor = conectarReproductorDeBase(seccion, ficha, {
+    alAcorde: (acorde, compas) => mostrarAcordeEnVivo(acorde, compas),
+    alTerminar: () => {
+      marcarGuiasEnDiagrama([]);
+      document.getElementById("base-en-vivo-acorde").textContent = "";
+    },
+  });
+  baseEnVivo = { nombre: nombre, ficha: ficha, reproductor: reproductor, grabacion: null };
+  seccion.hidden = false;
+}
+
+
+function quitarBaseEnVivo() {
+  if (!baseEnVivo) return;
+  baseEnVivo.reproductor.parar();
+  baseEnVivo = null;
+  marcarGuiasEnDiagrama([]);
+  document.getElementById("base-en-vivo").hidden = true;
+  document.getElementById("base-en-vivo-controles").innerHTML = "";
+  document.getElementById("base-en-vivo-cifrado").innerHTML = "";
+}
+
+
+function mostrarAcordeEnVivo(acorde, compas) {
+  const donde = document.getElementById("base-en-vivo-acorde");
+  const guias = acorde.guias || [];
+  const vistas = new Set();
+  const lista = guias.filter((g) => {
+    const clave = g.tab + "|" + g.grado;
+    if (vistas.has(clave)) return false;
+    vistas.add(clave);
+    return true;
+  }).map((g) => g.tab + " (" + g.grado.replace(" mayor", "").replace(" menor", "") + ")");
+  donde.innerHTML = "compás " + compas + " · <strong>" + escapar(acorde.nombre) + "</strong>" +
+    (lista.length ? "<small>notas guía: " + escapar(lista.join("  ")) + "</small>"
+                  : (acorde.familia ? "" : "<small>acorde que la app no calcula</small>"));
+  marcarGuiasEnDiagrama(guias);
+}
+
+
+/* Un aro cobre en las celdas del diagrama donde se agarran la 3a y la 7a
+ * del acorde que suena. Se saca al cambiar de acorde o al parar. */
+function marcarGuiasEnDiagrama(guias) {
+  diagramas.forEach((diagrama) => {
+    Object.values(diagrama.celdas).forEach((celda) => celda.classList.remove("guia"));
+    guias.forEach((g) => {
+      const celda = diagrama.celdas[g.agujero + "|" + g.direccion + "|" + g.bend];
+      if (celda) celda.classList.add("guia");
+    });
+  });
+}
+
+
+/* Al apretar Grabar con una base puesta: la base arranca con un compas de
+ * conteo. Se anota el instante en que el servidor confirmo que graba, y el
+ * reproductor anota el instante en que sono el compas 1: la diferencia es
+ * el offset. Trae la latencia del microfono adentro; el servidor la corrige
+ * con lo tocado (ritmo.ajustar_offset). */
+function arrancarBaseParaGrabar() {
+  if (!baseEnVivo) return;
+  const r = baseEnVivo.reproductor;
+  r.parar();
+  r.conteo = 1;
+  baseEnVivo.grabacion = { comienzo: performance.now(), bpm: r.bpm(), offsetSeg: null };
+  r.arrancar();
+  const boton = document.getElementById("base-en-vivo").querySelector(".boton-base");
+  if (boton) boton.textContent = "■ Parar";
+}
+
+
+function pararBaseAlTerminar() {
+  if (!baseEnVivo || !baseEnVivo.grabacion) return;
+  const r = baseEnVivo.reproductor;
+  if (r.instanteDelCompas1 !== null) {
+    baseEnVivo.grabacion.offsetSeg =
+      (r.instanteDelCompas1 - baseEnVivo.grabacion.comienzo) / 1000;
+  }
+  r.conteo = 0;
+  r.parar();
+}
+
+
+/* Lo tocado sobre la base, en el resumen: cuenta, no opina. */
+function htmlSobreLaBase(s) {
+  let html = '<div class="sobre-la-base"><h2>Sobre la base</h2>';
+  html += "<p class='ayuda'>" + escapar(s.cancion) + " a " + s.bpm + " BPM · " + s.notas +
+    " notas desde el compás 1" +
+    (s.offset_seg ? " (que cayó en el segundo " + s.offset_seg.toFixed(2) + ")" : "") + "</p>";
+  if (!s.suficiente) {
+    html += '<div class="aviso">Muy pocas notas para contar algo.</div></div>';
+    return html;
+  }
+  html += '<div class="tarjetas">' +
+    '<div class="tarjeta"><div class="numero">' + s.porcentaje_en_el_acorde + " %</div>" +
+      '<div class="rotulo">notas del acorde</div><div class="detalle">' + s.en_el_acorde +
+      " de " + s.notas + ". Una nota de paso también cuenta como fuera: es un conteo, no una nota.</div></div>" +
+    '<div class="tarjeta' + (s.cambios_con_nota ? "" : " apagada") + '"><div class="numero">' +
+      (s.cambios_con_nota ? s.aterrizajes_en_guia + "/" + s.cambios_con_nota : "—") + "</div>" +
+      '<div class="rotulo">cambios con nota guía</div><div class="detalle">cuántas veces la ' +
+      "primera nota del compás de cambio fue la 3ª o la 7ª, en el tiempo 1</div></div>" +
+    "</div>";
+  html += "<table><tbody>";
+  s.por_compas.forEach((c) => {
+    const acorde = c.notas.length ? c.notas[0].acorde : "";
+    html += '<tr class="' + (c.es_cambio ? "compas-cambio" : "") + '"><td>c' + c.compas +
+      (c.es_cambio ? " *" : "") + '</td><td class="numero">' + escapar(acorde) + "</td><td>" +
+      c.notas.map((n) => '<span class="' + (n.es_guia ? "nota-guia" : n.en_el_acorde ? "" : "nota-fuera") +
+        '" title="' + escapar(n.en_el_acorde ? n.grado : "fuera del acorde") + '">' +
+        escapar(n.tab) + "</span>").join(" ") + "</td></tr>";
+  });
+  html += "</tbody></table><p class='ayuda'>* compás donde cambia el acorde · en verde las " +
+    "notas guía, apagadas las que no son del acorde</p></div>";
+  return html;
+}
+
+
+/* ==========================================================================
    El reproductor de la base
 
    Band-in-a-Box no se puede reproducir desde afuera, y el archivo no trae
@@ -2800,9 +2958,12 @@ function contextoDeAudio() {
 }
 
 
-function htmlDelReproductorDeBase(ficha) {
+function htmlDelReproductorDeBase(ficha, conPracticar) {
   return '<div class="reproductor-base">' +
     '<button class="principal boton-base">▶ Reproducir la base</button>' +
+    (conPracticar
+      ? '<button class="secundario boton-practicar-base">Practicar sobre esta base</button>'
+      : "") +
     '<label class="con-titulo">tempo ' +
       '<input type="range" class="tempo-base" min="40" max="100" value="100" step="5">' +
       '<span class="bpm-base">' + ficha.bpm + " BPM</span></label>" +

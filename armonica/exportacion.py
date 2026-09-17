@@ -32,6 +32,7 @@ from datetime import datetime
 import config
 from armonica import audio as modulo_audio
 from armonica import prioridades, resumen as modulo_resumen, segmentacion
+from armonica import sobre_la_base as modulo_sobre_la_base
 
 
 CARPETA_POR_DEFECTO = "sesiones"
@@ -78,9 +79,12 @@ def marca_de_tiempo(momento=None):
 def guardar_sesion(eventos, tonalidad="C", posicion=None, escala=None,
                    muestras=None, frecuencia_muestreo=None,
                    analisis_ritmico=None, carpeta=None, momento=None,
-                   notacion=None, titulo="", comentario=""):
+                   notacion=None, titulo="", comentario="", sobre_la_base=None):
     """
     Escribe los cuatro archivos y devuelve un diccionario con las rutas.
+
+    `sobre_la_base` es lo que devuelve sobre_la_base.evaluar() cuando se toco
+    sobre una base que la app reprodujo: va al resumen y al JSON.
 
     `muestras` es opcional: si no le pasás audio, no guarda el .wav y los otros
     tres archivos se escriben igual.
@@ -123,13 +127,14 @@ def guardar_sesion(eventos, tonalidad="C", posicion=None, escala=None,
         "",
         prioridades.imprimir(hallazgos, sin_medir),
         "",
-    ]))
+    ] + ([modulo_sobre_la_base.como_texto(sobre_la_base), ""] if sobre_la_base else [])))
 
     # --- Los eventos en JSON ---
     rutas["eventos"] = base + "_eventos.json"
     _escribir(rutas["eventos"], json.dumps(
         _sesion_a_diccionario(eventos, datos, tonalidad, posicion, escala,
-                              analisis_ritmico, notacion, titulo, comentario),
+                              analisis_ritmico, notacion, titulo, comentario,
+                              sobre_la_base),
         indent=2, ensure_ascii=False,
     ))
 
@@ -185,7 +190,7 @@ def _texto_de_tab(eventos, datos, notacion, titulo="", comentario=""):
 
 def _sesion_a_diccionario(eventos, datos, tonalidad, posicion, escala,
                           analisis_ritmico, notacion, titulo="",
-                          comentario=""):
+                          comentario="", sobre_la_base=None):
     """
     Arma la estructura que va al JSON.
 
@@ -234,6 +239,8 @@ def _sesion_a_diccionario(eventos, datos, tonalidad, posicion, escala,
             ],
         },
         "ritmo": _ritmo_a_diccionario(analisis_ritmico),
+        # Solo cuando se toco sobre una base que la app reprodujo.
+        "sobre_la_base": sobre_la_base,
         "eventos": [_evento_a_diccionario(e, notacion) for e in eventos],
     }
 

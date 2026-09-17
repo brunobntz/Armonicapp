@@ -2597,3 +2597,52 @@ def test_sin_carpeta_de_canciones_la_lista_esta_vacia_y_no_rompe(servidor_andand
     monkeypatch.setattr(canciones, "carpeta_de_canciones", lambda ruta_env=None: str(tmp_path / "nada"))
     datos = traer_json(servidor_andando, "/api/canciones")
     assert datos["ok"] and not datos["existe"] and datos["canciones"] == []
+
+
+def test_guardar_una_sesion_sobre_la_base(servidor_andando, carpeta_de_canciones, tmp_path,
+                                          monkeypatch):
+    """
+    Con la base puesta, el navegador manda que cancion sono y en que segundo
+    cayo el compas 1. Con eso el ritmo se mide con los compases de cambio de
+    ESA base y la devolucion dice sobre que acorde cayo cada nota.
+
+    A 120 BPM el pulso dura medio segundo, que es la separacion de
+    eventos_de: -3'' (La) en el tiempo 1 de F7 es la 3a, una nota guia.
+    """
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+    terminar_sesion_con(servidor_andando, eventos_de(["-3''", "-3", "-4", "4"]))
+
+    respuesta = mandar(servidor_andando, "/api/sesiones/guardar", {
+        "bpm": 120, "subdivision": 1,
+        "base": {"cancion": "Georgia", "offset_seg": 0.0},
+    })
+
+    assert respuesta["ok"] is True
+    assert respuesta["ritmo"]["bpm"] == 120
+    sobre = respuesta["sobre_la_base"]
+    assert sobre["cancion"] == "Georgia"
+    assert sobre["notas"] == 4
+    assert sobre["por_compas"][0]["notas"][0] == {
+        "tab": "-3''", "tiempo": 1, "acorde": "F7", "grado": "3a mayor",
+        "en_el_acorde": True, "es_guia": True,
+    }
+
+    eventos = next(n for n in os.listdir(str(tmp_path)) if n.endswith("_eventos.json"))
+    with open(os.path.join(str(tmp_path), eventos), encoding="utf-8") as archivo:
+        guardado = json.load(archivo)
+    assert guardado["sobre_la_base"]["cancion"] == "Georgia"
+    resumen = next(n for n in os.listdir(str(tmp_path)) if n.endswith("_resumen.txt"))
+    with open(os.path.join(str(tmp_path), resumen), encoding="utf-8") as archivo:
+        assert "SOBRE LA BASE Georgia" in archivo.read()
+
+
+def test_una_base_que_no_existe_no_rompe_el_guardado(servidor_andando, carpeta_de_canciones,
+                                                     tmp_path, monkeypatch):
+    monkeypatch.setattr(exportacion, "CARPETA_POR_DEFECTO", str(tmp_path))
+    terminar_sesion_con(servidor_andando, eventos_de(["-2", "4", "-4", "-5"]))
+    respuesta = mandar(servidor_andando, "/api/sesiones/guardar", {
+        "bpm": 120, "base": {"cancion": "no existe", "offset_seg": 0.0},
+    })
+    assert respuesta["ok"] is True
+    assert respuesta["ritmo"] is not None
+    assert respuesta["sobre_la_base"] is None

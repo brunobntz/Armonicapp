@@ -29,6 +29,26 @@
 <!-- ===================== EN VIVO ===================== -->
 <main id="panel-vivo" class="panel">
 
+  <!-- La base sobre la que tocás, si elegiste una en Canciones. La app la
+       reproduce ella misma, así que sabe sobre qué acorde estás en cada
+       instante: lo ilumina en el cifrado y marca sus notas guía en el
+       diagrama. Al grabar, arranca con un compás de conteo. -->
+  <section id="base-en-vivo" class="base-en-vivo" hidden>
+    <div class="fila-arriba">
+      <div>
+        <h2 id="base-en-vivo-titulo"></h2>
+        <p id="base-en-vivo-acorde" class="acorde-actual"></p>
+      </div>
+      <button id="base-en-vivo-quitar" class="secundario">Quitar la base</button>
+    </div>
+    <div id="base-en-vivo-controles"></div>
+    <p class="ayuda">Con auriculares: si la base entra por el micrófono, el
+      detector no puede medir nada. Al grabar hay un compás de conteo.</p>
+    <details id="base-en-vivo-cifrado-caja" open><summary>El cifrado</summary>
+      <div id="base-en-vivo-cifrado"></div>
+    </details>
+  </section>
+
   <!-- Un solo botón. La app ya está escuchando: esto decide si lo que tocás
        se guarda o no. -->
   <section>

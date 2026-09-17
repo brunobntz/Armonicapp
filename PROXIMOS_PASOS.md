@@ -2,7 +2,7 @@
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
 la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-16:
-repo público en GitHub, 877 tests, todo lo listado en el README está hecho.
+repo público en GitHub, 890 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 
@@ -51,8 +51,16 @@ repo público en GitHub, 877 tests, todo lo listado en el README está hecho.
      caché en `material/_cache/`), melodía en tab, y el reproductor de la
      base: la app la sintetiza con Web Audio a partir del cifrado (click,
      acordes, bajo, melodía opcional, tempo, repetir) e ilumina el compás
-     y el acorde que suenan. Falta el botón "practicar sobre esta base",
-     que es el paso de abajo.
+     y el acorde que suenan.
+   - **Tocar sobre la base.** Hecho (2026-09-16): "Practicar sobre esta
+     base" la lleva a En vivo; al grabar hay un compás de conteo, el acorde
+     y sus notas guía se ven en pantalla y en el diagrama, la sesión se
+     guarda con BPM, figura y offset del compás 1, y el resumen trae el
+     bloque "Sobre la base" (`armonica/sobre_la_base.py`). PENDIENTE DE
+     MEDIR con micrófono real: el offset del compás 1 lleva la latencia
+     del micrófono; `ritmo.ajustar_offset` la corrige con lo tocado, pero
+     hay que ver cuánto da en la máquina del usuario (mirar `offset_seg`
+     en el JSON de la sesión contra lo que se escucha en el wav).
    - **La tablatura del profe, leída de la foto.** Renglón por renglón,
      en una tarjeta que se corrige como las frases (el profe anota los
      bends distinto). Es lectura de una imagen escrita a mano: la hace el
@@ -60,12 +68,6 @@ repo público en GitHub, 877 tests, todo lo listado en el README está hecho.
      y queda marcada como "leída de la foto, sin verificar" hasta que el
      usuario la revisa. Aviso igual que con el plan: la foto sale de la
      máquina si el coach es Claude.
-   - **Tocar sobre la base.** El navegador reproduce el audio de la base y
-     le dice al servidor cuándo arrancó; con el tempo y los acordes de la
-     base, En vivo muestra el acorde que suena y sus notas guía en el
-     diagrama, la sesión se guarda con el BPM y la subdivisión sin
-     tipearlos, y la devolución dice en qué compás y sobre qué acorde cayó
-     cada nota. Medir primero el desfasaje navegador↔Python.
 5. **#5 Filtros en Historial** por armónica, posición y lista, cuando se
    llene.
 6. **#6 La guitarra** como instrumento hermano, en `guitarra/`, reutilizando

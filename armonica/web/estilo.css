@@ -1322,6 +1322,35 @@ table.guias tr.esta td { color: var(--cobre); }
 .cifrado .compas.sonando { border-color: var(--cobre); background: var(--panel-alto); }
 .cifrado .acorde.sonando { color: var(--cobre); font-weight: 600; }
 
+/* La base en En vivo: el acorde actual grande, y sus notas guia en el
+ * diagrama con un aro cobre, como la tonica en Teoria. */
+.base-en-vivo { border-left: 2px solid var(--cobre); }
+.base-en-vivo h2 { margin: 0 0 4px; }
+.base-en-vivo .acorde-actual {
+  font-family: var(--mono);
+  font-size: 18px;
+  margin: 0;
+  min-height: 24px;
+  color: var(--cobre);
+}
+.base-en-vivo .acorde-actual small { color: var(--tenue); font-size: 13px; margin-left: 8px; }
+.base-en-vivo details { margin-top: 8px; }
+.base-en-vivo summary { cursor: pointer; font-size: 13px; color: var(--tenue); }
+.celda.guia { box-shadow: 0 0 0 2px var(--cobre); }
+.celda.guia::after {
+  content: "guía";
+  position: absolute; right: 3px; top: 2px;
+  font-size: 8px; letter-spacing: 0.06em; color: var(--cobre);
+  font-family: var(--texto-fuente, inherit);
+}
+.celda { position: relative; }
+
+/* Lo tocado sobre la base, en el resumen. */
+.sobre-la-base table td.fuera { color: var(--tenue); }
+.sobre-la-base .nota-guia { color: var(--verde); font-weight: 600; }
+.sobre-la-base .nota-fuera { color: var(--tenue); }
+.sobre-la-base .compas-cambio td:first-child { color: var(--cobre); }
+
 .cancion-melodia { margin-top: 14px; }
 .cancion-melodia summary { cursor: pointer; font-size: 14px; }
 .cancion-melodia summary small { color: var(--tenue); margin-left: 6px; }

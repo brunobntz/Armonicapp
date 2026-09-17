@@ -51,7 +51,7 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from armonica import canciones, imagenes
+from armonica import canciones, imagenes, sobre_la_base
 from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
                       segmentacion, tablas, teoria, tono, transcripcion)
@@ -1402,12 +1402,32 @@ class Manejador(SimpleHTTPRequestHandler):
         comentario = (peticion.get("comentario") or "").strip()[:400]
 
         analisis = None
+        evaluacion = None
         bpm = _numero(peticion.get("bpm"))
         if bpm is not None and bpm > 0:
             subdivision = int(_numero(peticion.get("subdivision"))
                               or config.SUBDIVISION_RITMO)
-            analisis = ritmo.analizar(pendiente.eventos, bpm, compas=4,
-                                      subdivision=subdivision)
+            base = self._base_de_la_sesion(peticion.get("base"))
+            if base is None:
+                analisis = ritmo.analizar(pendiente.eventos, bpm, compas=4,
+                                          subdivision=subdivision)
+            else:
+                # Sobre una base que la app toco ella misma: se sabe cuando
+                # cayo el compas 1 (corregido con lo tocado, ver
+                # ritmo.ajustar_offset), cuantos pulsos tiene el compas, en
+                # que compases cambia el acorde y cada cuanto se repite.
+                cancion, offset_medido = base
+                offset = ritmo.ajustar_offset(offset_medido, pendiente.eventos,
+                                              bpm, subdivision)
+                vuelta = cancion.base.coro_hasta - cancion.base.coro_desde + 1
+                analisis = ritmo.analizar(
+                    pendiente.eventos, bpm, compas=cancion.base.pulsos_por_compas,
+                    subdivision=subdivision, offset_seg=offset,
+                    compases_de_cambio=cancion.base.compases_de_cambio(),
+                    compases_por_vuelta=max(vuelta, 1),
+                )
+                evaluacion = sobre_la_base.evaluar(
+                    pendiente.eventos, cancion.base, bpm, offset, cancion.nombre)
 
         rutas = exportacion.guardar_sesion(
             pendiente.eventos,
@@ -1419,6 +1439,7 @@ class Manejador(SimpleHTTPRequestHandler):
             analisis_ritmico=analisis,
             titulo=titulo,
             comentario=comentario,
+            sobre_la_base=evaluacion,
         )
 
         resumen = self._resumen_de(pendiente.eventos, pendiente.tonalidad,
@@ -1432,7 +1453,25 @@ class Manejador(SimpleHTTPRequestHandler):
             "guardado": clase.estado.ultimo_guardado,
             "resumen": resumen,
             "ritmo": ritmo_como_diccionario(analisis) if analisis else None,
+            "sobre_la_base": evaluacion,
         }
+
+    def _base_de_la_sesion(self, pedido):
+        """
+        La cancion sobre la que se toco, si la peticion la trae y existe.
+
+        Devuelve (cancion, offset_medido) o None. El offset es el instante
+        de la grabacion en que el navegador hizo sonar el compas 1; si no
+        vino, se asume 0 y ajustar_offset lo corrige con lo tocado.
+        """
+        if not isinstance(pedido, dict) or not pedido.get("cancion"):
+            return None
+        nombre = str(pedido["cancion"])
+        for cancion in canciones.listar():
+            if cancion.nombre == nombre and cancion.base is not None:
+                offset = _numero(pedido.get("offset_seg"))
+                return cancion, float(offset or 0.0)
+        return None
 
     def _descartar_sesion(self):
         type(self).sesion_pendiente = None

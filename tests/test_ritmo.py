@@ -492,3 +492,33 @@ def test_el_ajuste_no_premia_a_las_grillas_mas_densas():
     assert dispersiones[0] > dispersiones[1] > dispersiones[2]
     # El ajuste, en cambio, se mantiene alto en las tres.
     assert all(a > 0.7 for a in ajustes)
+
+
+# =============================================================================
+# Sobre una base que no es el blues de doce
+# =============================================================================
+
+def test_la_vuelta_puede_no_ser_de_doce_compases():
+    """
+    Una base de Band-in-a-Box repite su coro, que puede durar cualquier
+    cantidad de compases. Con una vuelta de 4 y cambio en el compás 3, el
+    compás 7 (el 3 de la segunda vuelta) también es un cambio.
+    """
+    eventos = [nota_en(compas * 4.0) for compas in range(8)]  # 60 BPM, 4/4: un compás = 4 s
+    analisis = ritmo.analizar(eventos, 60, compas=4, subdivision=1, offset_seg=0.0,
+                              compases_de_cambio=[3], compases_por_vuelta=4)
+    cambios = [d.compas for d in analisis.desvios if d.es_cambio]
+    assert cambios == [3, 7]
+
+
+def test_ajustar_offset_corrige_la_latencia_sin_cambiar_de_compas():
+    """
+    La app midió que el compás 1 cayó en 1.000 s, pero el micrófono agrega
+    40 ms: las notas caen en 1.04, 2.04, 3.04... La fase la ponen las notas;
+    el compás, la medición. Y si la medición dijera 5.0 en vez de 1.0, el
+    resultado sigue cerca de 5.0: nunca se aleja más de medio paso.
+    """
+    eventos = [nota_en(1.04 + pulso) for pulso in range(8)]
+    assert ritmo.ajustar_offset(1.0, eventos, 60) == pytest.approx(1.04, abs=0.006)
+    assert ritmo.ajustar_offset(5.0, eventos, 60) == pytest.approx(5.04, abs=0.006)
+    assert ritmo.ajustar_offset(1.0, [], 60) == 1.0
