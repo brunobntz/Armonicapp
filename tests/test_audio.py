@@ -116,8 +116,34 @@ def test_un_wav_que_no_sea_de_dieciseis_bits_da_un_error_claro(tmp_path):
         archivo.setframerate(FS)
         archivo.writeframes(b"\x80" * 100)
 
-    with pytest.raises(ValueError, match="16 bits"):
+    with pytest.raises(ValueError, match="16, 24 o 32 bits"):
         audio.leer_wav(ruta)
+
+
+def test_un_wav_de_veinticuatro_bits_se_lee_igual_que_uno_de_dieciseis(tmp_path):
+    """
+    Band-in-a-Box exporta a 24 bits. Se escribe la misma senoidal en 16 y en
+    24 bits y las dos lecturas tienen que coincidir.
+    """
+    import wave
+
+    senal = seno(440.0, amplitud=0.5)
+    ruta16 = tmp_path / "dieciseis.wav"
+    audio.escribir_wav(ruta16, senal)
+
+    ruta24 = tmp_path / "veinticuatro.wav"
+    enteros = (senal * ((1 << 23) - 1)).astype(np.int32)
+    crudo = b"".join(int(e).to_bytes(3, "little", signed=True) for e in enteros)
+    with wave.open(str(ruta24), "wb") as archivo:
+        archivo.setnchannels(1)
+        archivo.setsampwidth(3)
+        archivo.setframerate(FS)
+        archivo.writeframes(crudo)
+
+    de16, _ = audio.leer_wav(ruta16)
+    de24, _ = audio.leer_wav(ruta24)
+    assert np.max(np.abs(de16 - de24)) < 1e-3
+    assert np.max(np.abs(de24)) == pytest.approx(0.5, abs=1e-3)
 
 
 # =============================================================================

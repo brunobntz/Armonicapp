@@ -2,7 +2,7 @@
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
 la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-16:
-repo público en GitHub, 900 tests, todo lo listado en el README está hecho.
+repo público en GitHub, 909 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 
@@ -53,8 +53,9 @@ repo público en GitHub, 900 tests, todo lo listado en el README está hecho.
      acordes, bajo, melodía opcional, tempo, repetir) e ilumina el compás
      y el acorde que suenan. Y con el audio real si hay uno en la carpeta
      (exportado desde Band-in-a-Box en WAV): el cifrado lo sigue desde el
-     compás 1, que se supone a dos compases de conteo o se marca con un
-     botón y queda en `material/_canciones.json` (`canciones_ajustes.py`).
+     compás 1, que la app mide escuchando dónde entra el bajo
+     (`compas_uno.py`), o se marca con un botón, y queda en
+     `material/_canciones.json` (`canciones_ajustes.py`).
    - **Tocar sobre la base.** Hecho (2026-09-16): "Practicar sobre esta
      base" la lleva a En vivo; al grabar hay un compás de conteo, el acorde
      y sus notas guía se ven en pantalla y en el diagrama, la sesión se

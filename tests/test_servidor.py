@@ -2663,13 +2663,14 @@ def test_los_ajustes_de_la_cancion_viajan_y_se_guardan(servidor_andando, carpeta
     georgia = traer_json(servidor_andando, "/api/canciones")["canciones"][0]
     # Sin nada guardado: el unico audio, y dos compases de conteo a 65 BPM.
     assert georgia["ajustes"] == {"audio": "base.m4a", "compas1_seg": pytest.approx(7.385, abs=0.001),
-                                  "compas1_medido": False}
+                                  "compas1_medido": False, "compas1_origen": "supuesto"}
 
     respuesta = mandar(servidor_andando, "/api/canciones/ajustes",
                        {"cancion": "Georgia", "compas1_seg": 7.41})
     assert respuesta["ok"] is True
     assert respuesta["ajustes"]["compas1_seg"] == 7.41
     assert respuesta["ajustes"]["compas1_medido"] is True
+    assert respuesta["ajustes"]["compas1_origen"] == "marcado"
     assert (ajustes_en / "_canciones.json").is_file()
     assert sorted(os.listdir(str(carpeta_de_canciones / "Georgia"))) == \
         ["base.m4a", "georgia.mgu", "tab.HEIC", "tab.png"]
@@ -2681,3 +2682,36 @@ def test_los_ajustes_de_la_cancion_viajan_y_se_guardan(servidor_andando, carpeta
                   {"cancion": "Georgia", "audio": "no-esta.m4a"})["ok"] is False
     assert mandar(servidor_andando, "/api/canciones/ajustes",
                   {"cancion": "otra", "compas1_seg": 1})["ok"] is False
+
+
+def test_el_compas_uno_se_mide_en_el_audio_la_primera_vez(servidor_andando, carpeta_de_canciones,
+                                                          tmp_path, monkeypatch):
+    """
+    Sin nada guardado, la lista de canciones escucha el audio elegido, busca
+    donde entra el bajo y guarda el resultado: la lectura de un WAV grande
+    pasa una sola vez. Aca se reemplaza la escucha por un resultado fijo.
+    """
+    from armonica import canciones_ajustes, compas_uno
+    monkeypatch.setattr(canciones_ajustes, "CARPETA_POR_DEFECTO", str(tmp_path / "_app"))
+    llamadas = []
+
+    def escucha_falsa(ruta, bpm, pulsos_por_compas=4):
+        llamadas.append((os.path.basename(ruta), bpm, pulsos_por_compas))
+        return compas_uno.Resultado(segundos=3.692, redondeado=True,
+                                    compases_de_conteo=1.0, instante_crudo=3.69)
+    monkeypatch.setattr(compas_uno, "desde_archivo", escucha_falsa)
+
+    georgia = traer_json(servidor_andando, "/api/canciones")["canciones"][0]
+    assert georgia["ajustes"]["compas1_seg"] == 3.692
+    assert georgia["ajustes"]["compas1_origen"] == "audio"
+    assert llamadas == [("base.m4a", 65, 4)]
+
+    # La segunda vez no vuelve a escuchar: ya esta guardado.
+    traer_json(servidor_andando, "/api/canciones")
+    assert len(llamadas) == 1
+
+    # Y si el usuario lo marca, manda lo marcado.
+    mandar(servidor_andando, "/api/canciones/ajustes", {"cancion": "Georgia", "compas1_seg": 7.38})
+    georgia = traer_json(servidor_andando, "/api/canciones")["canciones"][0]
+    assert georgia["ajustes"] == {"audio": "base.m4a", "compas1_seg": 7.38,
+                                  "compas1_medido": True, "compas1_origen": "marcado"}

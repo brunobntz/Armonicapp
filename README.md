@@ -131,8 +131,8 @@ sonando devuelve basura. La app tiene una medida para eso:
 python main.py --wav grabacion.wav --monofonia
 ```
 
-**Formato WAV.** La app lee `.wav` de 16 bits. En Windows 11, la Grabadora de
-sonido tiene la opción de formato en su configuración.
+**Formato WAV.** La app lee `.wav` de 16, 24 o 32 bits. En Windows 11, la
+Grabadora de sonido tiene la opción de formato en su configuración.
 
 Los audios que te mandan por WhatsApp o desde un iPhone vienen en otro formato
 (`.opus`, `.m4a`) y hay que convertirlos. La app lo hace sola si tenés
@@ -428,12 +428,18 @@ practicar sobre la base en En vivo.
 **O con el audio de verdad.** Si en la carpeta hay un audio exportado desde
 Band-in-a-Box (o cualquier otro), el reproductor lo usa en vez del
 sintetizador, y el cifrado lo sigue igual. Lo único que el archivo no dice
-es en qué segundo cae el compás 1: Band-in-a-Box exporta con dos compases
-de conteo adelante (medido: 7,38 s a 65 BPM), y eso es lo que la app supone
-hasta que lo marcás vos. Con el audio sonando, apretás **Marcar ahora**
-justo cuando arranca el compás 1, y queda guardado para esa canción en
-`material/_canciones.json`, junto con qué audio elegiste si hay varios. La
-carpeta de la canción no se toca. El tempo también funciona con el audio,
+es en qué segundo cae el compás 1. La app lo mide escuchando el audio la
+primera vez que lo lista: los golpes de baqueta del conteo no tienen graves
+y la banda sí, así que el compás 1 es donde entra el bajo, redondeado a
+compases enteros (`armonica/compas_uno.py`; en la exportación real dio
+7,38 s a 65 BPM, exactamente los dos compases de conteo que el programa
+pone por defecto). Si no se pudo medir, supone esos dos compases. Y si la
+medición no te convence, con el audio sonando apretás **Marcar ahora**
+justo cuando arranca el compás 1. Lo medido o marcado queda guardado para
+esa canción en `material/_canciones.json`, junto con qué audio elegiste si
+hay varios. La carpeta de la canción no se toca. La base no tiene
+"Importar como frases" (no hay armónica en ella); los otros audios de la
+carpeta sí. El tempo también funciona con el audio,
 sin cambiar el tono, pero estirado por el navegador: para practicar
 despacio anda; para escuchar la base como suena, exportala al tempo que
 quieras. Exportar desde Band-in-a-Box: *Archivo → Guardar especial →
@@ -610,7 +616,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 900 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 909 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

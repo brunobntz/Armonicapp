@@ -54,10 +54,15 @@ def guardar(nombre, ajustes, carpeta=None):
     limpios = {}
     if "audio" in ajustes:
         limpios["audio"] = str(ajustes["audio"] or "")
+    if "compas1_origen" in ajustes:
+        # De dónde salió el compás 1: "audio" (lo midió la app escuchando
+        # dónde entra el bajo) o "marcado" (lo marcó el usuario).
+        limpios["compas1_origen"] = str(ajustes["compas1_origen"] or "")
     if "compas1_seg" in ajustes:
         valor = ajustes["compas1_seg"]
         if valor is None or valor == "":
             limpios["compas1_seg"] = None
+            limpios["compas1_origen"] = ""
         else:
             try:
                 limpios["compas1_seg"] = round(float(valor), 3)
@@ -92,7 +97,8 @@ def de_la_cancion(cancion, todos=None):
     """
     Los ajustes de una canción con los valores por defecto ya puestos: el
     primer audio de la carpeta si no se eligió otro (o ninguno), y el
-    compás 1 a dos compases de conteo si no se midió.
+    compás 1 a dos compases de conteo si no se midió. `compas1_origen` dice
+    de dónde salió: "audio", "marcado" o "supuesto".
     """
     todos = cargar() if todos is None else todos
     guardados = todos.get(cancion.nombre, {})
@@ -101,6 +107,8 @@ def de_la_cancion(cancion, todos=None):
         audio = cancion.audios[0] if cancion.audios else ""
     compas1 = guardados.get("compas1_seg")
     medido = compas1 is not None
+    origen = guardados.get("compas1_origen") or ("marcado" if medido else "supuesto")
     if not medido:
         compas1 = compas1_por_defecto(cancion.base)
-    return {"audio": audio, "compas1_seg": compas1, "compas1_medido": medido}
+    return {"audio": audio, "compas1_seg": compas1, "compas1_medido": medido,
+            "compas1_origen": origen if medido else "supuesto"}

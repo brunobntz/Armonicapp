@@ -44,9 +44,10 @@ def leer_wav(ruta):
     Si el archivo es estéreo, promedia los dos canales: la armónica es una sola
     fuente de sonido y no ganamos nada manteniendo dos.
 
-    Solo acepta 16 bits por muestra, que es lo que graba cualquier celular y lo
-    que produce nuestro generador de audios de prueba. Si algún día hace falta
-    otro formato, este es el lugar.
+    Acepta 16, 24 y 32 bits por muestra. Los 16 son lo que graba cualquier
+    celular y lo que produce nuestro generador de audios de prueba; los 24
+    son lo que exporta Band-in-a-Box, y el día que hizo falta leer una base
+    exportada, este fue el lugar.
     """
     # wave.Error no hereda de ValueError, asi que sin esto un archivo que no
     # sea .wav —un mp3 o un m4a renombrado, que es lo que pasa cuando la
@@ -67,23 +68,36 @@ def leer_wav(ruta):
         frecuencia_muestreo = archivo.getframerate()
         cantidad = archivo.getnframes()
 
-        if bytes_por_muestra != 2:
+        if bytes_por_muestra not in (2, 3, 4):
             raise ValueError(
                 f"El archivo {ruta} tiene {bytes_por_muestra * 8} bits por muestra. "
-                f"Esta app solo lee .wav de 16 bits."
+                f"Esta app lee .wav de 16, 24 o 32 bits."
             )
 
         crudo = archivo.readframes(cantidad)
 
-    # Los bytes del archivo se interpretan como enteros de 16 bits con signo.
-    enteros = np.frombuffer(crudo, dtype=np.int16)
+    if bytes_por_muestra == 2:
+        # Los bytes del archivo se interpretan como enteros de 16 bits con signo.
+        enteros = np.frombuffer(crudo, dtype=np.int16)
+        escala = ESCALA_16_BITS
+    elif bytes_por_muestra == 3:
+        # 24 bits no es un tipo de numpy: se arman los enteros a mano con los
+        # tres bytes (el archivo los guarda del menos al mas significativo)
+        # y se corrige el signo, que vive en el bit 23.
+        bytes3 = np.frombuffer(crudo, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
+        enteros = bytes3[:, 0] | (bytes3[:, 1] << 8) | (bytes3[:, 2] << 16)
+        enteros = np.where(enteros >= 1 << 23, enteros - (1 << 24), enteros)
+        escala = float(1 << 23)
+    else:
+        enteros = np.frombuffer(crudo, dtype=np.int32)
+        escala = float(1 << 31)
 
     # Si es estéreo, los canales vienen intercalados: izq, der, izq, der...
     # Los separamos en dos columnas y promediamos.
     if canales > 1:
         enteros = enteros.reshape(-1, canales).mean(axis=1)
 
-    muestras = enteros.astype(np.float32) / ESCALA_16_BITS
+    muestras = enteros.astype(np.float32) / escala
     return muestras, frecuencia_muestreo
 
 

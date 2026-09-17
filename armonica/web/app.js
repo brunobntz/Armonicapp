@@ -2689,10 +2689,15 @@ async function cargarCanciones() {
       html += "<h3>Audios</h3>";
       cancion.audios.forEach((nombre) => {
         const url = urlDeArchivo(cancion.nombre, nombre);
-        html += '<div class="cancion-audio"><div class="nombre">' + escapar(nombre) + "</div>" +
+        // La base no se importa como frases: no tiene armonica. Los otros
+        // audios (el profe tocando encima, una clase) si.
+        const esLaBase = cancion.ajustes && cancion.ajustes.audio === nombre;
+        html += '<div class="cancion-audio"><div class="nombre">' + escapar(nombre) +
+          (esLaBase ? ' <span class="ayuda">la base</span>' : "") + "</div>" +
           '<audio controls preload="none" src="' + url + '"></audio>' +
-          '<button class="secundario" data-importar="' + escapar(nombre) + '">' +
-          "Importar como frases</button></div>";
+          (esLaBase ? "<span></span>"
+            : '<button class="secundario" data-importar="' + escapar(nombre) + '">' +
+              "Importar como frases</button>") + "</div>";
       });
     }
 
@@ -2974,8 +2979,7 @@ function htmlDelReproductorDeBase(ficha, opciones) {
       '<button class="secundario chico boton-marcar-compas1" ' +
       'title="mientras suena el audio, apretalo justo cuando arranca el compás 1">' +
       "Marcar ahora</button>" +
-      '<span class="ayuda estado-compas1">' +
-      (ajustes.compas1_medido ? "" : "supuesto: dos compases de conteo") + "</span></span>";
+      '<span class="ayuda estado-compas1">' + textoDelOrigenDelCompas1(ajustes) + "</span></span>";
   }
 
   return '<div class="reproductor-base">' +
@@ -2996,6 +3000,16 @@ function htmlDelReproductorDeBase(ficha, opciones) {
       ? "el audio de la carpeta; el cifrado lo sigue desde el compás 1"
       : "acordes, bajo y click sintetizados a partir del cifrado") + "</span>" +
     "</div>";
+}
+
+
+function textoDelOrigenDelCompas1(ajustes) {
+  return {
+    "audio": "medido en el audio: ahí entra el bajo",
+    "audio aproximado": "medido en el audio, pero no cae en compases enteros: revisalo",
+    "marcado": "marcado por vos",
+    "supuesto": "supuesto: dos compases de conteo",
+  }[ajustes.compas1_origen] || "";
 }
 
 
@@ -3087,7 +3101,7 @@ function conectarReproductorDeBase(caja, ficha, avisos, cancion) {
         reproductor.compas1Seg = respuesta.ajustes.compas1_seg;
         compas1.value = respuesta.ajustes.compas1_seg.toFixed(2);
         caja.querySelector(".estado-compas1").textContent =
-          respuesta.ajustes.compas1_medido ? "" : "supuesto: dos compases de conteo";
+          textoDelOrigenDelCompas1(respuesta.ajustes);
       }
     });
     marcar.addEventListener("click", () => {

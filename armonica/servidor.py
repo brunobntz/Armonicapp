@@ -51,7 +51,7 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from armonica import canciones, canciones_ajustes, imagenes, sobre_la_base
+from armonica import canciones, canciones_ajustes, compas_uno, imagenes, sobre_la_base
 from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
                       segmentacion, tablas, teoria, tono, transcripcion)
@@ -2282,10 +2282,35 @@ class Manejador(SimpleHTTPRequestHandler):
             "como_instalar_heic": imagenes.COMO_INSTALAR,
             "canciones": [
                 dict(c.como_diccionario(self.estado.tonalidad),
-                     ajustes=canciones_ajustes.de_la_cancion(c, ajustes))
+                     ajustes=self._ajustes_con_compas1(c, ajustes))
                 for c in lista
             ],
         }
+
+    def _ajustes_con_compas1(self, cancion, ajustes):
+        """
+        Los ajustes de la cancion, midiendo el compas 1 en el audio la primera
+        vez que hace falta: si hay una base y un audio elegido y nadie marco
+        ni midio el compas 1, se escucha donde entra el bajo (compas_uno.py)
+        y el resultado queda guardado, asi la lectura de un WAV de cien megas
+        pasa una sola vez. Si no se pudo medir, queda el supuesto de dos
+        compases de conteo.
+        """
+        de_la_cancion = canciones_ajustes.de_la_cancion(cancion, ajustes)
+        if de_la_cancion["compas1_medido"] or not de_la_cancion["audio"] or cancion.base is None:
+            return de_la_cancion
+        ruta = canciones.ruta_de_archivo(cancion.nombre, de_la_cancion["audio"])
+        if ruta is None:
+            return de_la_cancion
+        resultado = compas_uno.desde_archivo(ruta, cancion.base.bpm,
+                                             cancion.base.pulsos_por_compas)
+        if resultado is None:
+            return de_la_cancion
+        canciones_ajustes.guardar(cancion.nombre, {
+            "compas1_seg": resultado.segundos,
+            "compas1_origen": "audio" if resultado.redondeado else "audio aproximado",
+        })
+        return canciones_ajustes.de_la_cancion(cancion)
 
     def _ajustar_cancion(self, peticion):
         """
@@ -2306,6 +2331,7 @@ class Manejador(SimpleHTTPRequestHandler):
             cambios["audio"] = audio
         if "compas1_seg" in peticion:
             cambios["compas1_seg"] = peticion.get("compas1_seg")
+            cambios["compas1_origen"] = "marcado"
         try:
             canciones_ajustes.guardar(nombre, cambios)
         except ValueError as error:
