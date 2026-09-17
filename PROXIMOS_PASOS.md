@@ -2,7 +2,7 @@
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
 la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-16:
-repo público en GitHub, 845 tests, todo lo listado en el README está hecho.
+repo público en GitHub, 877 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 
@@ -48,8 +48,11 @@ repo público en GitHub, 845 tests, todo lo listado en el README está hecho.
      canción en `material/canciones/<nombre>/` (o `CARPETA_CANCIONES`),
      solo lectura con test. Ficha de la base, cifrado con cambios, audios
      con "Importar como frases", fotos (HEIC vía `pillow-heif` opcional,
-     caché en `material/_cache/`), melodía en tab. Falta el botón
-     "practicar sobre esta base", que es el paso de abajo.
+     caché en `material/_cache/`), melodía en tab, y el reproductor de la
+     base: la app la sintetiza con Web Audio a partir del cifrado (click,
+     acordes, bajo, melodía opcional, tempo, repetir) e ilumina el compás
+     y el acorde que suenan. Falta el botón "practicar sobre esta base",
+     que es el paso de abajo.
    - **La tablatura del profe, leída de la foto.** Renglón por renglón,
      en una tarjeta que se corrige como las frases (el profe anota los
      bends distinto). Es lectura de una imagen escrita a mano: la hace el

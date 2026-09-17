@@ -406,11 +406,22 @@ Band-in-a-Box, los audios y la tablatura en foto. De la base muestra la
 ficha (tono, tempo, compás, swing) y el cifrado compás por compás con los
 cambios marcados; los audios se escuchan ahí mismo y cada uno tiene
 "Importar como frases", que lo lleva por el mismo camino que un audio
-subido en Frases; las fotos se ven en la solapa, y si son `.HEIC` del
-iPhone se convierten a JPG en `material/_cache/` con `pillow-heif`, que es
-opcional: sin instalarlo, la solapa dice cómo. Si la base trae melodía, la
-muestra pasada a la tablatura de la armónica que tenés puesta. Esa carpeta
-también es solo lectura, con su test. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
+subido en Frases; las fotos se ven en la solapa, una al lado de la otra,
+y si son `.HEIC` del iPhone se convierten a JPG en `material/_cache/` con
+`pillow-heif`, que es opcional: sin instalarlo, la solapa dice cómo. Si la
+base trae melodía, la muestra pasada a la tablatura de la armónica que
+tenés puesta. Esa carpeta también es solo lectura, con su test.
+
+**Y la base se reproduce ahí mismo.** El archivo de Band-in-a-Box no trae
+audio, trae el cifrado; la app lo toca ella misma con Web Audio: un click
+por pulso con acento en el 1, el acorde como colchón, el bajo en el 1 y el
+3, y la melodía si la base la trae y la pedís. No suena a banda, suena a lo
+que hace falta para practicar los cambios, y mientras suena el compás y el
+acorde se iluminan en el cifrado. Tiene tempo (hasta el 40 % del original,
+sin cambiar el tono porque no hay audio que estirar) y repetición del coro.
+Lo que importa no es el sonido sino el reloj: como la app genera el audio,
+sabe al milisegundo sobre qué acorde estás, y eso es lo que permite
+practicar sobre la base en En vivo. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
 los JSON que ya se guardaban. **Teoría** es lo que `teoria.py` sabía y solo
 se veía en la terminal: elegís armónica, posición y escala (las doce
 posiciones, no solo las seis con tabla) y te muestra la escala marcada en la
@@ -565,7 +576,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 845 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 877 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

@@ -268,3 +268,55 @@ def test_la_base_real_de_georgia():
     assert (base.coro_desde, base.coro_hasta, base.vueltas) == (1, 32, 3)
     assert len(base.melodia) > 500
     assert base.avisos == []
+
+
+# =============================================================================
+# Qué notas tiene cada acorde, para que el reproductor lo toque
+# =============================================================================
+
+@pytest.mark.parametrize("tipo, esperado", [
+    ("", [0, 4, 7]),            # F
+    ("Maj", [0, 4, 7]),
+    ("m", [0, 3, 7]),           # Dm
+    ("7", [0, 4, 7, 10]),       # A7
+    ("Maj7", [0, 4, 7, 11]),    # FMaj7
+    ("m7", [0, 3, 7, 10]),      # Gm7
+    ("m7b5", [0, 3, 6, 10]),    # Em7b5
+    ("dim", [0, 3, 6]),
+    ("dim7", [0, 3, 6, 9]),
+    ("9", [0, 4, 7, 10]),       # D9: la 9a se deja afuera a proposito
+    ("13", [0, 4, 7, 10]),
+    ("7#5", [0, 4, 8, 10]),     # C7#5
+    ("7b5", [0, 4, 6, 10]),
+    ("7b9", [0, 4, 7, 10]),
+    ("6", [0, 4, 7, 9]),        # F6
+    ("69", [0, 4, 7, 9]),       # F69
+    ("m6", [0, 3, 7, 9]),       # Gm6
+    ("+", [0, 4, 8]),
+    ("mMaj7", [0, 3, 7, 11]),
+    ("7sus", [0, 5, 7, 10]),
+    ("sus4", [0, 5, 7]),
+    ("sus2", [0, 2, 7]),
+    ("add9", [0, 4, 7]),
+    ("madd9", [0, 3, 7]),
+    ("5", [0, 7]),
+    ("Maj9(no 3)", [0, 7, 11]),
+    ("?150", [0, 7]),           # desconocido: raiz y quinta, que nunca chocan
+])
+def test_las_notas_de_cada_tipo_de_acorde(tipo, esperado):
+    assert bandinabox.intervalos_del_tipo(tipo) == esperado
+
+
+def test_todos_los_tipos_conocidos_dan_un_acorde_tocable():
+    for tipo in bandinabox.TIPOS.values():
+        intervalos = bandinabox.intervalos_del_tipo(tipo)
+        assert intervalos[0] == 0
+        assert 2 <= len(intervalos) <= 4, tipo
+        assert intervalos == sorted(intervalos), tipo
+
+
+def test_las_clases_de_nota_del_acorde_y_su_bajo():
+    acorde = bandinabox.Acorde(1, 1, "D", "m", bajo="C#", numero_tipo=16)
+    assert acorde.clases() == [2, 5, 9]     # Re Fa La
+    assert acorde.clase_bajo() == 1          # Do#
+    assert bandinabox.Acorde(1, 1, "F", "7", numero_tipo=64).clase_bajo() == 5

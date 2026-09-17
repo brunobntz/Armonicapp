@@ -26,7 +26,7 @@ navegador no sabe mostrar— va a una caché aparte (ver imagenes.py).
 import os
 from dataclasses import dataclass, field
 
-from armonica import bandinabox, mapeo
+from armonica import bandinabox, mapeo, teoria
 from armonica.coach import leer_env
 
 CARPETA_POR_DEFECTO = os.path.join("material", "canciones")
@@ -147,13 +147,16 @@ def ficha(base, tonalidad_armonica=None):
         acordes = [a for a in base.acordes if a.compas == numero]
         compases.append({
             "compas": numero,
-            "acordes": [{"tiempo": a.tiempo, "nombre": a.nombre(), "familia": a.familia()}
-                        for a in acordes],
+            "acordes": [_acorde_para_la_pantalla(a, tonalidad_armonica) for a in acordes],
         })
 
     melodia = None
     if base.melodia and tonalidad_armonica:
         melodia = melodia_en_tablatura(base, tonalidad_armonica)
+
+    # La melodía cruda, en segundos y MIDI, para que el reproductor la toque.
+    melodia_midi = [[round(n.inicio_seg, 3), round(n.duracion_seg, 3), n.midi]
+                    for n in base.melodia]
 
     return {
         "titulo": base.titulo,
@@ -172,8 +175,40 @@ def ficha(base, tonalidad_armonica=None):
         "cifrado": compases,
         "tiene_melodia": bool(base.melodia),
         "melodia": melodia,
+        "melodia_midi": melodia_midi,
         "avisos": list(base.avisos),
     }
+
+
+def _acorde_para_la_pantalla(acorde, tonalidad_armonica):
+    """
+    Un acorde con lo que el navegador necesita: el nombre para escribirlo,
+    las clases de nota para que el reproductor lo toque, y —si la app sabe
+    calcular ese tipo de acorde y se sabe la armónica— las notas guía (la 3a
+    y la 7a) con los agujeros donde se agarran, para iluminarlas en el
+    diagrama mientras suena.
+    """
+    datos = {
+        "tiempo": acorde.tiempo,
+        "nombre": acorde.nombre(),
+        "familia": acorde.familia(),
+        "raiz": acorde.clase_raiz(),
+        "bajo": acorde.clase_bajo(),
+        "clases": acorde.clases(),
+        "guias": [],
+    }
+    if acorde.familia() and tonalidad_armonica:
+        arpegio = teoria.arpegio(tonalidad_armonica, acorde.raiz, acorde.familia())
+        for grado in arpegio.grados:
+            if not grado.es_guia:
+                continue
+            for nota in grado.agujeros:
+                datos["guias"].append({
+                    "agujero": nota.agujero, "direccion": nota.direccion,
+                    "bend": nota.bend, "tab": nota.como_tab(),
+                    "grado": grado.nombre_grado, "nota": grado.nombre_nota,
+                })
+    return datos
 
 
 def melodia_en_tablatura(base, tonalidad_armonica):

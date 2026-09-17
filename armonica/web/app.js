@@ -2581,8 +2581,11 @@ function irASolapa(nombre, config) {
    Canciones
 
    Una carpeta por cancion. Lo que se dibuja ya viene calculado del servidor:
-   el cifrado compas por compas, la melodia en tablatura de la armonica que
-   esta puesta, y la lista de audios y fotos. El navegador solo dibuja.
+   el cifrado compas por compas (con las notas de cada acorde y sus notas
+   guia), la melodia, y la lista de audios y fotos. El navegador dibuja y,
+   con el reproductor de abajo, TOCA la base: la sintetiza con Web Audio a
+   partir del cifrado, asi que sabe exactamente que acorde suena en cada
+   instante y lo ilumina.
    ========================================================================== */
 
 async function cargarCanciones() {
@@ -2622,10 +2625,11 @@ async function cargarCanciones() {
     } else {
       subtitulo = "sin base";
     }
+    // Con varias canciones, la primera arranca abierta y las demas plegadas.
     html += abrir(escapar(cancion.nombre) + " <small>" + subtitulo + "</small>", indice === 0);
     html += '<div class="cancion" data-cancion="' + escapar(cancion.nombre) + '">';
 
-    // --- La ficha de la base ---
+    // --- La ficha de la base, y el reproductor ---
     if (cancion.error_base) {
       html += '<div class="aviso">' + escapar(cancion.archivo_base) + ": " +
         escapar(cancion.error_base) + "</div>";
@@ -2637,7 +2641,28 @@ async function cargarCanciones() {
         (f.con_swing ? " · el ritmo se mide en tresillos" : " · el ritmo se mide en corcheas") +
         "</p>";
       f.avisos.forEach((aviso) => { html += '<div class="aviso">' + escapar(aviso) + "</div>"; });
+      html += htmlDelReproductorDeBase(f);
       html += dibujarCifrado(f);
+    }
+
+    // --- Las fotos: la tablatura del profe, una al lado de la otra ---
+    if (cancion.imagenes.length) {
+      html += "<h3>Tablatura y apuntes en foto</h3>";
+      html += '<div class="cancion-fotos">';
+      cancion.imagenes.forEach((nombre) => {
+        const esHeic = /\.hei[cf]$/i.test(nombre);
+        if (esHeic && !datos.heic) {
+          html += '<div class="aviso">' + escapar(nombre) + ": para mostrar una foto .HEIC " +
+            "hacen falta dos bibliotecas que no vienen con Python. Se instalan una sola vez, " +
+            "con la app cerrada: <code>" + escapar(datos.como_instalar_heic) + "</code></div>";
+          return;
+        }
+        const url = urlDeArchivo(cancion.nombre, nombre);
+        html += '<figure class="cancion-foto"><a href="' + url + '" target="_blank" rel="noopener">' +
+          '<img loading="lazy" src="' + url + '" alt="' + escapar(nombre) + '"></a>' +
+          "<figcaption>" + escapar(nombre) + "</figcaption></figure>";
+      });
+      html += "</div>";
     }
 
     // --- Los audios ---
@@ -2652,33 +2677,15 @@ async function cargarCanciones() {
       });
     }
 
-    // --- Las fotos: la tablatura del profe ---
-    if (cancion.imagenes.length) {
-      html += "<h3>Tablatura y apuntes en foto</h3>";
-      cancion.imagenes.forEach((nombre) => {
-        const esHeic = /\.hei[cf]$/i.test(nombre);
-        if (esHeic && !datos.heic) {
-          html += '<div class="aviso">' + escapar(nombre) + ": para mostrar una foto .HEIC " +
-            "hacen falta dos bibliotecas que no vienen con Python. Se instalan una sola vez, " +
-            "con la app cerrada: <code>" + escapar(datos.como_instalar_heic) + "</code></div>";
-          return;
-        }
-        const url = urlDeArchivo(cancion.nombre, nombre);
-        html += '<figure class="cancion-foto"><a href="' + url + '" target="_blank" rel="noopener">' +
-          '<img loading="lazy" src="' + url + '" alt="' + escapar(nombre) + '"></a>' +
-          "<figcaption>" + escapar(nombre) + "</figcaption></figure>";
-      });
-    }
-
     if (cancion.documentos.length) {
       html += '<p class="ayuda">También en la carpeta: ' +
         cancion.documentos.map(escapar).join(", ") + "</p>";
     }
 
-    // --- La melodia, si la base la trae ---
+    // --- La melodia en tablatura, plegada: la foto del profe manda ---
     if (f && f.tiene_melodia && f.melodia) {
       const m = f.melodia;
-      html += '<details class="cancion-melodia"><summary>La melodía en tu armónica en ' +
+      html += '<details class="cancion-melodia"><summary>La melodía de la base, en tu armónica en ' +
         escapar(m.tonalidad_armonica) + " <small>" + m.notas + " notas" +
         (m.fuera ? ", " + m.fuera + " que esa armónica no tiene (·)" : "") +
         "</small></summary>";
@@ -2697,6 +2704,13 @@ async function cargarCanciones() {
     boton.addEventListener("click", () =>
       importarAudioDeCancion(boton.closest(".cancion").dataset.cancion, boton.dataset.importar));
   });
+
+  datos.canciones.forEach((cancion) => {
+    if (!cancion.ficha) return;
+    const caja = contenedor.querySelector('.cancion[data-cancion="' +
+      cancion.nombre.replace(/"/g, '\\"') + '"]');
+    conectarReproductorDeBase(caja, cancion.ficha);
+  });
 }
 
 
@@ -2708,7 +2722,8 @@ function urlDeArchivo(cancion, nombre) {
 
 /* El cifrado como en un atril: cuatro compases por renglon, y los compases
  * donde cambia el acorde con la marca de cambio, igual que en la linea de
- * tiempo del ritmo. */
+ * tiempo del ritmo. Cada compas y cada acorde llevan su numero, para que el
+ * reproductor los pueda iluminar. */
 function dibujarCifrado(ficha) {
   const cambios = new Set(ficha.compases_de_cambio);
   const familias = { mayor: "mayor", menor: "menor", dominante: "7", menor7: "m7",
@@ -2717,12 +2732,14 @@ function dibujarCifrado(ficha) {
   ficha.cifrado.forEach((compas) => {
     const acordes = compas.acordes.length
       ? compas.acordes.map((a) =>
-          '<span class="acorde' + (a.familia ? "" : " sin-familia") + '" title="' +
+          '<span class="acorde' + (a.familia ? "" : " sin-familia") + '" data-compas="' +
+          compas.compas + '" data-tiempo="' + a.tiempo + '" title="' +
           (a.familia ? "la app sabe calcular este acorde: " + familias[a.familia]
                      : "acorde que la app no sabe calcular: se muestra, no se opina") +
           '">' + escapar(a.nombre) + "</span>").join(" ")
       : '<span class="acorde repite">%</span>';
-    html += '<div class="compas' + (cambios.has(compas.compas) ? " cambio" : "") + '">' +
+    html += '<div class="compas' + (cambios.has(compas.compas) ? " cambio" : "") +
+      '" data-compas="' + compas.compas + '">' +
       '<span class="numero">' + compas.compas + "</span>" + acordes + "</div>";
   });
   return html + "</div>";
@@ -2749,6 +2766,306 @@ async function importarAudioDeCancion(cancion, nombre) {
   ocultarPendiente();
   document.getElementById("seccion-comparacion").hidden = true;
   await elegirQueImportar(archivo);
+}
+
+
+/* ==========================================================================
+   El reproductor de la base
+
+   Band-in-a-Box no se puede reproducir desde afuera, y el archivo no trae
+   audio: trae el cifrado. Asi que la app lo toca ella misma, con Web Audio:
+   un click en cada pulso (acentuado en el 1), el acorde como un colchon de
+   ondas triangulares, el bajo en el 1 y el 3, y la melodia si el archivo la
+   trae y la pedis. No suena a banda; suena a lo que hace falta para
+   practicar los cambios: se escucha el acorde, se escucha el pulso.
+
+   Lo importante no es el sonido, es el RELOJ. Como la app genera el audio,
+   sabe con precision de milisegundos en que compas y sobre que acorde
+   estas, y eso es lo que hace posible practicar sobre la base en En vivo.
+
+   Todo se programa con la tecnica del "lookahead": un temporizador cada
+   25 ms encola en el reloj de audio lo que va a sonar en los proximos
+   120 ms. Un setTimeout solo, en un navegador, se atrasa decenas de ms y
+   el pulso se escucha cojo; el reloj de audio no.
+   ========================================================================== */
+
+const audioDeBase = { contexto: null, activo: null };
+
+function contextoDeAudio() {
+  if (!audioDeBase.contexto) {
+    audioDeBase.contexto = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioDeBase.contexto.state === "suspended") audioDeBase.contexto.resume();
+  return audioDeBase.contexto;
+}
+
+
+function htmlDelReproductorDeBase(ficha) {
+  return '<div class="reproductor-base">' +
+    '<button class="principal boton-base">▶ Reproducir la base</button>' +
+    '<label class="con-titulo">tempo ' +
+      '<input type="range" class="tempo-base" min="40" max="100" value="100" step="5">' +
+      '<span class="bpm-base">' + ficha.bpm + " BPM</span></label>" +
+    (ficha.tiene_melodia
+      ? '<label class="casilla"><input type="checkbox" class="melodia-base"> melodía</label>'
+      : "") +
+    '<label class="casilla"><input type="checkbox" class="repetir-base" checked> repetir</label>' +
+    '<span class="ayuda">acordes, bajo y click sintetizados a partir del cifrado</span>' +
+    "</div>";
+}
+
+
+/* Conecta los controles de una cancion con un reproductor. Lo devuelve, para
+ * que En vivo pueda usar el mismo con sus propios avisos. */
+function conectarReproductorDeBase(caja, ficha, avisos) {
+  const boton = caja.querySelector(".boton-base");
+  const tempo = caja.querySelector(".tempo-base");
+  const bpmTexto = caja.querySelector(".bpm-base");
+  const melodia = caja.querySelector(".melodia-base");
+  const repetir = caja.querySelector(".repetir-base");
+  if (!boton) return null;
+
+  const reproductor = crearReproductorDeBase(ficha, {
+    alPulso: (compas, tiempo) => {
+      iluminarCompas(caja, compas, tiempo);
+      if (avisos && avisos.alPulso) avisos.alPulso(compas, tiempo);
+    },
+    alAcorde: (acorde, compas, tiempo) => {
+      if (avisos && avisos.alAcorde) avisos.alAcorde(acorde, compas, tiempo);
+    },
+    alTerminar: () => {
+      boton.textContent = "▶ Reproducir la base";
+      iluminarCompas(caja, null);
+      if (avisos && avisos.alTerminar) avisos.alTerminar();
+    },
+  });
+
+  boton.addEventListener("click", () => {
+    if (reproductor.corriendo) {
+      reproductor.parar();
+    } else {
+      reproductor.arrancar();
+      boton.textContent = "■ Parar";
+    }
+  });
+  tempo.addEventListener("input", () => {
+    reproductor.porcentaje = Number(tempo.value);
+    bpmTexto.textContent = reproductor.bpm() + " BPM";
+  });
+  if (melodia) melodia.addEventListener("change", () => { reproductor.conMelodia = melodia.checked; });
+  repetir.addEventListener("change", () => { reproductor.repetir = repetir.checked; });
+
+  caja.reproductorDeBase = reproductor;
+  return reproductor;
+}
+
+
+function iluminarCompas(caja, compas, tiempo) {
+  caja.querySelectorAll(".cifrado .sonando").forEach((e) => e.classList.remove("sonando"));
+  if (!compas) return;
+  const celda = caja.querySelector('.cifrado .compas[data-compas="' + compas + '"]');
+  if (celda) celda.classList.add("sonando");
+  // El acorde que suena es el ultimo que empezo en este compas hasta este tiempo.
+  let actual = null;
+  caja.querySelectorAll('.cifrado .acorde[data-compas="' + compas + '"]').forEach((a) => {
+    if (Number(a.dataset.tiempo) <= tiempo) actual = a;
+  });
+  if (!actual) {
+    // Un compas con "%" sigue con el acorde del anterior: se busca hacia atras.
+    for (let anterior = compas - 1; anterior >= 1 && !actual; anterior--) {
+      const de = caja.querySelectorAll('.cifrado .acorde[data-compas="' + anterior + '"]');
+      if (de.length) actual = de[de.length - 1];
+    }
+  }
+  if (actual) actual.classList.add("sonando");
+}
+
+
+function crearReproductorDeBase(ficha, avisos) {
+  const pulsosPorCompas = ficha.pulsos_por_compas || 4;
+  const acordes = [];
+  ficha.cifrado.forEach((compas) => compas.acordes.forEach((a) =>
+    acordes.push(Object.assign({ compas: compas.compas }, a))));
+  const melodia = (ficha.melodia_midi || []).map(([inicio, duracion, midi]) => ({
+    // En pulsos, no en segundos: asi la melodia sigue al tempo elegido.
+    pulso: inicio * ficha.bpm / 60, largo: duracion * ficha.bpm / 60, midi: midi,
+  }));
+
+  const r = {
+    ficha: ficha,
+    porcentaje: 100,
+    conMelodia: false,
+    repetir: true,
+    conteo: 0,                 // compases de conteo antes del 1 (En vivo pide uno)
+    corriendo: false,
+    bpm: () => Math.round(ficha.bpm * r.porcentaje / 100),
+    segundosPorPulso: () => 60 / r.bpm(),
+    // Donde arranca y termina la vuelta, en pulsos desde el compas 1.
+    primerPulso: () => ((ficha.coro_desde || 1) - 1) * pulsosPorCompas,
+    ultimoPulso: () => (ficha.coro_hasta || ficha.compases) * pulsosPorCompas,
+    instanteDelCompas1: null,  // performance.now() del tiempo 1 del compas 1
+    _temporizador: null, _pulso: 0, _proximo: 0, _acordeSonando: null, _fuentes: [],
+  };
+
+  function acordeEn(pulso) {
+    const compas = Math.floor(pulso / pulsosPorCompas) + 1;
+    const tiempo = pulso % pulsosPorCompas + 1;
+    let actual = null;
+    for (const a of acordes) {
+      if (a.compas < compas || (a.compas === compas && a.tiempo <= tiempo)) actual = a;
+      else break;
+    }
+    return actual;
+  }
+
+  function pulsoDelSiguienteAcorde(pulso) {
+    for (const a of acordes) {
+      const p = (a.compas - 1) * pulsosPorCompas + a.tiempo - 1;
+      if (p > pulso) return Math.min(p, r.ultimoPulso());
+    }
+    return r.ultimoPulso();
+  }
+
+  const frecuencia = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
+
+  function click(ctx, t, acento) {
+    const osc = ctx.createOscillator();
+    const gan = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = acento ? 1600 : 1000;
+    gan.gain.setValueAtTime(acento ? 0.35 : 0.2, t);
+    gan.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    osc.connect(gan).connect(r._salida);
+    osc.start(t); osc.stop(t + 0.05);
+  }
+
+  function nota(ctx, midi, t, duracion, ganancia, tipo, filtro) {
+    const osc = ctx.createOscillator();
+    const gan = ctx.createGain();
+    osc.type = tipo;
+    osc.frequency.value = frecuencia(midi);
+    const ataque = 0.02, caida = Math.min(0.12, duracion / 3);
+    gan.gain.setValueAtTime(0.0001, t);
+    gan.gain.exponentialRampToValueAtTime(ganancia, t + ataque);
+    gan.gain.setValueAtTime(ganancia, t + duracion - caida);
+    gan.gain.exponentialRampToValueAtTime(0.0001, t + duracion);
+    let destino = gan;
+    if (filtro) {
+      const paso = ctx.createBiquadFilter();
+      paso.type = "lowpass"; paso.frequency.value = filtro;
+      gan.connect(paso).connect(r._salida);
+    } else {
+      gan.connect(r._salida);
+    }
+    osc.connect(destino);
+    osc.start(t); osc.stop(t + duracion + 0.02);
+    // Se recuerdan las que suenan para poder cortarlas al parar, y se
+    // olvidan solas al terminar: si no, una hora de base son miles.
+    r._fuentes.push(osc);
+    osc.onended = () => { r._fuentes = r._fuentes.filter((f) => f !== osc); };
+  }
+
+  function colchon(ctx, acorde, t, duracion) {
+    // Las notas del acorde entre el Do4 y el Si4, que es donde no tapan nada.
+    acorde.clases.forEach((clase) => nota(ctx, 60 + clase, t, duracion, 0.09, "triangle", 1400));
+  }
+
+  function bajo(ctx, acorde, t) {
+    nota(ctx, 36 + acorde.bajo, t, r.segundosPorPulso() * 0.9, 0.22, "sine");
+  }
+
+  function programarPulso(pulso, t) {
+    const ctx = r._contexto;
+    const enConteo = pulso < r.primerPulso();
+    const compas = Math.floor(pulso / pulsosPorCompas) + 1;
+    const tiempo = ((pulso % pulsosPorCompas) + pulsosPorCompas) % pulsosPorCompas + 1;
+    click(ctx, t, tiempo === 1);
+
+    if (!enConteo) {
+      const acorde = acordeEn(pulso);
+      if (acorde) {
+        const empieza = (acorde.compas - 1) * pulsosPorCompas + acorde.tiempo - 1;
+        if (empieza === pulso || acorde !== r._acordeSonando) {
+          const hasta = pulsoDelSiguienteAcorde(pulso);
+          colchon(ctx, acorde, t, (hasta - pulso) * r.segundosPorPulso() - 0.03);
+          r._acordeSonando = acorde;
+          const acordeAhora = acorde;
+          setTimeout(() => { if (avisos.alAcorde) avisos.alAcorde(acordeAhora, compas, tiempo); },
+                     Math.max(0, (t - ctx.currentTime) * 1000));
+        }
+        if (tiempo === 1 || tiempo === 3) bajo(ctx, acorde, t);
+      }
+      if (r.conMelodia) {
+        melodia.forEach((n) => {
+          if (n.pulso >= pulso && n.pulso < pulso + 1) {
+            nota(ctx, n.midi, t + (n.pulso - pulso) * r.segundosPorPulso(),
+                 Math.max(0.08, n.largo * r.segundosPorPulso()), 0.16, "triangle");
+          }
+        });
+      }
+    }
+
+    const compasParaLaPantalla = enConteo ? null : compas;
+    setTimeout(() => {
+      if (!r.corriendo) return;
+      if (avisos.alPulso) avisos.alPulso(compasParaLaPantalla, tiempo, enConteo);
+      if (!enConteo && pulso === r.primerPulso() && r.instanteDelCompas1 === null) {
+        r.instanteDelCompas1 = performance.now();
+      }
+    }, Math.max(0, (t - ctx.currentTime) * 1000));
+  }
+
+  function tic() {
+    const ctx = r._contexto;
+    while (r._proximo < ctx.currentTime + 0.12) {
+      if (r._pulso >= r.ultimoPulso()) {
+        if (r.repetir) {
+          r._pulso = r.primerPulso();
+          r._acordeSonando = null;
+        } else {
+          r.parar((r._proximo - ctx.currentTime) * 1000);
+          return;
+        }
+      }
+      programarPulso(r._pulso, r._proximo);
+      r._pulso += 1;
+      r._proximo += r.segundosPorPulso();
+    }
+  }
+
+  r.arrancar = () => {
+    if (audioDeBase.activo && audioDeBase.activo !== r) audioDeBase.activo.parar();
+    audioDeBase.activo = r;
+    const ctx = contextoDeAudio();
+    r._contexto = ctx;
+    r._salida = ctx.createGain();
+    r._salida.gain.value = 0.8;
+    r._salida.connect(ctx.destination);
+    r._pulso = r.primerPulso() - r.conteo * pulsosPorCompas;
+    r._proximo = ctx.currentTime + 0.1;
+    r._acordeSonando = null;
+    r._fuentes = [];
+    r.instanteDelCompas1 = null;
+    r.corriendo = true;
+    tic();
+    r._temporizador = setInterval(tic, 25);
+  };
+
+  r.parar = (despuesDeMs) => {
+    if (!r.corriendo) return;
+    r.corriendo = false;
+    clearInterval(r._temporizador);
+    const cerrar = () => {
+      r._fuentes.forEach((f) => { try { f.stop(); } catch (e) { /* ya paro */ } });
+      r._fuentes = [];
+      if (r._salida) r._salida.disconnect();
+      if (audioDeBase.activo === r) audioDeBase.activo = null;
+      if (avisos.alTerminar) avisos.alTerminar();
+    };
+    if (despuesDeMs > 0) setTimeout(cerrar, despuesDeMs); else cerrar();
+  };
+
+  return r;
 }
 
 

@@ -170,6 +170,81 @@ class Acorde:
     def clase_raiz(self):
         return notas.nombre_a_midi(self.raiz + "4") % 12
 
+    def clase_bajo(self):
+        return notas.nombre_a_midi((self.bajo or self.raiz) + "4") % 12
+
+    def intervalos(self):
+        """Los semitonos desde la raíz de las notas que forman el acorde."""
+        return intervalos_del_tipo(self.tipo)
+
+    def clases(self):
+        """Las clases de nota (0 a 11) del acorde, de la raíz para arriba."""
+        raiz = self.clase_raiz()
+        return [(raiz + intervalo) % 12 for intervalo in self.intervalos()]
+
+
+def intervalos_del_tipo(tipo):
+    """
+    Qué notas tiene un acorde, a partir de su cifrado: "m7b5" -> [0, 3, 6, 10].
+
+    Es para que el reproductor de la base sepa qué tocar, así que alcanza con
+    la tríada y la séptima (o la sexta): las tensiones de arriba (9, 11, 13)
+    se dejan afuera a propósito, porque en un acompañamiento sintético suenan
+    a barro y no aportan a escuchar el cambio. Las reglas siguen la forma de
+    escribir cifrados: "m" es tercera menor salvo en "Maj", "dim" es tercera
+    menor y quinta bemol, "sus" reemplaza la tercera, "+" o "#5" suben la
+    quinta, "Maj7" es séptima mayor y cualquier 7, 9, 11 o 13 sin "Maj" es
+    séptima menor.
+    """
+    texto = tipo or ""
+    if texto.startswith("?"):
+        return [0, 7]
+    if texto in ("5", "Tristan"):
+        return [0, 7]
+
+    es_mayor7 = "Maj" in texto and texto != "Maj"
+    es_dim = texto.startswith("dim")
+    es_menor = es_dim or texto.startswith("Phryg") or (
+        texto.startswith("m") and not texto.startswith("Maj"))
+    con_sus = "sus" in texto or texto in ("2", "4")
+    sin_tercera = "(no 3)" in texto
+
+    if sin_tercera:
+        tercera = None
+    elif con_sus:
+        tercera = 2 if ("sus2" in texto or texto == "2") else 5
+    else:
+        tercera = 3 if es_menor else 4
+
+    if "b5" in texto or "5b" in texto or es_dim:
+        quinta = 6
+    elif "+" in texto or "aug" in texto or "#5" in texto:
+        quinta = 8
+    else:
+        quinta = 7
+
+    resto = texto.replace("Maj", "").replace("add", "").replace("sus", "")
+    if es_mayor7:
+        septima = 11
+    elif texto == "dim7":
+        septima = 9
+    elif "add" in texto:
+        septima = None
+    elif texto in ("6", "69", "m6", "m69", "6add9"):
+        septima = 9
+    elif any(numero in resto for numero in ("7", "9", "11", "13")) or "alt" in texto or "blues" in texto.lower():
+        septima = 10
+    else:
+        septima = None
+
+    intervalos = [0]
+    if tercera is not None:
+        intervalos.append(tercera)
+    intervalos.append(quinta)
+    if septima is not None:
+        intervalos.append(septima)
+    return intervalos
+
 
 @dataclass
 class NotaDeMelodia:

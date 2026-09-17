@@ -203,7 +203,9 @@ def test_la_ficha_trae_el_cifrado_compas_por_compas(carpeta):
     ficha = canciones.listar(carpeta)[1].como_diccionario("C")["ficha"]
     assert (ficha["tonalidad"], ficha["bpm"], ficha["subdivision"]) == ("F", 65, 3)
     assert ficha["compases"] == 12
-    assert ficha["cifrado"][1]["acordes"] == [{"tiempo": 1, "nombre": "Bb7", "familia": "dominante"}]
+    bb7 = ficha["cifrado"][1]["acordes"]
+    assert len(bb7) == 1
+    assert (bb7[0]["tiempo"], bb7[0]["nombre"], bb7[0]["familia"]) == (1, "Bb7", "dominante")
     assert ficha["compases_de_cambio"] == [2, 3, 5, 7, 9, 10, 11, 12]
     assert ficha["tiene_melodia"] is False
     assert ficha["melodia"] is None
@@ -233,3 +235,38 @@ def test_sin_armonica_la_ficha_no_pasa_la_melodia():
     ficha = canciones.ficha(base, None)
     assert ficha["tiene_melodia"] is True
     assert ficha["melodia"] is None
+
+
+def test_cada_acorde_de_la_ficha_trae_sus_notas_y_sus_guias(carpeta):
+    """
+    El reproductor necesita las clases de nota de cada acorde; el diagrama,
+    los agujeros de la 3a y la 7a. Para un F7 en armónica de Do, la 3a (La)
+    está en el ↓3'' y en el ↑6... hay varias formas: alcanza con que todas
+    sean La o Mib y que cada una diga qué grado es.
+    """
+    ficha = canciones.listar(carpeta)[1].como_diccionario("C")["ficha"]
+    f7 = ficha["cifrado"][0]["acordes"][0]
+    assert f7["nombre"] == "F7"
+    assert f7["clases"] == [5, 9, 0, 3]       # Fa La Do Mib
+    assert f7["bajo"] == 5
+    assert f7["guias"], "un dominante tiene notas guia"
+    assert {g["nota"] for g in f7["guias"]} == {"A", "Eb"}
+    assert {g["grado"] for g in f7["guias"]} == {"3a mayor", "7a menor"}
+    assert all(set(g) >= {"agujero", "direccion", "bend", "tab"} for g in f7["guias"])
+
+
+def test_un_acorde_que_la_app_no_calcula_tiene_notas_pero_no_guias():
+    base = blues_en_fa()
+    base.acordes = [bandinabox.Acorde(1, 1, "E", "m7b5", numero_tipo=32)]
+    base.compases = 1
+    ficha = canciones.ficha(bandinabox.interpretar(bandinabox.escribir(base)), "C")
+    acorde = ficha["cifrado"][0]["acordes"][0]
+    assert acorde["clases"] == [4, 7, 10, 2]
+    assert acorde["guias"] == []
+
+
+def test_la_melodia_cruda_viaja_para_el_reproductor():
+    melodia = [bandinabox.NotaDeMelodia(2.0, 0.5, 69, 90)]
+    base = bandinabox.interpretar(bandinabox.escribir(blues_en_fa(bpm=120, melodia=melodia)))
+    ficha = canciones.ficha(base, None)
+    assert ficha["melodia_midi"] == [[2.0, 0.5, 69]]
