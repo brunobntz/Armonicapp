@@ -2655,7 +2655,7 @@ async function cargarCanciones() {
         (f.con_swing ? " · el ritmo se mide en tresillos" : " · el ritmo se mide en corcheas") +
         "</p>";
       f.avisos.forEach((aviso) => { html += '<div class="aviso">' + escapar(aviso) + "</div>"; });
-      html += htmlDelReproductorDeBase(f, true);
+      html += htmlDelReproductorDeBase(f, { conPracticar: true, cancion: cancion });
       html += dibujarCifrado(f);
     }
 
@@ -2715,10 +2715,10 @@ async function cargarCanciones() {
     if (!cancion.ficha) return;
     const caja = contenedor.querySelector('.cancion[data-cancion="' +
       cancion.nombre.replace(/"/g, '\\"') + '"]');
-    conectarReproductorDeBase(caja, cancion.ficha);
+    conectarReproductorDeBase(caja, cancion.ficha, null, cancion);
     caja.querySelector(".boton-practicar-base").addEventListener("click", () => {
       if (caja.reproductorDeBase) caja.reproductorDeBase.parar();
-      ponerBaseEnVivo(cancion.nombre, cancion.ficha);
+      ponerBaseEnVivo(cancion.nombre, cancion.ficha, cancion);
       irASolapa("vivo");
     });
   });
@@ -2792,7 +2792,7 @@ async function importarAudioDeCancion(cancion, nombre) {
 
 let baseEnVivo = null;
 
-function ponerBaseEnVivo(nombre, ficha) {
+function ponerBaseEnVivo(nombre, ficha, cancion) {
   quitarBaseEnVivo();
   const seccion = document.getElementById("base-en-vivo");
   document.getElementById("base-en-vivo-titulo").textContent =
@@ -2800,7 +2800,8 @@ function ponerBaseEnVivo(nombre, ficha) {
   document.getElementById("base-en-vivo-acorde").textContent =
     ficha.tonalidad + (ficha.modo === "menor" ? "m" : "") + " · " + ficha.bpm + " BPM · " +
     ficha.pulsos_por_compas + "/4" + (ficha.con_swing ? " con swing" : "");
-  document.getElementById("base-en-vivo-controles").innerHTML = htmlDelReproductorDeBase(ficha);
+  document.getElementById("base-en-vivo-controles").innerHTML =
+    htmlDelReproductorDeBase(ficha, { cancion: cancion });
   document.getElementById("base-en-vivo-cifrado").innerHTML = dibujarCifrado(ficha);
 
   const reproductor = conectarReproductorDeBase(seccion, ficha, {
@@ -2809,7 +2810,7 @@ function ponerBaseEnVivo(nombre, ficha) {
       marcarGuiasEnDiagrama([]);
       document.getElementById("base-en-vivo-acorde").textContent = "";
     },
-  });
+  }, cancion);
   baseEnVivo = { nombre: nombre, ficha: ficha, reproductor: reproductor, grabacion: null };
   seccion.hidden = false;
 }
@@ -2950,32 +2951,65 @@ function contextoDeAudio() {
 }
 
 
-function htmlDelReproductorDeBase(ficha, conPracticar) {
+function htmlDelReproductorDeBase(ficha, opciones) {
+  opciones = opciones || {};
+  const cancion = opciones.cancion || { audios: [], ajustes: {} };
+  const ajustes = cancion.ajustes || {};
+  const audios = cancion.audios || [];
+  const conAudio = audios.length && ajustes.audio;
+
+  // Con qué suena: el audio exportado de Band-in-a-Box (o el que sea) si lo
+  // hay en la carpeta, o el sintetizador. Se puede cambiar y queda guardado.
+  let fuente = "";
+  if (audios.length) {
+    fuente = '<label class="con-titulo">sonido <select class="fuente-base">' +
+      '<option value=""' + (conAudio ? "" : " selected") + ">sintetizado</option>" +
+      audios.map((a) => '<option value="' + escapar(a) + '"' +
+        (a === ajustes.audio ? " selected" : "") + ">" + escapar(a) + "</option>").join("") +
+      "</select></label>";
+    fuente += '<span class="ajuste-compas1"' + (conAudio ? "" : " hidden") + ">compás 1 en " +
+      '<input type="number" class="compas1-base" min="0" step="0.01" value="' +
+      (ajustes.compas1_seg !== null && ajustes.compas1_seg !== undefined
+        ? ajustes.compas1_seg.toFixed(2) : "") + '"> s ' +
+      '<button class="secundario chico boton-marcar-compas1" ' +
+      'title="mientras suena el audio, apretalo justo cuando arranca el compás 1">' +
+      "Marcar ahora</button>" +
+      '<span class="ayuda estado-compas1">' +
+      (ajustes.compas1_medido ? "" : "supuesto: dos compases de conteo") + "</span></span>";
+  }
+
   return '<div class="reproductor-base">' +
     '<button class="principal boton-base">▶ Reproducir la base</button>' +
-    (conPracticar
+    (opciones.conPracticar
       ? '<button class="secundario boton-practicar-base">Practicar sobre esta base</button>'
       : "") +
     '<label class="con-titulo">tempo ' +
       '<input type="range" class="tempo-base" min="40" max="150" value="100" step="5">' +
       '<span class="bpm-base">' + ficha.bpm + " BPM</span></label>" +
     (ficha.tiene_melodia
-      ? '<label class="casilla"><input type="checkbox" class="melodia-base"> melodía</label>'
+      ? '<label class="casilla opcion-melodia"' + (conAudio ? " hidden" : "") +
+        '><input type="checkbox" class="melodia-base"> melodía</label>'
       : "") +
     '<label class="casilla"><input type="checkbox" class="repetir-base" checked> repetir</label>' +
-    '<span class="ayuda">acordes, bajo y click sintetizados a partir del cifrado</span>' +
+    fuente +
+    '<span class="ayuda nota-fuente">' + (conAudio
+      ? "el audio de la carpeta; el cifrado lo sigue desde el compás 1"
+      : "acordes, bajo y click sintetizados a partir del cifrado") + "</span>" +
     "</div>";
 }
 
 
 /* Conecta los controles de una cancion con un reproductor. Lo devuelve, para
  * que En vivo pueda usar el mismo con sus propios avisos. */
-function conectarReproductorDeBase(caja, ficha, avisos) {
+function conectarReproductorDeBase(caja, ficha, avisos, cancion) {
   const boton = caja.querySelector(".boton-base");
   const tempo = caja.querySelector(".tempo-base");
   const bpmTexto = caja.querySelector(".bpm-base");
   const melodia = caja.querySelector(".melodia-base");
   const repetir = caja.querySelector(".repetir-base");
+  const fuente = caja.querySelector(".fuente-base");
+  const compas1 = caja.querySelector(".compas1-base");
+  const marcar = caja.querySelector(".boton-marcar-compas1");
   if (!boton) return null;
 
   const reproductor = crearReproductorDeBase(ficha, {
@@ -3004,9 +3038,68 @@ function conectarReproductorDeBase(caja, ficha, avisos) {
   tempo.addEventListener("input", () => {
     reproductor.porcentaje = Number(tempo.value);
     bpmTexto.textContent = reproductor.bpm() + " BPM";
+    if (reproductor._audio) reproductor._audio.playbackRate = reproductor.porcentaje / 100;
   });
   if (melodia) melodia.addEventListener("change", () => { reproductor.conMelodia = melodia.checked; });
-  repetir.addEventListener("change", () => { reproductor.repetir = repetir.checked; });
+  repetir.addEventListener("change", () => {
+    reproductor.repetir = repetir.checked;
+    if (reproductor._audio) reproductor._audio.loop = repetir.checked;
+  });
+
+  // El audio real, si hay. Lo que se elige y el compas 1 se guardan por
+  // cancion en el servidor (material/_canciones.json).
+  const ajustes = (cancion && cancion.ajustes) || {};
+  if (fuente && ajustes.audio) {
+    reproductor.fuente = ajustes.audio;
+    reproductor.urlAudio = urlDeArchivo(cancion.nombre, ajustes.audio);
+  }
+  if (compas1 && ajustes.compas1_seg !== null && ajustes.compas1_seg !== undefined) {
+    reproductor.compas1Seg = ajustes.compas1_seg;
+  }
+  const guardarAjuste = async (cambio) => {
+    const respuesta = await pedir("/api/canciones/ajustes", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ cancion: cancion.nombre }, cambio)),
+    });
+    if (!respuesta.ok) alert(respuesta.motivo || "no pude guardar el ajuste");
+    else cancion.ajustes = respuesta.ajustes;
+    return respuesta;
+  };
+  if (fuente) {
+    fuente.addEventListener("change", async () => {
+      reproductor.parar();
+      reproductor.fuente = fuente.value;
+      reproductor.urlAudio = fuente.value ? urlDeArchivo(cancion.nombre, fuente.value) : null;
+      caja.querySelector(".ajuste-compas1").hidden = !fuente.value;
+      const opcionMelodia = caja.querySelector(".opcion-melodia");
+      if (opcionMelodia) opcionMelodia.hidden = !!fuente.value;
+      caja.querySelector(".nota-fuente").textContent = fuente.value
+        ? "el audio de la carpeta; el cifrado lo sigue desde el compás 1"
+        : "acordes, bajo y click sintetizados a partir del cifrado";
+      await guardarAjuste({ audio: fuente.value });
+    });
+  }
+  if (compas1) {
+    compas1.addEventListener("change", async () => {
+      const valor = compas1.value.trim();
+      const respuesta = await guardarAjuste({ compas1_seg: valor === "" ? null : Number(valor) });
+      if (respuesta.ok) {
+        reproductor.compas1Seg = respuesta.ajustes.compas1_seg;
+        compas1.value = respuesta.ajustes.compas1_seg.toFixed(2);
+        caja.querySelector(".estado-compas1").textContent =
+          respuesta.ajustes.compas1_medido ? "" : "supuesto: dos compases de conteo";
+      }
+    });
+    marcar.addEventListener("click", () => {
+      const instante = reproductor.instanteDelAudio();
+      if (instante === null) {
+        alert("Primero poné a sonar el audio, y apretá Marcar ahora justo cuando arranca el compás 1.");
+        return;
+      }
+      compas1.value = instante.toFixed(2);
+      compas1.dispatchEvent(new Event("change"));
+    });
+  }
 
   caja.reproductorDeBase = reproductor;
   return reproductor;
@@ -3057,8 +3150,16 @@ function crearReproductorDeBase(ficha, avisos) {
     primerPulso: () => ((ficha.coro_desde || 1) - 1) * pulsosPorCompas,
     ultimoPulso: () => (ficha.coro_hasta || ficha.compases) * pulsosPorCompas,
     instanteDelCompas1: null,  // performance.now() del tiempo 1 del compas 1
+    fuente: "",                // "" = sintetizado; si no, el nombre del audio
+    urlAudio: null,
+    compas1Seg: null,          // en que segundo del audio cae el compas 1
     _temporizador: null, _pulso: 0, _proximo: 0, _acordeSonando: null, _fuentes: [],
+    _audio: null, _cuadro: null, _ultimoPulsoAudio: null,
   };
+  const compasesDeVuelta = () => Math.max(1, (ficha.coro_hasta || ficha.compases) - (ficha.coro_desde || 1) + 1);
+  const compasEnLaVuelta = (compas) =>
+    ((compas - (ficha.coro_desde || 1)) % compasesDeVuelta() + compasesDeVuelta()) % compasesDeVuelta() +
+    (ficha.coro_desde || 1);
 
   function acordeEn(pulso) {
     const compas = Math.floor(pulso / pulsosPorCompas) + 1;
@@ -3186,9 +3287,71 @@ function crearReproductorDeBase(ficha, avisos) {
     }
   }
 
+  /* --- Con el audio de la carpeta ---
+   *
+   * El archivo ya trae el conteo y las tres vueltas: se reproduce como
+   * viene, y el cifrado se sigue leyendo el reloj del audio: el pulso k
+   * cae en compas1Seg + k * 60 / bpm del archivo, en segundos DEL AUDIO,
+   * asi que cambiar la velocidad no lo corre. La altura se conserva
+   * (preservesPitch); el navegador la estira con calidad de navegador. */
+  function arrancarAudio() {
+    const audio = new Audio(r.urlAudio);
+    audio.preservesPitch = true;
+    audio.mozPreservesPitch = true;
+    audio.playbackRate = r.porcentaje / 100;
+    audio.loop = r.repetir;
+    const compasSeg = 60 / ficha.bpm * pulsosPorCompas;
+    const desde = r.compas1Seg === null ? 0
+      : Math.max(0, r.compas1Seg - (r.conteo > 0 ? r.conteo : 1) * compasSeg);
+    r._audio = audio;
+    r._ultimoPulsoAudio = null;
+    r._acordeSonando = null;
+    r.instanteDelCompas1 = null;
+    r.corriendo = true;
+    audio.addEventListener("ended", () => { if (r.corriendo) r.parar(); });
+    audio.addEventListener("error", () => {
+      r.parar();
+      alert("No pude reproducir " + r.fuente + ". Probá con otro archivo, o con el sonido sintetizado.");
+    });
+    audio.currentTime = desde;
+    audio.play().catch(() => {});
+
+    // Un temporizador y no requestAnimationFrame: el navegador congela los
+    // cuadros cuando la pestana no se ve, y el cifrado dejaria de seguir al
+    // audio justo cuando uno mira el diagrama en otra ventana.
+    const seguir = () => {
+      if (!r.corriendo || r._audio !== audio) return;
+      const compas1 = r.compas1Seg === null ? 0 : r.compas1Seg;
+      const pulso = Math.floor((audio.currentTime - compas1) * ficha.bpm / 60);
+      if (pulso !== r._ultimoPulsoAudio) {
+        r._ultimoPulsoAudio = pulso;
+        const enConteo = pulso < 0;
+        const compasAbsoluto = Math.floor(pulso / pulsosPorCompas) + 1;
+        const tiempo = ((pulso % pulsosPorCompas) + pulsosPorCompas) % pulsosPorCompas + 1;
+        const compas = enConteo ? null : compasEnLaVuelta(compasAbsoluto);
+        if (!enConteo && pulso === 0 && r.instanteDelCompas1 === null) {
+          r.instanteDelCompas1 = performance.now();
+        }
+        if (avisos.alPulso) avisos.alPulso(compas, tiempo, enConteo);
+        if (!enConteo) {
+          const acorde = acordeEn((compas - 1) * pulsosPorCompas + tiempo - 1);
+          if (acorde && acorde !== r._acordeSonando) {
+            r._acordeSonando = acorde;
+            if (avisos.alAcorde) avisos.alAcorde(acorde, compas, tiempo);
+          }
+        }
+      }
+    };
+    r._cuadro = setInterval(seguir, 25);
+  }
+
+  /* El segundo del audio que esta sonando, para "Marcar ahora". */
+  r.instanteDelAudio = () => (r.corriendo && r._audio) ? r._audio.currentTime : null;
+
   r.arrancar = () => {
     if (audioDeBase.activo && audioDeBase.activo !== r) audioDeBase.activo.parar();
     audioDeBase.activo = r;
+    if (r.fuente && r.urlAudio) { arrancarAudio(); return; }
     const ctx = contextoDeAudio();
     r._contexto = ctx;
     r._salida = ctx.createGain();
@@ -3208,6 +3371,12 @@ function crearReproductorDeBase(ficha, avisos) {
     if (!r.corriendo) return;
     r.corriendo = false;
     clearInterval(r._temporizador);
+    if (r._cuadro) clearInterval(r._cuadro);
+    if (r._audio) {
+      r._audio.pause();
+      r._audio.src = "";
+      r._audio = null;
+    }
     const cerrar = () => {
       r._fuentes.forEach((f) => { try { f.stop(); } catch (e) { /* ya paro */ } });
       r._fuentes = [];

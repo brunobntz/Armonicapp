@@ -1317,6 +1317,11 @@ table.guias tr.esta td { color: var(--cobre); }
 .reproductor-base .bpm-base { font-family: var(--mono); font-size: 13px; min-width: 64px; }
 .reproductor-base .casilla { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
 .reproductor-base .casilla input { accent-color: var(--cobre); }
+.reproductor-base select { max-width: 260px; }
+.reproductor-base .ajuste-compas1 { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.reproductor-base .compas1-base { width: 78px; font-family: var(--mono); }
+.reproductor-base button.chico { padding: 6px 12px; font-size: 13px; }
+.reproductor-base .nota-fuente { flex-basis: 100%; }
 
 /* Lo que esta sonando. */
 .cifrado .compas.sonando { border-color: var(--cobre); background: var(--panel-alto); }

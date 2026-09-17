@@ -2646,3 +2646,38 @@ def test_una_base_que_no_existe_no_rompe_el_guardado(servidor_andando, carpeta_d
     assert respuesta["ok"] is True
     assert respuesta["ritmo"] is not None
     assert respuesta["sobre_la_base"] is None
+
+
+def test_los_ajustes_de_la_cancion_viajan_y_se_guardan(servidor_andando, carpeta_de_canciones,
+                                                       tmp_path, monkeypatch):
+    """
+    Que audio es la base y donde cae el compas 1 van a material/_canciones.json
+    (aca, a una carpeta temporal), nunca a la carpeta de la cancion.
+    """
+    from armonica import canciones_ajustes
+    # Con guion bajo: la carpeta de canciones es tmp_path, y una subcarpeta
+    # "app" se leeria como una cancion mas.
+    ajustes_en = tmp_path / "_app"
+    monkeypatch.setattr(canciones_ajustes, "CARPETA_POR_DEFECTO", str(ajustes_en))
+
+    georgia = traer_json(servidor_andando, "/api/canciones")["canciones"][0]
+    # Sin nada guardado: el unico audio, y dos compases de conteo a 65 BPM.
+    assert georgia["ajustes"] == {"audio": "base.m4a", "compas1_seg": pytest.approx(7.385, abs=0.001),
+                                  "compas1_medido": False}
+
+    respuesta = mandar(servidor_andando, "/api/canciones/ajustes",
+                       {"cancion": "Georgia", "compas1_seg": 7.41})
+    assert respuesta["ok"] is True
+    assert respuesta["ajustes"]["compas1_seg"] == 7.41
+    assert respuesta["ajustes"]["compas1_medido"] is True
+    assert (ajustes_en / "_canciones.json").is_file()
+    assert sorted(os.listdir(str(carpeta_de_canciones / "Georgia"))) == \
+        ["base.m4a", "georgia.mgu", "tab.HEIC", "tab.png"]
+
+    georgia = traer_json(servidor_andando, "/api/canciones")["canciones"][0]
+    assert georgia["ajustes"]["compas1_seg"] == 7.41
+
+    assert mandar(servidor_andando, "/api/canciones/ajustes",
+                  {"cancion": "Georgia", "audio": "no-esta.m4a"})["ok"] is False
+    assert mandar(servidor_andando, "/api/canciones/ajustes",
+                  {"cancion": "otra", "compas1_seg": 1})["ok"] is False

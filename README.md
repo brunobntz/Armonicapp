@@ -425,6 +425,21 @@ Lo que importa no es el sonido sino el reloj: como la app genera el audio,
 sabe al milisegundo sobre qué acorde estás, y eso es lo que permite
 practicar sobre la base en En vivo.
 
+**O con el audio de verdad.** Si en la carpeta hay un audio exportado desde
+Band-in-a-Box (o cualquier otro), el reproductor lo usa en vez del
+sintetizador, y el cifrado lo sigue igual. Lo único que el archivo no dice
+es en qué segundo cae el compás 1: Band-in-a-Box exporta con dos compases
+de conteo adelante (medido: 7,38 s a 65 BPM), y eso es lo que la app supone
+hasta que lo marcás vos. Con el audio sonando, apretás **Marcar ahora**
+justo cuando arranca el compás 1, y queda guardado para esa canción en
+`material/_canciones.json`, junto con qué audio elegiste si hay varios. La
+carpeta de la canción no se toca. El tempo también funciona con el audio,
+sin cambiar el tono, pero estirado por el navegador: para practicar
+despacio anda; para escuchar la base como suena, exportala al tempo que
+quieras. Exportar desde Band-in-a-Box: *Archivo → Guardar especial →
+Guardar canción como archivo de audio*, en WAV, a la carpeta de la
+canción.
+
 **Practicar sobre la base.** El botón "Practicar sobre esta base" de la
 ficha la lleva a **En vivo**: arriba queda la base con sus controles y su
 cifrado, y el acorde que suena se ve grande con sus notas guía, que además
@@ -595,7 +610,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 889 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 900 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

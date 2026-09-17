@@ -51,7 +51,7 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from armonica import canciones, imagenes, sobre_la_base
+from armonica import canciones, canciones_ajustes, imagenes, sobre_la_base
 from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
                       segmentacion, tablas, teoria, tono, transcripcion)
@@ -1191,6 +1191,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._crear_lista(cuerpo))
         if self.path == "/api/listas/renombrar":
             return self._responder_json(self._renombrar_lista(cuerpo))
+        if self.path == "/api/canciones/ajustes":
+            return self._responder_json(self._ajustar_cancion(cuerpo))
         if self.path == "/api/listas/borrar":
             return self._responder_json(self._borrar_lista(cuerpo))
         if self.path == "/api/configuracion":
@@ -2270,6 +2272,7 @@ class Manejador(SimpleHTTPRequestHandler):
         """
         carpeta = canciones.carpeta_de_canciones()
         lista = canciones.listar(carpeta)
+        ajustes = canciones_ajustes.cargar()
         return {
             "ok": True,
             "existe": os.path.isdir(carpeta),
@@ -2277,8 +2280,37 @@ class Manejador(SimpleHTTPRequestHandler):
             "tonalidad": self.estado.tonalidad,
             "heic": imagenes.hay_soporte_heic(),
             "como_instalar_heic": imagenes.COMO_INSTALAR,
-            "canciones": [c.como_diccionario(self.estado.tonalidad) for c in lista],
+            "canciones": [
+                dict(c.como_diccionario(self.estado.tonalidad),
+                     ajustes=canciones_ajustes.de_la_cancion(c, ajustes))
+                for c in lista
+            ],
         }
+
+    def _ajustar_cancion(self, peticion):
+        """
+        Guarda que audio es la base de una cancion y en que segundo cae su
+        compas 1. Va a material/_canciones.json, nunca a la carpeta de la
+        cancion.
+        """
+        peticion = peticion or {}
+        nombre = (peticion.get("cancion") or "").strip()
+        cancion = next((c for c in canciones.listar() if c.nombre == nombre), None)
+        if cancion is None:
+            return {"ok": False, "motivo": "esa cancion no esta en la carpeta"}
+        cambios = {}
+        if "audio" in peticion:
+            audio = str(peticion.get("audio") or "")
+            if audio and audio not in cancion.audios:
+                return {"ok": False, "motivo": "ese audio no esta en la carpeta de la cancion"}
+            cambios["audio"] = audio
+        if "compas1_seg" in peticion:
+            cambios["compas1_seg"] = peticion.get("compas1_seg")
+        try:
+            canciones_ajustes.guardar(nombre, cambios)
+        except ValueError as error:
+            return {"ok": False, "motivo": str(error)}
+        return {"ok": True, "ajustes": canciones_ajustes.de_la_cancion(cancion)}
 
     def _mandar_archivo_de_cancion(self, consulta):
         """
