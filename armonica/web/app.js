@@ -2838,35 +2838,50 @@ function urlDeArchivo(cancion, nombre) {
  * donde cambia el acorde con la marca de cambio, igual que en la linea de
  * tiempo del ritmo. Cada compas y cada acorde llevan su numero, para que el
  * reproductor los pueda iluminar. */
+const COMPASES_POR_RENGLON = 4;
+
+/* El cifrado como en un atril: cuatro compases por renglon, con los cambios
+ * de acorde marcados. Y debajo de cada renglon, otro con las notas de cada
+ * compas: la casilla de notas queda alineada con la de su acorde, y los
+ * acordes se leen limpios arriba. */
 function dibujarCifrado(ficha) {
   const cambios = new Set(ficha.compases_de_cambio);
   const conNotas = mostrarNotasDelCifrado();
   let html = '<div class="cifrado' + (conNotas ? "" : " sin-notas") + '">';
-  ficha.cifrado.forEach((compas) => {
-    const acordes = compas.acordes.length
-      ? compas.acordes.map((a) =>
-          '<span class="acorde-bloque" data-compas="' + compas.compas + '" data-tiempo="' + a.tiempo + '">' +
-          '<span class="acorde" data-compas="' + compas.compas + '" data-tiempo="' + a.tiempo +
-          '" title="' + escapar(explicacionDelAcorde(a)) + '">' + escapar(a.nombre) + "</span>" +
-          lineaDeNotas(a) + "</span>").join("")
-      : '<span class="acorde-bloque"><span class="acorde repite">%</span></span>';
-    html += '<div class="compas' + (cambios.has(compas.compas) ? " cambio" : "") +
-      '" data-compas="' + compas.compas + '">' +
-      '<span class="numero">' + compas.compas + "</span>" + acordes + "</div>";
-  });
+  for (let desde = 0; desde < ficha.cifrado.length; desde += COMPASES_POR_RENGLON) {
+    const renglon = ficha.cifrado.slice(desde, desde + COMPASES_POR_RENGLON);
+    renglon.forEach((compas) => {
+      const acordes = compas.acordes.length
+        ? compas.acordes.map((a) =>
+            '<span class="acorde" data-compas="' + compas.compas + '" data-tiempo="' + a.tiempo +
+            '" title="' + escapar(explicacionDelAcorde(a)) + '">' + escapar(a.nombre) + "</span>").join(" ")
+        : '<span class="acorde repite">%</span>';
+      html += '<div class="compas' + (cambios.has(compas.compas) ? " cambio" : "") +
+        '" data-compas="' + compas.compas + '">' +
+        '<span class="numero">' + compas.compas + "</span>" + acordes + "</div>";
+    });
+    renglon.forEach((compas) => {
+      html += '<div class="notas-compas" data-compas="' + compas.compas + '">' +
+        compas.acordes.map((a) => lineaDeNotas(a, compas.compas, compas.acordes.length > 1)).join("") +
+        "</div>";
+    });
+  }
   return html + "</div>";
 }
 
 
-/* Las notas del acorde, cada una con su agujero mas comodo. Las guias (la
+/* Las notas de un acorde, cada una con su agujero mas comodo. Las guias (la
  * 3a y la 7a) en cobre. Al pasar el mouse, el porque: que grado es, todas
- * las formas de agarrarla. */
-function lineaDeNotas(acorde) {
+ * las formas de agarrarla. Con varios acordes en el compas, cada linea
+ * empieza con el nombre del suyo. */
+function lineaDeNotas(acorde, compas, conNombre) {
   if (!acorde.notas || !acorde.notas.length) return "";
-  return '<span class="notas-acorde">' + acorde.notas.map((n) =>
-    '<span class="nota-acorde' + (n.es_guia ? " guia" : "") + (n.facil ? "" : " no-esta") +
-    '" title="' + escapar(explicacionDeLaNota(n, acorde)) + '">' +
-    escapar(n.nota) + " " + escapar(n.facil || "—") + "</span>").join("") + "</span>";
+  return '<div class="acorde-notas" data-compas="' + compas + '" data-tiempo="' + acorde.tiempo + '">' +
+    (conNombre ? '<span class="de">' + escapar(acorde.nombre) + "</span>" : "") +
+    acorde.notas.map((n) =>
+      '<span class="nota-acorde' + (n.es_guia ? " guia" : "") + (n.facil ? "" : " no-esta") +
+      '" title="' + escapar(explicacionDeLaNota(n, acorde)) + '">' +
+      escapar(n.nota) + " " + escapar(n.facil || "—") + "</span>").join("") + "</div>";
 }
 
 
@@ -3326,15 +3341,19 @@ function iluminarCompas(caja, compas, tiempo) {
     }
   }
   if (!actual) return;
+  const notasDe = (acorde) => caja.querySelector('.cifrado .acorde-notas[data-compas="' +
+    acorde.dataset.compas + '"][data-tiempo="' + acorde.dataset.tiempo + '"]');
   actual.classList.add("sonando");
-  actual.closest(".acorde-bloque").classList.add("sonando");
+  const notasActual = notasDe(actual);
+  if (notasActual) notasActual.classList.add("sonando");
   // Y el que viene, para anticiparlo: el siguiente en el cifrado, dando la
   // vuelta al principio si es el ultimo.
   const todos = [...caja.querySelectorAll(".cifrado .acorde:not(.repite)")];
   const proximo = todos[(todos.indexOf(actual) + 1) % todos.length];
   if (proximo && proximo !== actual) {
     proximo.classList.add("proximo");
-    proximo.closest(".acorde-bloque").classList.add("proximo");
+    const notasProximo = notasDe(proximo);
+    if (notasProximo) notasProximo.classList.add("proximo");
   }
 }
 

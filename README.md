@@ -446,10 +446,12 @@ quieras. Exportar desde Band-in-a-Box: *Archivo → Guardar especial →
 Guardar canción como archivo de audio*, en WAV, a la carpeta de la
 canción.
 
-**Las notas de cada acorde, en el cifrado.** Debajo de cada acorde va una
-línea con sus notas y el agujero más cómodo para cada una en la armónica
-que tenés puesta: bajo FMaj7 en Do, "F ↓5 · A ↓6 · C ↑4 · E ↑5", con las
-guías (la 3ª y la 7ª) en cobre. Al pasar el mouse por una nota, qué grado
+**Las notas de cada acorde, en el cifrado.** Debajo de cada renglón de
+cuatro compases va otro renglón con las notas de cada compás, alineadas
+con su acorde: el agujero más cómodo para cada una en la armónica que
+tenés puesta, bajo FMaj7 en Do "F ↓5 · A ↓6 · C ↑4 · E ↑5", con las guías
+(la 3ª y la 7ª) en cobre. Así los acordes se leen limpios arriba y las
+notas no estiran las casillas. Al pasar el mouse por una nota, qué grado
 es y todas las formas de agarrarla; por el nombre del acorde, sus notas,
 las guías y las **notas a evitar**, que son las naturales de la armónica a
 medio tono por encima de una nota del acorde (sobre F7, el Mi). La app dice
