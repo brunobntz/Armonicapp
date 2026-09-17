@@ -400,7 +400,17 @@ como contexto: puede decir "el bend del 2 es justo lo de la última clase".
 **Lo que hay que saber:** para armar el plan, el texto de las clases se le
 manda al modelo. Con Ollama se queda en tu máquina; con Claude o ChatGPT,
 sale. La pantalla lo dice al lado del botón, porque para apuntes de un
-tercero esa decisión es tuya. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
+tercero esa decisión es tuya. **Canciones** lee una carpeta por canción de `material/canciones/` (o de
+`CARPETA_CANCIONES` en el `.env`), con lo que te manden: la base de
+Band-in-a-Box, los audios y la tablatura en foto. De la base muestra la
+ficha (tono, tempo, compás, swing) y el cifrado compás por compás con los
+cambios marcados; los audios se escuchan ahí mismo y cada uno tiene
+"Importar como frases", que lo lleva por el mismo camino que un audio
+subido en Frases; las fotos se ven en la solapa, y si son `.HEIC` del
+iPhone se convierten a JPG en `material/_cache/` con `pillow-heif`, que es
+opcional: sin instalarlo, la solapa dice cómo. Si la base trae melodía, la
+muestra pasada a la tablatura de la armónica que tenés puesta. Esa carpeta
+también es solo lectura, con su test. **Historial** grafica cómo viene cada bend sesión por sesión, leyendo
 los JSON que ya se guardaban. **Teoría** es lo que `teoria.py` sabía y solo
 se veía en la terminal: elegís armónica, posición y escala (las doce
 posiciones, no solo las seis con tabla) y te muestra la escala marcada en la
@@ -555,7 +565,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 814 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 845 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

@@ -41,6 +41,7 @@ frena a esperar al que consume.
 
 import io
 import json
+import mimetypes
 import os
 import tempfile
 import threading
@@ -50,6 +51,7 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
+from armonica import canciones, imagenes
 from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
                       segmentacion, tablas, teoria, tono, transcripcion)
@@ -1131,6 +1133,10 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._buscar_en_clases(self.path.partition("?")[2]))
         if self.path == "/api/aprendizaje/plan":
             return self._responder_json(self._plan())
+        if self.path == "/api/canciones":
+            return self._responder_json(self._canciones())
+        if self.path.startswith("/api/canciones/archivo"):
+            return self._mandar_archivo_de_cancion(self.path.partition("?")[2])
         return super().do_GET()
 
     # --- POST ---
@@ -2215,6 +2221,86 @@ class Manejador(SimpleHTTPRequestHandler):
         if clase.error:
             return {"ok": False, "motivo": clase.error}
         return dict(clase.como_diccionario(con_texto=True), ok=True)
+
+    # --- Las canciones: una carpeta por cancion, con su base y sus audios ---
+
+    def _canciones(self):
+        """
+        Las canciones de material/canciones/ (o de CARPETA_CANCIONES), con la
+        ficha de la base ya calculada para la armonica que esta puesta.
+        """
+        carpeta = canciones.carpeta_de_canciones()
+        lista = canciones.listar(carpeta)
+        return {
+            "ok": True,
+            "existe": os.path.isdir(carpeta),
+            "origen": "material" if carpeta == canciones.CARPETA_POR_DEFECTO else "configurada",
+            "tonalidad": self.estado.tonalidad,
+            "heic": imagenes.hay_soporte_heic(),
+            "como_instalar_heic": imagenes.COMO_INSTALAR,
+            "canciones": [c.como_diccionario(self.estado.tonalidad) for c in lista],
+        }
+
+    def _mandar_archivo_de_cancion(self, consulta):
+        """
+        Un audio o una foto de una cancion, para el reproductor o el <img>.
+
+        Los dos nombres vienen del navegador y se validan en canciones.py:
+        nada de lo que se pida puede salir de la carpeta de canciones. Una
+        foto .HEIC se manda convertida a JPG desde la cache; sin las
+        bibliotecas para convertirla, se contesta 501 con el comando para
+        instalarlas.
+
+        El reproductor del navegador pide el audio por pedazos (Range) para
+        poder saltar a la mitad; se atiende un rango, que es lo que manda.
+        """
+        parametros = urllib.parse.parse_qs(consulta)
+        cancion = (parametros.get("cancion", [""])[0] or "").strip()
+        nombre = (parametros.get("nombre", [""])[0] or "").strip()
+        ruta = canciones.ruta_de_archivo(cancion, nombre)
+        if ruta is None:
+            return self.send_error(404, "ese archivo no esta en la carpeta de canciones")
+
+        if imagenes.es_heic(ruta):
+            try:
+                ruta = imagenes.como_jpg(ruta)
+            except RuntimeError as error:
+                return self.send_error(501, str(error))
+            except Exception as error:  # una foto rota no tiene que tirar el servidor
+                return self.send_error(500, f"no pude convertir la foto: {error}")
+
+        tipo = mimetypes.guess_type(ruta)[0] or "application/octet-stream"
+        if ruta.lower().endswith(".m4a"):
+            tipo = "audio/mp4"
+        with open(ruta, "rb") as archivo:
+            datos = archivo.read()
+
+        desde, hasta = 0, len(datos) - 1
+        rango = self.headers.get("Range", "")
+        parcial = rango.startswith("bytes=") and len(datos) > 0
+        if parcial:
+            inicio, _, fin = rango[len("bytes="):].partition("-")
+            try:
+                desde = int(inicio) if inicio else max(0, len(datos) - int(fin))
+                hasta = min(int(fin), len(datos) - 1) if fin and inicio else len(datos) - 1
+            except ValueError:
+                parcial = False
+            if parcial and (desde > hasta or desde >= len(datos)):
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{len(datos)}")
+                self.end_headers()
+                return None
+
+        pedazo = datos[desde:hasta + 1]
+        self.send_response(206 if parcial else 200)
+        self.send_header("Content-Type", tipo)
+        self.send_header("Content-Length", str(len(pedazo)))
+        self.send_header("Accept-Ranges", "bytes")
+        if parcial:
+            self.send_header("Content-Range", f"bytes {desde}-{hasta}/{len(datos)}")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(pedazo)
 
     # --- El plan de estudio (Aprendizaje, fase 2) ---
 

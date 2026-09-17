@@ -2,7 +2,7 @@
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
 la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-16:
-repo público en GitHub, 814 tests, todo lo listado en el README está hecho.
+repo público en GitHub, 845 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 
@@ -44,14 +44,12 @@ repo público en GitHub, 814 tests, todo lo listado en el README está hecho.
    `armonica/bandinabox.py` lee el `.sgu`/`.mgu` directo y `--base` lo
    muestra: tono, tempo, compás, swing, cifrado y melodía en tablatura. Lo
    que sigue, en orden:
-   - **Canciones.** Una carpeta por canción en `material/canciones/<nombre>/`
-     con la base, los audios que exporta Band-in-a-Box o manda el profe
-     (m4a, mp3, mp4: el navegador los reproduce solos) y la tablatura en
-     foto. Una sección en la web con la ficha (lo que da `--base`), los
-     audios reproducibles, y botones a "importar tramos" del audio y a
-     "practicar sobre esta base". Las fotos `.HEIC` no las muestra ningún
-     navegador: hace falta `pillow-heif` como dependencia opcional, con
-     caché de JPG fuera de la carpeta de clases.
+   - **Canciones.** Hecho (2026-09-16): solapa Canciones, una carpeta por
+     canción en `material/canciones/<nombre>/` (o `CARPETA_CANCIONES`),
+     solo lectura con test. Ficha de la base, cifrado con cambios, audios
+     con "Importar como frases", fotos (HEIC vía `pillow-heif` opcional,
+     caché en `material/_cache/`), melodía en tab. Falta el botón
+     "practicar sobre esta base", que es el paso de abajo.
    - **La tablatura del profe, leída de la foto.** Renglón por renglón,
      en una tarjeta que se corrige como las frases (el profe anota los
      bends distinto). Es lectura de una imagen escrita a mano: la hace el

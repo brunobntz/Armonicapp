@@ -79,11 +79,12 @@ function configurarSolapas() {
         otro.classList.toggle("activa", otro === boton));
 
       const cual = boton.dataset.panel;
-      ["vivo", "frases", "aprendizaje", "historial", "teoria", "ajustes"].forEach((nombre) => {
+      ["vivo", "frases", "aprendizaje", "canciones", "historial", "teoria", "ajustes"].forEach((nombre) => {
         document.getElementById("panel-" + nombre).hidden = nombre !== cual;
       });
 
       if (cual === "historial") cargarHistorial();
+      if (cual === "canciones") cargarCanciones();
       if (cual === "frases") cargarFrases();
       if (cual === "ajustes") cargarAjustes();
       if (cual === "teoria") cargarTeoria();
@@ -2573,6 +2574,181 @@ function irASolapa(nombre, config) {
     };
     setTimeout(aplicar, 200);
   }
+}
+
+
+/* ==========================================================================
+   Canciones
+
+   Una carpeta por cancion. Lo que se dibuja ya viene calculado del servidor:
+   el cifrado compas por compas, la melodia en tablatura de la armonica que
+   esta puesta, y la lista de audios y fotos. El navegador solo dibuja.
+   ========================================================================== */
+
+async function cargarCanciones() {
+  const datos = await pedir("/api/canciones");
+  const contenedor = document.getElementById("canciones-contenido");
+  const estado = document.getElementById("canciones-estado");
+
+  if (!datos.ok) {
+    contenedor.innerHTML = '<div class="aviso">' + escapar(datos.motivo) + "</div>";
+    return;
+  }
+
+  const cuantas = datos.canciones.length;
+  estado.textContent = cuantas ? (cuantas === 1 ? "Hay 1 canción." : "Hay " + cuantas + " canciones.") : "";
+
+  if (!cuantas) {
+    contenedor.innerHTML = '<div class="aviso">Todavía no hay canciones. Creá una carpeta ' +
+      "por canción adentro de <code>material/canciones/</code> y dejá ahí la base, los " +
+      "audios y la foto de la tablatura. Con volver a esta solapa alcanza.</div>";
+    return;
+  }
+
+  const abrir = (titulo, abierto) =>
+    '<details class="bloque"' + (abierto ? " open" : "") + "><summary><h2>" + titulo +
+    "</h2></summary>";
+  const cerrar = "</details>";
+
+  let html = "";
+  datos.canciones.forEach((cancion, indice) => {
+    const f = cancion.ficha;
+    let subtitulo = "";
+    if (f) {
+      subtitulo = escapar(f.tonalidad + (f.modo === "menor" ? "m" : "")) + " · " + f.bpm +
+        " BPM · " + f.pulsos_por_compas + "/4" + (f.con_swing ? " con swing" : "");
+    } else if (cancion.archivo_base) {
+      subtitulo = "la base no se pudo leer";
+    } else {
+      subtitulo = "sin base";
+    }
+    html += abrir(escapar(cancion.nombre) + " <small>" + subtitulo + "</small>", indice === 0);
+    html += '<div class="cancion" data-cancion="' + escapar(cancion.nombre) + '">';
+
+    // --- La ficha de la base ---
+    if (cancion.error_base) {
+      html += '<div class="aviso">' + escapar(cancion.archivo_base) + ": " +
+        escapar(cancion.error_base) + "</div>";
+    }
+    if (f) {
+      html += '<p class="ayuda">' + escapar(f.titulo) + " · estilo " + escapar(f.estilo) +
+        " · " + f.compases + " compases · coro del " + f.coro_desde + " al " + f.coro_hasta +
+        ", " + f.vueltas + (f.vueltas === 1 ? " vuelta" : " vueltas") +
+        (f.con_swing ? " · el ritmo se mide en tresillos" : " · el ritmo se mide en corcheas") +
+        "</p>";
+      f.avisos.forEach((aviso) => { html += '<div class="aviso">' + escapar(aviso) + "</div>"; });
+      html += dibujarCifrado(f);
+    }
+
+    // --- Los audios ---
+    if (cancion.audios.length) {
+      html += "<h3>Audios</h3>";
+      cancion.audios.forEach((nombre) => {
+        const url = urlDeArchivo(cancion.nombre, nombre);
+        html += '<div class="cancion-audio"><div class="nombre">' + escapar(nombre) + "</div>" +
+          '<audio controls preload="none" src="' + url + '"></audio>' +
+          '<button class="secundario" data-importar="' + escapar(nombre) + '">' +
+          "Importar como frases</button></div>";
+      });
+    }
+
+    // --- Las fotos: la tablatura del profe ---
+    if (cancion.imagenes.length) {
+      html += "<h3>Tablatura y apuntes en foto</h3>";
+      cancion.imagenes.forEach((nombre) => {
+        const esHeic = /\.hei[cf]$/i.test(nombre);
+        if (esHeic && !datos.heic) {
+          html += '<div class="aviso">' + escapar(nombre) + ": para mostrar una foto .HEIC " +
+            "hacen falta dos bibliotecas que no vienen con Python. Se instalan una sola vez, " +
+            "con la app cerrada: <code>" + escapar(datos.como_instalar_heic) + "</code></div>";
+          return;
+        }
+        const url = urlDeArchivo(cancion.nombre, nombre);
+        html += '<figure class="cancion-foto"><a href="' + url + '" target="_blank" rel="noopener">' +
+          '<img loading="lazy" src="' + url + '" alt="' + escapar(nombre) + '"></a>' +
+          "<figcaption>" + escapar(nombre) + "</figcaption></figure>";
+      });
+    }
+
+    if (cancion.documentos.length) {
+      html += '<p class="ayuda">También en la carpeta: ' +
+        cancion.documentos.map(escapar).join(", ") + "</p>";
+    }
+
+    // --- La melodia, si la base la trae ---
+    if (f && f.tiene_melodia && f.melodia) {
+      const m = f.melodia;
+      html += '<details class="cancion-melodia"><summary>La melodía en tu armónica en ' +
+        escapar(m.tonalidad_armonica) + " <small>" + m.notas + " notas" +
+        (m.fuera ? ", " + m.fuera + " que esa armónica no tiene (·)" : "") +
+        "</small></summary>";
+      html += '<div class="cancion-tabs">' + m.compases.map((c) =>
+        '<div class="compas-tab"><span class="numero">' + c.compas + "</span>" +
+        '<span class="tab-corta">' + escapar(c.tabs.join(" ")) + "</span></div>").join("") +
+        "</div></details>";
+    }
+
+    html += "</div>" + cerrar;
+  });
+
+  contenedor.innerHTML = html;
+
+  contenedor.querySelectorAll("button[data-importar]").forEach((boton) => {
+    boton.addEventListener("click", () =>
+      importarAudioDeCancion(boton.closest(".cancion").dataset.cancion, boton.dataset.importar));
+  });
+}
+
+
+function urlDeArchivo(cancion, nombre) {
+  return "/api/canciones/archivo?cancion=" + encodeURIComponent(cancion) +
+    "&nombre=" + encodeURIComponent(nombre);
+}
+
+
+/* El cifrado como en un atril: cuatro compases por renglon, y los compases
+ * donde cambia el acorde con la marca de cambio, igual que en la linea de
+ * tiempo del ritmo. */
+function dibujarCifrado(ficha) {
+  const cambios = new Set(ficha.compases_de_cambio);
+  const familias = { mayor: "mayor", menor: "menor", dominante: "7", menor7: "m7",
+                     mayor7: "maj7", disminuido7: "dim7" };
+  let html = '<div class="cifrado">';
+  ficha.cifrado.forEach((compas) => {
+    const acordes = compas.acordes.length
+      ? compas.acordes.map((a) =>
+          '<span class="acorde' + (a.familia ? "" : " sin-familia") + '" title="' +
+          (a.familia ? "la app sabe calcular este acorde: " + familias[a.familia]
+                     : "acorde que la app no sabe calcular: se muestra, no se opina") +
+          '">' + escapar(a.nombre) + "</span>").join(" ")
+      : '<span class="acorde repite">%</span>';
+    html += '<div class="compas' + (cambios.has(compas.compas) ? " cambio" : "") + '">' +
+      '<span class="numero">' + compas.compas + "</span>" + acordes + "</div>";
+  });
+  return html + "</div>";
+}
+
+
+/* Importar un audio de la cancion como frases es lo mismo que subirlo desde
+ * Frases: se trae el archivo del servidor y entra por el mismo camino, que
+ * busca los tramos con armonica y deja elegir cual guardar. */
+async function importarAudioDeCancion(cancion, nombre) {
+  mostrarEspera("Trayendo " + nombre);
+  let archivo;
+  try {
+    const respuesta = await fetch(urlDeArchivo(cancion, nombre));
+    if (!respuesta.ok) throw new Error(respuesta.statusText);
+    archivo = new File([await respuesta.blob()], nombre);
+  } catch (error) {
+    ocultarEspera();
+    alert("No pude traer " + nombre + ": " + error.message);
+    return;
+  }
+  ocultarEspera();
+  irASolapa("frases");
+  ocultarPendiente();
+  document.getElementById("seccion-comparacion").hidden = true;
+  await elegirQueImportar(archivo);
 }
 
 

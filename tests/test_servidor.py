@@ -2521,3 +2521,79 @@ def test_renombrar_desde_la_pantalla(servidor_andando, carpeta_de_frases):
                        {"nombre": "clase tramo 1", "nuevo": "el lick de la 3a"})
     assert respuesta == {"ok": True, "nombre": "el lick de la 3a"}
     assert [f["nombre"] for f in traer_json(servidor_andando, "/api/frases")["frases"]] == ["el lick de la 3a"]
+
+
+# =============================================================================
+# Canciones: una carpeta por cancion, con su base y sus audios
+# =============================================================================
+
+@pytest.fixture
+def carpeta_de_canciones(tmp_path, monkeypatch):
+    from armonica import bandinabox, canciones
+    from tests.test_bandinabox import blues_en_fa
+    georgia = tmp_path / "Georgia"
+    georgia.mkdir()
+    (georgia / "georgia.mgu").write_bytes(bandinabox.escribir(blues_en_fa(bpm=65)))
+    (georgia / "base.m4a").write_bytes(bytes(range(256)) * 4)
+    (georgia / "tab.HEIC").write_bytes(b"no soy una foto")
+    (georgia / "tab.png").write_bytes(b"\x89PNG")
+    monkeypatch.setattr(canciones, "carpeta_de_canciones", lambda ruta_env=None: str(tmp_path))
+    return tmp_path
+
+
+def test_la_lista_de_canciones_trae_la_ficha_para_la_armonica_puesta(servidor_andando, carpeta_de_canciones):
+    datos = traer_json(servidor_andando, "/api/canciones")
+    assert datos["ok"] and datos["existe"]
+    assert datos["tonalidad"] == "C"
+    assert [c["nombre"] for c in datos["canciones"]] == ["Georgia"]
+    georgia = datos["canciones"][0]
+    assert georgia["ficha"]["bpm"] == 65
+    assert georgia["ficha"]["cifrado"][0]["acordes"][0]["nombre"] == "F7"
+    assert georgia["audios"] == ["base.m4a"]
+    assert georgia["imagenes"] == ["tab.HEIC", "tab.png"]
+    # La ruta de la carpeta no viaja al navegador.
+    assert str(carpeta_de_canciones) not in json.dumps(datos)
+
+
+def test_un_audio_de_la_cancion_se_manda_entero_o_por_pedazos(servidor_andando, carpeta_de_canciones):
+    ruta = "/api/canciones/archivo?cancion=Georgia&nombre=base.m4a"
+    estado, cuerpo = traer(servidor_andando, ruta)
+    assert estado == 200 and cuerpo == bytes(range(256)) * 4
+
+    # El reproductor del navegador pide un rango para poder saltar.
+    pedido = urllib.request.Request(servidor_andando + ruta, headers={"Range": "bytes=256-511"})
+    with urllib.request.urlopen(pedido, timeout=5) as respuesta:
+        assert respuesta.status == 206
+        assert respuesta.headers["Content-Range"] == "bytes 256-511/1024"
+        assert respuesta.headers["Content-Type"] == "audio/mp4"
+        assert respuesta.read() == bytes(range(256))
+
+
+@pytest.mark.parametrize("consulta", [
+    "cancion=..&nombre=georgia.mgu",
+    "cancion=Georgia&nombre=..%2Fotra.m4a",
+    "cancion=Georgia&nombre=no-existe.m4a",
+    "cancion=&nombre=base.m4a",
+])
+def test_no_se_puede_pedir_nada_fuera_de_la_carpeta_de_canciones(servidor_andando, carpeta_de_canciones, consulta):
+    with pytest.raises(urllib.error.HTTPError) as fallo:
+        traer(servidor_andando, "/api/canciones/archivo?" + consulta)
+    assert fallo.value.code == 404
+
+
+def test_una_foto_heic_sin_las_bibliotecas_dice_como_instalarlas(servidor_andando, carpeta_de_canciones, monkeypatch):
+    from armonica import imagenes
+    monkeypatch.setattr(imagenes, "hay_soporte_heic", lambda: False)
+    datos = traer_json(servidor_andando, "/api/canciones")
+    assert datos["heic"] is False
+    assert "pillow-heif" in datos["como_instalar_heic"]
+    with pytest.raises(urllib.error.HTTPError) as fallo:
+        traer(servidor_andando, "/api/canciones/archivo?cancion=Georgia&nombre=tab.HEIC")
+    assert fallo.value.code == 501
+
+
+def test_sin_carpeta_de_canciones_la_lista_esta_vacia_y_no_rompe(servidor_andando, tmp_path, monkeypatch):
+    from armonica import canciones
+    monkeypatch.setattr(canciones, "carpeta_de_canciones", lambda ruta_env=None: str(tmp_path / "nada"))
+    datos = traer_json(servidor_andando, "/api/canciones")
+    assert datos["ok"] and not datos["existe"] and datos["canciones"] == []

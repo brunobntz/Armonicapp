@@ -19,6 +19,7 @@
     <button class="solapa activa" data-panel="vivo">En vivo</button>
     <button class="solapa" data-panel="frases">Frases</button>
     <button class="solapa" data-panel="aprendizaje">Aprendizaje</button>
+    <button class="solapa" data-panel="canciones">Canciones</button>
     <button class="solapa" data-panel="historial">Historial</button>
     <button class="solapa" data-panel="teoria">Teoría</button>
     <button class="solapa" data-panel="ajustes">Ajustes</button>
@@ -409,6 +410,28 @@
   <div id="aprendizaje-plan"></div>
 
   <div id="aprendizaje-contenido"></div>
+
+</main>
+
+<!-- ===================== CANCIONES ===================== -->
+<main id="panel-canciones" class="panel" hidden>
+
+  <!-- Una carpeta por canción: la base de Band-in-a-Box, los audios y la
+       tablatura en foto. La app solo LEE esa carpeta. -->
+  <section>
+    <p class="ayuda">
+      Una carpeta por canción en <code>material/canciones/</code> (o en la
+      que diga <code>CARPETA_CANCIONES</code> en el <code>.env</code>), con
+      lo que te manden: la base de Band-in-a-Box (<code>.sgu</code> o
+      <code>.mgu</code>), los audios (m4a, mp3, mp4) y la tablatura en foto.
+      De la base salen el tono, el tempo, el compás y el cifrado; los audios
+      se escuchan acá y se pueden importar como frases. La app solo lee esa
+      carpeta: nunca escribe ahí.
+      <span id="canciones-estado"></span>
+    </p>
+  </section>
+
+  <div id="canciones-contenido"></div>
 
 </main>
 

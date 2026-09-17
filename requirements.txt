@@ -3,3 +3,7 @@ numpy>=1.26        # cálculo numérico: YIN, RMS, buffers de audio
 sounddevice>=0.4   # captura de audio del micrófono (envuelve PortAudio)
 rich>=13.0         # pantalla en terminal con colores y refresco en vivo
 pytest>=8.0        # tests unitarios
+
+# Opcionales. La app anda sin ellas y dice como instalarlas cuando hacen falta:
+#   pypdf         para leer apuntes de clase en PDF          pip install pypdf
+#   pillow-heif   para mostrar fotos .HEIC (iPhone) en Canciones   pip install pillow-heif

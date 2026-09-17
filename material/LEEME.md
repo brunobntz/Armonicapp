@@ -17,6 +17,14 @@ en tu máquina. Solo se versiona este LEEME.
 4. **Prioridades pedagógicas** — para que las reglas de fortalezas y
    puntos a trabajar del resumen de sesión digan algo útil.
 
+## Canciones
+
+Una carpeta por canción adentro de `canciones/`, con el nombre de la
+canción, y adentro lo que te manden: la base de Band-in-a-Box (`.sgu` o
+`.mgu`), los audios (m4a, mp3, mp4) y la tablatura en foto. La solapa
+Canciones la lee de ahí. Las fotos `.HEIC` se convierten a JPG en
+`_cache/`, nunca adentro de la carpeta de la canción.
+
 ## Criterio
 
 Si algo de este material contradice las tablas ya verificadas del proyecto,
