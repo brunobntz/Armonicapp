@@ -172,6 +172,7 @@ def ficha(base, tonalidad_armonica=None):
         "vueltas": base.vueltas,
         "compases_de_cambio": base.compases_de_cambio(),
         "cifrado": compases,
+        "hechos": hechos_de_la_base(base),
         "tiene_melodia": bool(base.melodia),
         "melodia_midi": melodia_midi,
         "avisos": list(base.avisos),
@@ -300,3 +301,95 @@ def melodia_en_tablatura(base, tonalidad_armonica):
         "fuera": fuera,
         "compases": [{"compas": c, "tabs": por_compas[c]} for c in sorted(por_compas)],
     }
+
+
+# =============================================================================
+# Los hechos de una base: lo que se puede contar del cifrado sin opinar
+# =============================================================================
+
+ESCALA_MAYOR = [0, 2, 4, 5, 7, 9, 11]
+ESCALA_MENOR = [0, 2, 3, 5, 7, 8, 10]
+
+
+def hechos_de_la_base(base):
+    """
+    Lo que se puede decir de una base mirando solo su cifrado: cuántos
+    acordes distintos, cuántos compases con más de uno, dónde hay cadencias
+    ii-V-I o V-I (un acorde dominante que resuelve una quinta abajo), y qué
+    acordes tienen la raíz fuera de la tonalidad. Es la capa de hechos; la
+    interpretación (la forma, cómo pensar cada acorde) es del coach.
+    """
+    acordes = list(base.acordes)
+    nombres = [a.nombre() for a in acordes]
+    distintos = []
+    for nombre in nombres:
+        if nombre not in distintos:
+            distintos.append(nombre)
+    por_compas = {}
+    for a in acordes:
+        por_compas[a.compas] = por_compas.get(a.compas, 0) + 1
+
+    # La base da la vuelta: el ultimo acorde resuelve en el primero (el
+    # turnaround del blues, C7 a F7), asi que se mira tambien ese par.
+    cadencias = []
+    cantidad = len(acordes)
+    for indice in range(1, cantidad + (1 if cantidad > 1 else 0)):
+        b, c = acordes[indice - 1], acordes[indice % cantidad]
+        if not _es_dominante(b) or (b.clase_raiz() - c.clase_raiz()) % 12 != 7:
+            continue
+        a = acordes[indice - 2] if indice >= 2 else None
+        if a is not None and _es_menor(a) and (a.clase_raiz() - c.clase_raiz()) % 12 == 2:
+            cadencias.append({"tipo": "ii-V-I", "a": c.raiz, "compas": c.compas,
+                              "acordes": f"{a.nombre()} {b.nombre()} {c.nombre()}"})
+        else:
+            cadencias.append({"tipo": "V-I", "a": c.raiz, "compas": c.compas,
+                              "acordes": f"{b.nombre()} {c.nombre()}"})
+
+    tonica = notas.nombre_a_midi(base.tonalidad + "4") % 12
+    escala = ESCALA_MENOR if base.modo == "menor" else ESCALA_MAYOR
+    diatonicas = {(tonica + grado) % 12 for grado in escala}
+    fuera = []
+    for a in acordes:
+        if a.clase_raiz() not in diatonicas and a.nombre() not in fuera:
+            fuera.append(a.nombre())
+
+    return {
+        "tonalidad": f"{base.tonalidad} {base.modo}",
+        "compases": base.compases,
+        "acordes_distintos": len(distintos),
+        "lista_acordes": distintos,
+        "compases_con_varios": sum(1 for cuantos in por_compas.values() if cuantos > 1),
+        "cadencias": cadencias,
+        "fuera_de_la_tonalidad": fuera,
+    }
+
+
+def _es_dominante(acorde):
+    intervalos = acorde.intervalos()
+    return 4 in intervalos and 10 in intervalos
+
+
+def _es_menor(acorde):
+    return 3 in acorde.intervalos()
+
+
+def texto_de_los_hechos(hechos):
+    """Una línea para la pantalla, con los hechos y nada más."""
+    partes = [
+        hechos["tonalidad"],
+        f"{hechos['compases']} compases, {hechos['acordes_distintos']} acordes distintos"
+        + (f", {hechos['compases_con_varios']} compases con más de un acorde"
+           if hechos["compases_con_varios"] else ""),
+    ]
+    ii_v_i = [c for c in hechos["cadencias"] if c["tipo"] == "ii-V-I"]
+    v_i = [c for c in hechos["cadencias"] if c["tipo"] == "V-I"]
+    if ii_v_i:
+        partes.append("ii-V-I " + ", ".join(
+            f"a {c['a']} en el compás {c['compas']} ({c['acordes']})" for c in ii_v_i[:4])
+            + (" y más" if len(ii_v_i) > 4 else ""))
+    if v_i:
+        partes.append("V-I " + ", ".join(
+            f"a {c['a']} en el {c['compas']}" for c in v_i[:4]) + (" y más" if len(v_i) > 4 else ""))
+    if hechos["fuera_de_la_tonalidad"]:
+        partes.append("con la raíz fuera de la tonalidad: " + ", ".join(hechos["fuera_de_la_tonalidad"]))
+    return " · ".join(partes)

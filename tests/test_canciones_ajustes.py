@@ -73,13 +73,13 @@ def test_los_ajustes_de_una_cancion_traen_los_valores_por_defecto(tmp_path):
     # Sin nada guardado: el primer audio (en orden alfabético) y dos compases.
     ajustes = canciones_ajustes.de_la_cancion(cancion, {})
     assert ajustes == {"audio": "base.wav", "compas1_seg": 4.0, "compas1_medido": False,
-                       "compas1_origen": "supuesto"}
+                       "compas1_origen": "supuesto", "explicacion": None}
 
     # Con algo guardado, manda lo guardado.
     guardados = {"Georgia": {"audio": "con el profe.m4a", "compas1_seg": 3.5}}
     ajustes = canciones_ajustes.de_la_cancion(cancion, guardados)
     assert ajustes == {"audio": "con el profe.m4a", "compas1_seg": 3.5, "compas1_medido": True,
-                       "compas1_origen": "marcado"}
+                       "compas1_origen": "marcado", "explicacion": None}
 
     # Si lo midio la app en el audio, lo dice.
     guardados = {"Georgia": {"compas1_seg": 4.0, "compas1_origen": "audio"}}

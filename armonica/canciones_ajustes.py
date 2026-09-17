@@ -54,6 +54,10 @@ def guardar(nombre, ajustes, carpeta=None):
     limpios = {}
     if "audio" in ajustes:
         limpios["audio"] = str(ajustes["audio"] or "")
+    if "explicacion" in ajustes:
+        # Lo que el coach dijo de la base, con fecha y proveedor; None la borra.
+        valor = ajustes["explicacion"]
+        limpios["explicacion"] = dict(valor) if isinstance(valor, dict) else None
     if "compas1_origen" in ajustes:
         # De dónde salió el compás 1: "audio" (lo midió la app escuchando
         # dónde entra el bajo) o "marcado" (lo marcó el usuario).
@@ -111,4 +115,5 @@ def de_la_cancion(cancion, todos=None):
     if not medido:
         compas1 = compas1_por_defecto(cancion.base)
     return {"audio": audio, "compas1_seg": compas1, "compas1_medido": medido,
-            "compas1_origen": origen if medido else "supuesto"}
+            "compas1_origen": origen if medido else "supuesto",
+            "explicacion": guardados.get("explicacion") or None}

@@ -1344,6 +1344,13 @@ table.guias tr.esta td { color: var(--cobre); }
 .reproductor-base button.chico { padding: 6px 12px; font-size: 13px; }
 .reproductor-base .nota-fuente { flex-basis: 100%; }
 
+/* Que dice la base: los hechos y la explicacion del coach. */
+.explicacion-base { margin: 10px 0 4px; }
+.explicacion-base .hechos-base { cursor: help; }
+.explicacion-base .texto-coach { margin: 8px 0; font-size: 15px; line-height: 1.55; }
+.explicacion-base .texto-coach p { margin: 0 0 8px; }
+.explicacion-base .controles { margin-top: 4px; }
+
 /* Lo que esta sonando: en lavanda, el color de "donde estas ahora", igual
  * que la aguja del bend. El cobre queda para los cambios de acorde. */
 .cifrado .compas.sonando { border-color: var(--aguja); background: var(--panel-alto); }

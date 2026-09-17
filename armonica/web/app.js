@@ -2657,6 +2657,7 @@ async function cargarCanciones() {
       f.avisos.forEach((aviso) => { html += '<div class="aviso">' + escapar(aviso) + "</div>"; });
       html += htmlDelReproductorDeBase(f, { conPracticar: true, cancion: cancion });
       html += dibujarCifrado(f);
+      html += htmlDeLaExplicacion(cancion, datos);
     }
 
     // --- Las fotos: la tablatura del profe, una al lado de la otra ---
@@ -2715,6 +2716,13 @@ async function cargarCanciones() {
 
   contenedor.innerHTML = html;
 
+  contenedor.querySelectorAll("button[data-explicar]").forEach((boton) => {
+    boton.addEventListener("click", () => explicarBase(boton.dataset.explicar, boton, false));
+  });
+  contenedor.querySelectorAll("button[data-explicar-borrar]").forEach((boton) => {
+    boton.addEventListener("click", () => explicarBase(boton.dataset.explicarBorrar, boton, true));
+  });
+
   contenedor.querySelectorAll("button[data-importar]").forEach((boton) => {
     boton.addEventListener("click", () =>
       importarAudioDeCancion(boton.closest(".cancion").dataset.cancion, boton.dataset.importar));
@@ -2734,6 +2742,88 @@ async function cargarCanciones() {
       ponerBaseEnVivo(cancion.nombre, cancion.ficha, cancion);
       irASolapa("vivo");
     });
+  });
+}
+
+
+/* Que dice la base: una linea de hechos que la app conto sola (cadencias,
+ * acordes fuera de la tonalidad) y, debajo, la explicacion del coach si la
+ * pediste. La explicacion es interpretacion, y se dice de quien es. */
+function htmlDeLaExplicacion(cancion, datos) {
+  const hechos = cancion.ficha.hechos;
+  let html = '<div class="explicacion-base">';
+  if (hechos) {
+    html += '<p class="ayuda hechos-base" title="contado por la app a partir del cifrado">' +
+      escapar(textoDeLosHechos(hechos)) + "</p>";
+  }
+  const e = cancion.ajustes && cancion.ajustes.explicacion;
+  const coachActivo = datos.coach && datos.coach.disponible;
+  if (e && e.texto) {
+    html += '<div class="texto-coach">' +
+      e.texto.split(/\n\s*\n/).map((p) => "<p>" + escapar(p.trim()) + "</p>").join("") + "</div>";
+    html += '<p class="ayuda">Lo dijo el coach (' + escapar(nombreDelProveedor(e.proveedor)) +
+      ", " + escapar((e.fecha || "").slice(0, 10)) + "): es su lectura del cifrado, no una medición.</p>";
+  }
+  html += '<div class="controles">';
+  if (coachActivo) {
+    html += '<button class="secundario chico" data-explicar="' + escapar(cancion.nombre) + '">' +
+      (e && e.texto ? "Que el coach la vuelva a explicar" : "Que el coach explique la base") + "</button>";
+    if (e && e.texto) {
+      html += '<button class="secundario chico" data-explicar-borrar="' + escapar(cancion.nombre) + '">Borrar</button>';
+    }
+    html += '<span class="ayuda">' + (datos.sale_de_la_maquina
+      ? "El cifrado se le manda al modelo: con " + escapar(nombreDelProveedor(datos.coach.proveedor)) +
+        " sale de tu máquina. Con Ollama, no."
+      : "El cifrado se le manda al modelo local: no sale de tu máquina.") + "</span>";
+  } else if (!(e && e.texto)) {
+    html += "<span class='ayuda'>Con el coach activo (mirá Ajustes), un botón acá le pide que " +
+      "explique la base: la forma, las cadencias, dónde apuntar las guías.</span>";
+  }
+  html += "</div></div>";
+  return html;
+}
+
+
+function textoDeLosHechos(h) {
+  const partes = [h.tonalidad,
+    h.compases + " compases, " + h.acordes_distintos + " acordes distintos" +
+    (h.compases_con_varios ? ", " + h.compases_con_varios + " compases con más de un acorde" : "")];
+  const iiVI = h.cadencias.filter((c) => c.tipo === "ii-V-I");
+  const VI = h.cadencias.filter((c) => c.tipo === "V-I");
+  if (iiVI.length) {
+    partes.push("ii-V-I " + iiVI.slice(0, 4).map((c) => "a " + c.a + " en el compás " + c.compas +
+      " (" + c.acordes + ")").join(", ") + (iiVI.length > 4 ? " y más" : ""));
+  }
+  if (VI.length) {
+    partes.push("V-I " + VI.slice(0, 4).map((c) => "a " + c.a + " en el " + c.compas).join(", ") +
+      (VI.length > 4 ? " y más" : ""));
+  }
+  if (h.fuera_de_la_tonalidad.length) {
+    partes.push("con la raíz fuera de la tonalidad: " + h.fuera_de_la_tonalidad.join(", "));
+  }
+  return partes.join(" · ");
+}
+
+
+async function explicarBase(nombre, boton, borrar) {
+  boton.disabled = true;
+  if (!borrar) boton.textContent = "Pensando...";
+  const respuesta = await pedir("/api/canciones/explicar", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cancion: nombre, borrar: !!borrar }),
+  });
+  if (!respuesta.ok) {
+    boton.disabled = false;
+    boton.textContent = "Que el coach explique la base";
+    alert(respuesta.motivo || "el coach no contestó");
+    return;
+  }
+  // Se vuelve a dibujar la solapa entera: la explicacion vive en los ajustes.
+  const abiertos = [...document.querySelectorAll("#canciones-contenido details.bloque")]
+    .map((d) => d.open);
+  await cargarCanciones();
+  document.querySelectorAll("#canciones-contenido details.bloque").forEach((d, i) => {
+    if (abiertos[i] !== undefined) d.open = abiertos[i];
   });
 }
 

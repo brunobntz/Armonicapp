@@ -251,3 +251,32 @@ def test_una_respuesta_vacia_es_un_error_y_no_un_texto_vacio(sin_entorno, tmp_pa
     http_falso["respuesta"] = {"message": {"content": "   "}}
     with pytest.raises(coach.CoachNoDisponible):
         coach._pedir("s", "u", ruta)
+
+
+def test_el_prompt_de_la_base_lleva_el_cifrado_y_los_hechos():
+    """El coach recibe el cifrado compás por compás y lo que la app contó."""
+    ficha = {
+        "tonalidad": "F", "modo": "mayor", "bpm": 65, "pulsos_por_compas": 4,
+        "con_swing": True, "coro_desde": 1, "coro_hasta": 2,
+        "hechos": {"cadencias": [{"tipo": "ii-V-I", "a": "F", "compas": 2}]},
+        "cifrado": [{"compas": 1, "acordes": [{"nombre": "Gm7"}, {"nombre": "C7"}]},
+                    {"compas": 2, "acordes": [{"nombre": "FMaj7"}]}],
+    }
+    prompt = coach.prompt_de_base("Georgia", ficha, "C")
+    assert "1: Gm7 C7" in prompt and "2: FMaj7" in prompt
+    assert "ii-V-I" in prompt
+    assert "no agregues ni cambies ninguno" in prompt
+    assert '"armonica_del_alumno": "C"' in prompt
+
+
+def test_explicar_la_base_pasa_por_pedir(monkeypatch):
+    recibido = {}
+
+    def falsa(sistema, usuario, ruta_env=None):
+        recibido["sistema"], recibido["usuario"] = sistema, usuario
+        return "Es un blues de doce."
+
+    monkeypatch.setattr(coach, "_pedir", falsa)
+    assert coach.explicar_base("Blues", {"cifrado": [], "hechos": {}}, "C") == "Es un blues de doce."
+    assert recibido["sistema"] == coach.SISTEMA
+    assert "Blues" in recibido["usuario"]

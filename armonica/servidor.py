@@ -40,6 +40,7 @@ frena a esperar al que consume.
 """
 
 import io
+from datetime import datetime
 import json
 import mimetypes
 import os
@@ -1193,6 +1194,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._renombrar_lista(cuerpo))
         if self.path == "/api/canciones/ajustes":
             return self._responder_json(self._ajustar_cancion(cuerpo))
+        if self.path == "/api/canciones/explicar":
+            return self._responder_json(self._explicar_cancion(cuerpo))
         if self.path == "/api/listas/borrar":
             return self._responder_json(self._borrar_lista(cuerpo))
         if self.path == "/api/configuracion":
@@ -2273,8 +2276,13 @@ class Manejador(SimpleHTTPRequestHandler):
         carpeta = canciones.carpeta_de_canciones()
         lista = canciones.listar(carpeta)
         ajustes = canciones_ajustes.cargar()
+        estado_coach = coach.estado()
         return {
             "ok": True,
+            "coach": estado_coach,
+            # Para explicar la base, el cifrado se le manda al modelo: con uno
+            # local no sale de la maquina; con Claude o ChatGPT, si.
+            "sale_de_la_maquina": estado_coach["proveedor"] != "ollama",
             "existe": os.path.isdir(carpeta),
             "origen": "material" if carpeta == canciones.CARPETA_POR_DEFECTO else "configurada",
             "tonalidad": self.estado.tonalidad,
@@ -2311,6 +2319,37 @@ class Manejador(SimpleHTTPRequestHandler):
             "compas1_origen": "audio" if resultado.redondeado else "audio aproximado",
         })
         return canciones_ajustes.de_la_cancion(cancion)
+
+    def _explicar_cancion(self, peticion):
+        """
+        El coach explica la base de una cancion a partir de su cifrado, y la
+        explicacion queda guardada con los ajustes de la cancion para
+        mostrarla sin volver a llamar. Con "borrar" se saca.
+        """
+        peticion = peticion or {}
+        nombre = (peticion.get("cancion") or "").strip()
+        cancion = next((c for c in canciones.listar() if c.nombre == nombre), None)
+        if cancion is None:
+            return {"ok": False, "motivo": "esa cancion no esta en la carpeta"}
+        if peticion.get("borrar"):
+            canciones_ajustes.guardar(nombre, {"explicacion": None})
+            return {"ok": True, "explicacion": None}
+        if cancion.base is None:
+            return {"ok": False, "motivo": "esa cancion no tiene una base que explicar"}
+        ficha = canciones.ficha(cancion.base, self.estado.tonalidad)
+        try:
+            texto = coach.explicar_base(nombre, ficha, self.estado.tonalidad)
+        except coach.CoachNoDisponible as error:
+            return {"ok": False, "motivo": str(error)}
+        estado_coach = coach.estado()
+        explicacion = {
+            "texto": texto.strip(),
+            "proveedor": estado_coach["proveedor"],
+            "modelo": estado_coach["modelo"],
+            "fecha": datetime.now().isoformat(timespec="seconds"),
+        }
+        canciones_ajustes.guardar(nombre, {"explicacion": explicacion})
+        return {"ok": True, "explicacion": explicacion}
 
     def _ajustar_cancion(self, peticion):
         """

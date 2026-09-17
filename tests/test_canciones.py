@@ -320,3 +320,52 @@ def test_la_melodia_cruda_viaja_para_el_reproductor():
     base = bandinabox.interpretar(bandinabox.escribir(blues_en_fa(bpm=120, melodia=melodia)))
     ficha = canciones.ficha(base, None)
     assert ficha["melodia_midi"] == [[2.0, 0.5, 69]]
+
+
+# =============================================================================
+# Los hechos de la base
+# =============================================================================
+
+def test_los_hechos_del_blues_en_fa():
+    """
+    F7 Bb7 F7 F7 Bb7 Bb7 F7 F7 C7 Bb7 F7 C7: tres acordes distintos, un
+    solo acorde por compás, y las raíces todas en Fa mayor. Cadencias V-I:
+    F7 a Bb7 en el 2 y en el 5 (en el blues el I es dominante y resuelve al
+    IV una quinta abajo: la regla es esa y la app la aplica sin opinar), y
+    C7 a F7 del compás 12 al 1, el turnaround, porque la base da la vuelta.
+    """
+    base = bandinabox.interpretar(bandinabox.escribir(blues_en_fa()))
+    hechos = canciones.hechos_de_la_base(base)
+    assert hechos["tonalidad"] == "F mayor"
+    assert hechos["acordes_distintos"] == 3
+    assert hechos["lista_acordes"] == ["F7", "Bb7", "C7"]
+    assert hechos["compases_con_varios"] == 0
+    assert [(c["tipo"], c["a"], c["compas"]) for c in hechos["cadencias"]] == [
+        ("V-I", "Bb", 2), ("V-I", "Bb", 5), ("V-I", "F", 1)]
+    assert hechos["fuera_de_la_tonalidad"] == []
+    assert "V-I a Bb en el 2, a Bb en el 5, a F en el 1" in canciones.texto_de_los_hechos(hechos)
+
+
+def test_un_ii_v_i_y_un_acorde_fuera_de_la_tonalidad():
+    """Gm7 C7 FMaj7 es un ii-V-I a Fa; un Eb7 tiene la raíz fuera de Fa mayor."""
+    base = blues_en_fa()
+    base.acordes = [
+        bandinabox.Acorde(1, 1, "G", "m7", numero_tipo=19),
+        bandinabox.Acorde(2, 1, "C", "7", numero_tipo=64),
+        bandinabox.Acorde(3, 1, "F", "Maj7", numero_tipo=6),
+        bandinabox.Acorde(3, 3, "Eb", "7", numero_tipo=64),
+    ]
+    base.compases = 3
+    hechos = canciones.hechos_de_la_base(bandinabox.interpretar(bandinabox.escribir(base)))
+    assert hechos["cadencias"] == [{"tipo": "ii-V-I", "a": "F", "compas": 3,
+                                    "acordes": "Gm7 C7 FMaj7"}]
+    assert hechos["fuera_de_la_tonalidad"] == ["Eb7"]
+    assert hechos["compases_con_varios"] == 1
+    texto = canciones.texto_de_los_hechos(hechos)
+    assert "ii-V-I a F en el compás 3 (Gm7 C7 FMaj7)" in texto
+    assert "fuera de la tonalidad: Eb7" in texto
+
+
+def test_la_ficha_trae_los_hechos(carpeta):
+    ficha = canciones.listar(carpeta)[1].como_diccionario("C")["ficha"]
+    assert ficha["hechos"]["acordes_distintos"] == 3

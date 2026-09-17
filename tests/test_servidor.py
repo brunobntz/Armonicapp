@@ -2670,7 +2670,8 @@ def test_los_ajustes_de_la_cancion_viajan_y_se_guardan(servidor_andando, carpeta
     georgia = traer_json(servidor_andando, "/api/canciones")["canciones"][0]
     # Sin nada guardado: el unico audio, y dos compases de conteo a 65 BPM.
     assert georgia["ajustes"] == {"audio": "base.m4a", "compas1_seg": pytest.approx(7.385, abs=0.001),
-                                  "compas1_medido": False, "compas1_origen": "supuesto"}
+                                  "compas1_medido": False, "compas1_origen": "supuesto",
+                                  "explicacion": None}
 
     respuesta = mandar(servidor_andando, "/api/canciones/ajustes",
                        {"cancion": "Georgia", "compas1_seg": 7.41})
@@ -2721,4 +2722,43 @@ def test_el_compas_uno_se_mide_en_el_audio_la_primera_vez(servidor_andando, carp
     mandar(servidor_andando, "/api/canciones/ajustes", {"cancion": "Georgia", "compas1_seg": 7.38})
     georgia = traer_json(servidor_andando, "/api/canciones")["canciones"][0]
     assert georgia["ajustes"] == {"audio": "base.m4a", "compas1_seg": 7.38,
-                                  "compas1_medido": True, "compas1_origen": "marcado"}
+                                  "compas1_medido": True, "compas1_origen": "marcado",
+                                  "explicacion": None}
+
+
+def test_el_coach_explica_la_base_y_queda_guardada(servidor_andando, carpeta_de_canciones,
+                                                    tmp_path, monkeypatch):
+    """
+    La explicacion se pide una vez y queda con los ajustes de la cancion;
+    la lista la trae sin volver a llamar al modelo. Borrar la saca.
+    """
+    from armonica import canciones_ajustes
+    monkeypatch.setattr(canciones_ajustes, "CARPETA_POR_DEFECTO", str(tmp_path / "_app"))
+    recibido = {}
+
+    def falsa(sistema, usuario, ruta_env=None):
+        recibido["usuario"] = usuario
+        return "Es un blues de doce en Fa.\n\nApunta a la 3a en cada cambio."
+
+    monkeypatch.setattr(coach, "_pedir", falsa)
+    monkeypatch.setattr(coach, "estado", lambda ruta_env=None: {
+        "disponible": True, "motivo": "", "proveedor": "ollama", "modelo": "qwen"})
+
+    respuesta = mandar(servidor_andando, "/api/canciones/explicar", {"cancion": "Georgia"})
+    assert respuesta["ok"] is True
+    assert respuesta["explicacion"]["texto"].startswith("Es un blues")
+    assert respuesta["explicacion"]["proveedor"] == "ollama"
+    assert "F7" in recibido["usuario"]
+
+    datos = traer_json(servidor_andando, "/api/canciones")
+    assert datos["coach"]["disponible"] is True
+    assert datos["sale_de_la_maquina"] is False
+    assert datos["canciones"][0]["ajustes"]["explicacion"]["texto"].startswith("Es un blues")
+    assert datos["canciones"][0]["ficha"]["hechos"]["acordes_distintos"] == 3
+
+    assert mandar(servidor_andando, "/api/canciones/explicar",
+                  {"cancion": "Georgia", "borrar": True})["ok"] is True
+    datos = traer_json(servidor_andando, "/api/canciones")
+    assert datos["canciones"][0]["ajustes"]["explicacion"] is None
+
+    assert mandar(servidor_andando, "/api/canciones/explicar", {"cancion": "otra"})["ok"] is False

@@ -459,6 +459,17 @@ un Em7b5. Mientras suena la base, la línea del acorde que suena se agranda
 un poco y el acorde que viene queda en lavanda tenue, para anticiparlo. La
 casilla "notas" pliega las líneas cuando querés el cifrado limpio.
 
+**Qué dice la base.** Debajo del cifrado, una línea de hechos que la app
+cuenta sola: tono, cuántos acordes distintos, cuántos compases con más de
+uno, dónde hay ii-V-I o V-I (un dominante que resuelve una quinta abajo,
+que en el blues incluye el I7 yendo al IV7) y qué acordes tienen la raíz
+fuera de la tonalidad. Y un botón para que **el coach explique la base**:
+la forma, cómo pensar los acordes que se salen, dónde apuntar las guías.
+Recibe el cifrado y esos hechos, y nada más; la explicación queda guardada
+con la canción y se muestra sin volver a llamar, con quién la dijo y
+cuándo, porque es su lectura del cifrado, no una medición. Aviso igual que
+con el plan: con Ollama el cifrado no sale de tu máquina, con Claude sí.
+
 **Practicar sobre la base.** El botón "Practicar sobre esta base" de la
 ficha la lleva a **En vivo**: arriba queda la base con sus controles y su
 cifrado plegado, y el acorde que suena se ve grande con sus notas guía y
@@ -631,7 +642,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 913 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 919 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

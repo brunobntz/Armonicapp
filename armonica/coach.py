@@ -342,13 +342,54 @@ def prompt_de_teoria(teoria, pregunta):
     )
 
 
+def prompt_de_base(nombre, ficha, tonalidad_armonica):
+    """
+    El pedido para explicar la base de una canción: el cifrado compás por
+    compás y los hechos que la app ya contó (cadencias, acordes fuera de la
+    tonalidad). El coach interpreta: la forma, cómo pensar cada acorde,
+    dónde apuntar las notas guía. No agrega acordes que no estén.
+    """
+    cifrado = [
+        f"{compas['compas']}: " + " ".join(a["nombre"] for a in compas["acordes"])
+        for compas in ficha.get("cifrado", []) if compas["acordes"]
+    ]
+    datos = {
+        "cancion": nombre,
+        "tonalidad": ficha.get("tonalidad"),
+        "modo": ficha.get("modo"),
+        "bpm": ficha.get("bpm"),
+        "compas": f"{ficha.get('pulsos_por_compas')}/4",
+        "con_swing": ficha.get("con_swing"),
+        "coro": f"del compás {ficha.get('coro_desde')} al {ficha.get('coro_hasta')}",
+        "armonica_del_alumno": tonalidad_armonica,
+        "hechos_contados_por_la_app": ficha.get("hechos"),
+        "cifrado": cifrado,
+    }
+    return (
+        "El alumno va a practicar sobre esta base de Band-in-a-Box. Esto es lo "
+        "que la app leyó del archivo, en JSON:\n\n"
+        + json.dumps(datos, ensure_ascii=False, indent=1) +
+        "\n\nExplicale la base como un profe antes de tocarla: qué forma tiene, "
+        "cómo se agrupan los acordes (las cadencias que la app encontró y las "
+        "que veas vos), cómo pensar los acordes que se salen de la tonalidad, "
+        "y en qué compases conviene apuntar a las notas guía. Trabajá solo con "
+        "los acordes del cifrado: no agregues ni cambies ninguno. Dos o tres "
+        "párrafos cortos, sin listas ni títulos."
+    )
+
+
 # =============================================================================
-# Las dos preguntas
+# Las preguntas
 # =============================================================================
 
 def explicar_devolucion(comparacion, ruta_env=None, contexto=""):
     """Una devolución en palabras, a partir de la comparación ya medida."""
     return _pedir(SISTEMA, prompt_de_devolucion(comparacion, contexto), ruta_env)
+
+
+def explicar_base(nombre, ficha, tonalidad_armonica, ruta_env=None):
+    """La explicación de una base de Band-in-a-Box, a partir de su cifrado."""
+    return _pedir(SISTEMA, prompt_de_base(nombre, ficha, tonalidad_armonica), ruta_env)
 
 
 def preguntar_teoria(teoria, pregunta, ruta_env=None):

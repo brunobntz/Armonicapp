@@ -2,7 +2,7 @@
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
 la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-17:
-repo público en GitHub, 913 tests, todo lo listado en el README está hecho.
+repo público en GitHub, 919 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 
@@ -60,7 +60,10 @@ repo público en GitHub, 913 tests, todo lo listado en el README está hecho.
      y agujero más cómodo bajo cada acorde, guías en cobre, hover con el
      porqué y las notas a evitar (regla: medio tono arriba de una nota del
      acorde), zoom del acorde que suena y el que viene en lavanda. Y la
-     tablatura en una ventana aparte (`tablatura.html`).
+     tablatura en una ventana aparte (`tablatura.html`). Y "qué dice la
+     base": hechos contados (`canciones.hechos_de_la_base`: cadencias,
+     acordes fuera de la tonalidad) más la explicación del coach a pedido
+     (`coach.explicar_base`), guardada en `_canciones.json`.
    - **Tocar sobre la base.** Hecho (2026-09-16): "Practicar sobre esta
      base" la lleva a En vivo; al grabar hay un compás de conteo, el acorde
      y sus notas guía se ven en pantalla y en el diagrama, la sesión se
