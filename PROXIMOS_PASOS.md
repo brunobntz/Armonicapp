@@ -2,7 +2,7 @@
 
 Para arrancar una sesión nueva desde acá. Leer primero `README.md` (qué hace
 la app) y `CONTRIBUTING.md` (las reglas de la casa). Estado al 2026-09-16:
-repo público en GitHub, 890 tests, todo lo listado en el README está hecho.
+repo público en GitHub, 889 tests, todo lo listado en el README está hecho.
 
 ## Cómo trabajamos
 

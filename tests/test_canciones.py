@@ -208,7 +208,7 @@ def test_la_ficha_trae_el_cifrado_compas_por_compas(carpeta):
     assert (bb7[0]["tiempo"], bb7[0]["nombre"], bb7[0]["familia"]) == (1, "Bb7", "dominante")
     assert ficha["compases_de_cambio"] == [2, 3, 5, 7, 9, 10, 11, 12]
     assert ficha["tiene_melodia"] is False
-    assert ficha["melodia"] is None
+    assert ficha["melodia_midi"] == []
 
 
 def test_la_melodia_sale_en_la_tablatura_de_la_armonica_elegida():
@@ -229,12 +229,14 @@ def test_la_melodia_sale_en_la_tablatura_de_la_armonica_elegida():
     assert resultado["notas"] == 3
 
 
-def test_sin_armonica_la_ficha_no_pasa_la_melodia():
+def test_la_ficha_no_manda_la_melodia_en_tablatura():
+    """La tablatura de una canción es la foto del profe; la melodía de la base
+    pasada a agujeros solo la muestra --base en la terminal."""
     melodia = [bandinabox.NotaDeMelodia(0.0, 0.5, 69, 90)]
     base = bandinabox.interpretar(bandinabox.escribir(blues_en_fa(melodia=melodia)))
-    ficha = canciones.ficha(base, None)
+    ficha = canciones.ficha(base, "C")
     assert ficha["tiene_melodia"] is True
-    assert ficha["melodia"] is None
+    assert "melodia" not in ficha
 
 
 def test_cada_acorde_de_la_ficha_trae_sus_notas_y_sus_guias(carpeta):

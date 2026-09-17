@@ -37,7 +37,7 @@ from armonica import (afinador, audio, exportacion, frases, mapeo, menu,
                       tablas, tonalidad as modulo_tonalidad, tono,
                       transcripcion)
 from armonica.consola import preparar_consola
-from armonica import bandinabox
+from armonica import bandinabox, canciones
 
 
 def transcribir_archivo(ruta, tonalidad, posicion=None, escala=None,
@@ -1182,19 +1182,12 @@ def modo_base(ruta, tonalidad_armonica):
     print()
     print(f"  MELODIA en armonica de {tonalidad_armonica} ({len(base.melodia)} notas)")
     print("  Un punto es una nota que esa armonica no tiene.")
-    tabla = mapeo.construir_tabla_inversa(tonalidad_armonica)
-    por_compas = {}
-    pulso = 60.0 / base.bpm
-    for nota in base.melodia:
-        compas = int(nota.inicio_seg // (pulso * base.pulsos_por_compas)) + 1
-        forma = tabla.get(nota.midi)
-        por_compas.setdefault(compas, []).append(forma.como_tab() if forma else "·")
-    fuera = sum(1 for tabs in por_compas.values() for t in tabs if t == "·")
-    if fuera:
-        print(f"  {fuera} de {len(base.melodia)} notas quedan fuera de esta armonica; "
+    melodia = canciones.melodia_en_tablatura(base, tonalidad_armonica)
+    if melodia["fuera"]:
+        print(f"  {melodia['fuera']} de {melodia['notas']} notas quedan fuera de esta armonica; "
               "proba con --tonalidad otra.")
-    for compas in sorted(por_compas):
-        print(f"  {compas:>3} | {' '.join(por_compas[compas])}")
+    for compas in melodia["compases"]:
+        print(f"  {compas['compas']:>3} | {' '.join(compas['tabs'])}")
     return 0
 
 

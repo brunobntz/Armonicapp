@@ -139,8 +139,8 @@ def ruta_de_archivo(cancion, nombre, carpeta=None):
 def ficha(base, tonalidad_armonica=None):
     """
     Lo que la pantalla muestra de una base: tono, tempo, compás, el cifrado
-    compás por compás y, si hay melodía y se sabe la armónica, la melodía en
-    tablatura de esa armónica. Todo ya calculado: el navegador solo dibuja.
+    compás por compás con las notas de cada acorde, y la melodía cruda para
+    el reproductor. Todo ya calculado: el navegador solo dibuja.
     """
     compases = []
     for numero in range(1, base.compases + 1):
@@ -150,11 +150,10 @@ def ficha(base, tonalidad_armonica=None):
             "acordes": [_acorde_para_la_pantalla(a, tonalidad_armonica) for a in acordes],
         })
 
-    melodia = None
-    if base.melodia and tonalidad_armonica:
-        melodia = melodia_en_tablatura(base, tonalidad_armonica)
-
     # La melodía cruda, en segundos y MIDI, para que el reproductor la toque.
+    # En tablatura no va: la tablatura de una canción es la foto del profe,
+    # y la melodía de la base pasada a agujeros la muestra `--base` en la
+    # terminal, para quien la quiera.
     melodia_midi = [[round(n.inicio_seg, 3), round(n.duracion_seg, 3), n.midi]
                     for n in base.melodia]
 
@@ -174,7 +173,6 @@ def ficha(base, tonalidad_armonica=None):
         "compases_de_cambio": base.compases_de_cambio(),
         "cifrado": compases,
         "tiene_melodia": bool(base.melodia),
-        "melodia": melodia,
         "melodia_midi": melodia_midi,
         "avisos": list(base.avisos),
     }

@@ -2660,8 +2660,13 @@ async function cargarCanciones() {
     }
 
     // --- Las fotos: la tablatura del profe, una al lado de la otra ---
+    html += "<h3>Tablatura y apuntes en foto</h3>";
+    if (!cancion.imagenes.length) {
+      html += '<p class="ayuda">Todavía no hay ninguna foto en la carpeta. Dejá ahí la ' +
+        "tablatura (jpg, png o HEIC del iPhone) y aparece acá; si hay varias, van una " +
+        "al lado de la otra.</p>";
+    }
     if (cancion.imagenes.length) {
-      html += "<h3>Tablatura y apuntes en foto</h3>";
       html += '<div class="cancion-fotos">';
       cancion.imagenes.forEach((nombre) => {
         const esHeic = /\.hei[cf]$/i.test(nombre);
@@ -2694,19 +2699,6 @@ async function cargarCanciones() {
     if (cancion.documentos.length) {
       html += '<p class="ayuda">También en la carpeta: ' +
         cancion.documentos.map(escapar).join(", ") + "</p>";
-    }
-
-    // --- La melodia en tablatura, plegada: la foto del profe manda ---
-    if (f && f.tiene_melodia && f.melodia) {
-      const m = f.melodia;
-      html += '<details class="cancion-melodia"><summary>La melodía de la base, en tu armónica en ' +
-        escapar(m.tonalidad_armonica) + " <small>" + m.notas + " notas" +
-        (m.fuera ? ", " + m.fuera + " que esa armónica no tiene (·)" : "") +
-        "</small></summary>";
-      html += '<div class="cancion-tabs">' + m.compases.map((c) =>
-        '<div class="compas-tab"><span class="numero">' + c.compas + "</span>" +
-        '<span class="tab-corta">' + escapar(c.tabs.join(" ")) + "</span></div>").join("") +
-        "</div></details>";
     }
 
     html += "</div>" + cerrar;

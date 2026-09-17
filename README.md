@@ -408,9 +408,10 @@ cambios marcados; los audios se escuchan ahí mismo y cada uno tiene
 "Importar como frases", que lo lleva por el mismo camino que un audio
 subido en Frases; las fotos se ven en la solapa, una al lado de la otra,
 y si son `.HEIC` del iPhone se convierten a JPG en `material/_cache/` con
-`pillow-heif`, que es opcional: sin instalarlo, la solapa dice cómo. Si la
-base trae melodía, la muestra pasada a la tablatura de la armónica que
-tenés puesta. Esa carpeta también es solo lectura, con su test.
+`pillow-heif`, que es opcional: sin instalarlo, la solapa dice cómo. La
+tablatura de una canción es esa foto: la melodía de la base pasada a
+agujeros solo la muestra `--base` en la terminal. Esa carpeta también es
+solo lectura, con su test.
 
 **Y la base se reproduce ahí mismo.** El archivo de Band-in-a-Box no trae
 audio, trae el cifrado; la app lo toca ella misma con Web Audio: un click
@@ -593,7 +594,7 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 python -m pytest -q
 ```
 
-Son 890 y no necesitan micrófono: el audio se genera, y la captura en vivo se
+Son 889 y no necesitan micrófono: el audio se genera, y la captura en vivo se
 prueba inyectando datos en la cola interna, que es exactamente lo que hace la
 placa de sonido.
 

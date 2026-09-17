@@ -1351,13 +1351,6 @@ table.guias tr.esta td { color: var(--cobre); }
 .sobre-la-base .nota-fuera { color: var(--tenue); }
 .sobre-la-base .compas-cambio td:first-child { color: var(--cobre); }
 
-.cancion-melodia { margin-top: 14px; }
-.cancion-melodia summary { cursor: pointer; font-size: 14px; }
-.cancion-melodia summary small { color: var(--tenue); margin-left: 6px; }
-.cancion-tabs { margin-top: 8px; }
-.compas-tab { display: flex; gap: 12px; padding: 3px 0; border-top: 1px solid var(--borde); }
-.compas-tab .numero { font-family: var(--mono); font-size: 12px; color: var(--tenue); min-width: 28px; text-align: right; }
-
 /* La cronologia: una fila por clase, que se abre al clickear. */
 .clase-fila {
   border-top: 1px solid var(--borde);
