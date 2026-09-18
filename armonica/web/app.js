@@ -3694,6 +3694,12 @@ function crearReproductorDeBase(ficha, avisos) {
     r.corriendo = true;
     audio.addEventListener("ended", () => { if (r.corriendo) r.parar(); });
     audio.addEventListener("error", () => {
+      // Parar hace `audio.src = ""`, y eso dispara este mismo evento: el
+      // navegador lo cuenta como "fuente no soportada". Si ya no estamos
+      // corriendo, o este audio ya no es el activo, fue un apagado a
+      // proposito y no un error. Sin esta guarda, cortar la practica
+      // mostraba el cartel de "No pude reproducir".
+      if (!r.corriendo || r._audio !== audio) return;
       r.parar();
       alert("No pude reproducir " + r.fuente + ". Probá con otro archivo, o con el sonido sintetizado.");
     });

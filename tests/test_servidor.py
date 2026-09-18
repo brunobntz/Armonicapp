@@ -102,6 +102,26 @@ def test_los_archivos_de_la_web_existen_en_el_disco():
         assert os.path.exists(os.path.join(servidor.CARPETA_WEB, archivo))
 
 
+def test_parar_la_base_no_muestra_el_cartel_de_no_pude_reproducir():
+    """
+    Cortar la practica sobre una base con audio mostraba "No pude reproducir
+    ...". No habia error: parar hace `audio.src = ""`, y el navegador dispara
+    el evento `error` del elemento (fuente no soportada). El manejador tiene
+    que ignorar el evento cuando el reproductor ya no corre o ese audio ya no
+    es el activo. No hay tests de JavaScript en el proyecto, asi que se
+    revisa el codigo, como con las aperturas de archivo en clases.py.
+    """
+    with open(os.path.join(servidor.CARPETA_WEB, "app.js"), encoding="utf-8") as archivo:
+        codigo = archivo.read()
+
+    # Desde el alert hacia atras hasta SU listener: hay otros manejadores de
+    # `error` en el archivo (el reproductor de tramos) y no son este.
+    alerta = codigo.index('alert("No pude reproducir')
+    inicio = codigo.rindex('addEventListener("error"', 0, alerta)
+    manejador = codigo[inicio:alerta]
+    assert "if (!r.corriendo || r._audio !== audio) return;" in manejador
+
+
 def test_la_ventana_de_la_tablatura_se_sirve(servidor_andando):
     """La pagina aparte con las fotos de una cancion, para tener al costado."""
     codigo, cuerpo = traer(servidor_andando, "/tablatura.html?cancion=Georgia")
