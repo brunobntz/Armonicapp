@@ -3005,6 +3005,53 @@ def test_medir_el_ruido_guarda_el_umbral(servidor_andando, tmp_path, monkeypatch
     assert ajustes.cargar(str(tmp_path / "ajustes.json"))["umbral"] == 0.006
 
 
+def test_un_doble_clic_en_medir_el_ruido_no_pisa_la_medicion(
+        servidor_andando, tmp_path, monkeypatch):
+    """
+    Si se pide medir mientras ya se está midiendo, el segundo pedido se
+    rechaza al instante y no toca la medición en curso: antes la reiniciaba,
+    y uno de los dos terminaba con un falso "No llegó audio del micrófono".
+    """
+    monkeypatch.setattr(servidor, "SEGUNDOS_DE_RUIDO", 0.5)
+    monkeypatch.setattr(config, "UMBRAL_VOLUMEN_RMS", config.UMBRAL_VOLUMEN_RMS)
+    estado = servidor.Manejador.estado
+    estado.escuchando = True
+
+    def microfono_falso():
+        fin = time.monotonic() + 1.5
+        while time.monotonic() < fin:
+            for volumen in (0.001, 0.002):
+                estado.anotar_volumen(volumen)
+            time.sleep(0.01)
+
+    primera = {}
+
+    def primer_pedido():
+        primera["respuesta"] = mandar(servidor_andando, "/api/medir-ruido")
+
+    hilo_microfono = threading.Thread(target=microfono_falso, daemon=True)
+    hilo_primero = threading.Thread(target=primer_pedido, daemon=True)
+    hilo_microfono.start()
+    hilo_primero.start()
+
+    # Se espera a que la primera medición haya empezado de verdad.
+    limite = time.monotonic() + 3
+    while estado._ruido is None and time.monotonic() < limite:
+        time.sleep(0.005)
+    assert estado._ruido is not None
+
+    segunda = mandar(servidor_andando, "/api/medir-ruido")
+    hilo_primero.join()
+    hilo_microfono.join()
+
+    assert segunda["ok"] is False
+    assert segunda["motivo"] == "Ya estoy midiendo."
+    assert primera["respuesta"]["ok"] is True
+    assert primera["respuesta"]["umbral"] == 0.006
+    assert config.UMBRAL_VOLUMEN_RMS == 0.006
+    assert ajustes.cargar(str(tmp_path / "ajustes.json"))["umbral"] == 0.006
+
+
 # (0.2, 0.3) daría un umbral de 0.9, válido pero sordo; (0.4, 0.5) daría 1.5,
 # que ajustes.json ni siquiera acepta.
 @pytest.mark.parametrize("volumenes", [(0.2, 0.3), (0.4, 0.5)])

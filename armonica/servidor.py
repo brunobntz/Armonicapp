@@ -284,8 +284,15 @@ class EstadoCompartido:
     # --- Medir el ruido, con el micrófono que ya está abierto ---
 
     def empezar_a_medir_ruido(self):
+        """
+        True si empezó a medir; False si ya había una medición en curso, que
+        no se toca (un segundo pedido no puede pisar la lista de la primera).
+        """
         with self._candado:
+            if self._ruido is not None:
+                return False
             self._ruido = []
+            return True
 
     def anotar_volumen(self, volumen):
         """Lo llama el hilo de audio en cada ventana; no hace nada si no se mide."""
@@ -2340,7 +2347,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return {"ok": False,
                     "motivo": "El micrófono no está abierto: elegí uno arriba y probá de nuevo."}
 
-        estado.empezar_a_medir_ruido()
+        if not estado.empezar_a_medir_ruido():
+            return {"ok": False, "motivo": "Ya estoy midiendo."}
         time.sleep(SEGUNDOS_DE_RUIDO)
         mediana, pico = microfono.resumen_de_ruido(estado.terminar_de_medir_ruido())
         if pico is None:
