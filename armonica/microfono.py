@@ -217,12 +217,18 @@ def medir_ruido_de_fondo(segundos=3.0, dispositivo=None):
     with CapturaMicrofono(dispositivo=dispositivo, guardar_audio=False) as captura:
         for _, ventana in captura.ventanas(tiempo_maximo_seg=segundos):
             niveles.append(audio.volumen_rms(ventana))
+    return resumen_de_ruido(niveles)
 
+
+def resumen_de_ruido(niveles):
+    """
+    (mediana, pico) de los volúmenes medidos en silencio, o (None, None) si
+    no llegó nada. Lo usan --calibrar y el botón Medir el ruido de Ajustes.
+    """
     if not niveles:
         return None, None
-
-    niveles.sort()
-    return niveles[len(niveles) // 2], niveles[-1]
+    ordenados = sorted(niveles)
+    return ordenados[len(ordenados) // 2], ordenados[-1]
 
 
 def umbral_sugerido(pico_de_ruido):

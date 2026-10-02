@@ -374,9 +374,8 @@
     <h2>El micrófono</h2>
     <p class="ayuda">
       Windows tiene siempre varias entradas y la que viene elegida rara vez es
-      la que querés: en esta computadora la predeterminada era el micrófono de
-      la cámara. Elegí una y soplá: la barra de abajo se tiene que mover. Si no
-      se mueve, probá con otra.
+      la que querés (a veces es la de la cámara). Elegí una y soplá: la barra
+      de abajo se tiene que mover. Si no se mueve, probá con otra.
     </p>
     <div class="controles">
       <select id="selector-microfono"></select>
@@ -385,6 +384,15 @@
     <div class="barra-nivel ancha"><div id="barra-nivel-ajustes"></div>
       <div id="marca-umbral-ajustes"></div>
     </div>
+    <div class="controles">
+      <button id="boton-medir-ruido" class="secundario">Medir el ruido</button>
+      <span id="resultado-ruido" class="ayuda"></span>
+    </div>
+    <p class="ayuda">
+      Medir el ruido son tres segundos en silencio: la app escucha tu
+      habitación y pone la rayita de la barra justo por encima. Lo que pasa la
+      rayita es armónica; lo de abajo, ruido.
+    </p>
   </section>
 
   <section>

@@ -14,6 +14,7 @@ import re
 import socket
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -2965,3 +2966,52 @@ def test_inicio_dice_la_version_y_si_es_la_instalada(servidor_andando):
     datos = traer_json(servidor_andando, "/api/inicio")
     assert datos["version"] == version.version()
     assert datos["empaquetada"] is False
+
+
+# =============================================================================
+# Medir el ruido
+# =============================================================================
+
+def test_medir_el_ruido_guarda_el_umbral(servidor_andando, tmp_path, monkeypatch):
+    """
+    Escucha lo que entra por el micrófono que ya está abierto (acá, un hilo
+    que hace de micrófono) y deja el umbral en tres veces el pico del ruido,
+    en config y en ajustes.json.
+    """
+    monkeypatch.setattr(servidor, "SEGUNDOS_DE_RUIDO", 0.3)
+    monkeypatch.setattr(config, "UMBRAL_VOLUMEN_RMS", config.UMBRAL_VOLUMEN_RMS)
+    estado = servidor.Manejador.estado
+    estado.escuchando = True
+
+    def microfono_falso():
+        fin = time.monotonic() + 1.0
+        while time.monotonic() < fin:
+            for volumen in (0.001, 0.002):
+                estado.anotar_volumen(volumen)
+            time.sleep(0.01)
+
+    hilo = threading.Thread(target=microfono_falso, daemon=True)
+    hilo.start()
+    respuesta = mandar(servidor_andando, "/api/medir-ruido")
+    hilo.join()
+
+    assert respuesta["ok"] is True
+    assert respuesta["pico"] == 0.002
+    assert respuesta["umbral"] == 0.006
+    assert config.UMBRAL_VOLUMEN_RMS == 0.006
+    assert ajustes.cargar(str(tmp_path / "ajustes.json"))["umbral"] == 0.006
+
+
+def test_sin_microfono_abierto_no_se_mide(servidor_andando):
+    servidor.Manejador.estado.escuchando = False
+    respuesta = mandar(servidor_andando, "/api/medir-ruido")
+    assert respuesta["ok"] is False
+    assert "micrófono" in respuesta["motivo"]
+
+
+def test_si_no_llega_audio_no_se_inventa_un_umbral(servidor_andando, monkeypatch):
+    monkeypatch.setattr(servidor, "SEGUNDOS_DE_RUIDO", 0.1)
+    servidor.Manejador.estado.escuchando = True
+    respuesta = mandar(servidor_andando, "/api/medir-ruido")
+    assert respuesta["ok"] is False
+    assert "audio" in respuesta["motivo"]

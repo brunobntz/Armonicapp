@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarTeoria();
   configurarAprendizaje();
   configurarDestinos();
+  configurarLaApp();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -1113,8 +1114,7 @@ function mostrarResumen(respuesta) {
 
   if (!datos.hay) {
     contenedor.innerHTML = '<div class="aviso">No se detectó ninguna nota. ' +
-      "Si el micrófono no engancha, corré <code>python main.py --calibrar</code> " +
-      "para medir el ruido de tu habitación.</div>";
+      "Si el micrófono no engancha, medí el ruido en <strong>Ajustes</strong>.</div>";
     seccion.hidden = false;
     return;
   }
@@ -2098,6 +2098,30 @@ async function guardarAjustes() {
   dibujarCorridaEnVivo(inicio.corrida);
   marcarUmbral();
   mostrarResultadoDeAjustes();
+}
+
+
+/* Medir el ruido: tres segundos en silencio, y el umbral queda justo por
+ * encima. Lo usan Ajustes y los primeros pasos; `donde` es el renglon donde
+ * se cuenta como salio. */
+async function medirRuido(donde) {
+  donde.textContent = "Midiendo: tres segundos en silencio\u2026";
+  const respuesta = await pedir("/api/medir-ruido", { method: "POST" });
+  if (!respuesta.ok) {
+    donde.textContent = respuesta.motivo;
+    return;
+  }
+  inicio.umbral_volumen = respuesta.umbral;
+  marcarUmbral();
+  donde.textContent = "Listo: la rayita qued\u00f3 justo encima del ruido de tu habitaci\u00f3n. " +
+    "Toc\u00e1 una nota: la barra la tiene que pasar.";
+}
+
+
+/* Los botones de Ajustes que no son elegir algo. */
+function configurarLaApp() {
+  document.getElementById("boton-medir-ruido").addEventListener("click", () =>
+    medirRuido(document.getElementById("resultado-ruido")));
 }
 
 

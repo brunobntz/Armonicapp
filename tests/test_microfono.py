@@ -323,3 +323,12 @@ def test_la_pantalla_se_dibuja_tambien_sin_nota_y_sin_escala():
     estado = pantalla.EstadoPantalla("G")
     consola = Console(file=open("nul", "w"), width=100)
     consola.print(pantalla.armar(estado))
+
+
+# =============================================================================
+# El resumen del ruido
+# =============================================================================
+
+def test_el_resumen_del_ruido_es_la_mediana_y_el_pico():
+    assert microfono.resumen_de_ruido([0.003, 0.001, 0.002]) == (0.002, 0.003)
+    assert microfono.resumen_de_ruido([]) == (None, None)

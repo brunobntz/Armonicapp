@@ -77,6 +77,9 @@ MAXIMO_SUBIDA_BYTES = 60 * 1024 * 1024
 INTENTOS_DE_MICROFONO = 5
 ESPERA_ENTRE_INTENTOS = 0.5
 
+# Cuánto escucha "Medir el ruido". Lo mismo que --calibrar.
+SEGUNDOS_DE_RUIDO = 3.0
+
 # Lo que se le dice al navegador cuando el archivo no se puede leer. El error
 # de audio.leer_wav nombra el archivo, que en la terminal es justo lo que
 # queres saber; acá ese archivo es un temporal con nombre inventado y decirlo
@@ -113,6 +116,10 @@ class EstadoCompartido:
         # Si el micrófono guardado en Ajustes no está conectado al arrancar,
         # se usa el de Windows y esto lo dice en Ajustes.
         self.aviso_microfono = ""
+
+        # Mientras se mide el ruido, el hilo de audio anota acá el volumen de
+        # cada ventana. None = no se está midiendo.
+        self._ruido = None
 
         # En que modo esta escuchando. Cambia SOLO lo que pasa al terminar:
         #   "sesion"     -> guarda la sesion en sesiones/
@@ -255,6 +262,23 @@ class EstadoCompartido:
                     1, config.VENTANAS_PARA_CONFIRMAR):
                 self.nota_actual = nota
                 self.cents = cents
+
+    # --- Medir el ruido, con el micrófono que ya está abierto ---
+
+    def empezar_a_medir_ruido(self):
+        with self._candado:
+            self._ruido = []
+
+    def anotar_volumen(self, volumen):
+        """Lo llama el hilo de audio en cada ventana; no hace nada si no se mide."""
+        with self._candado:
+            if self._ruido is not None:
+                self._ruido.append(volumen)
+
+    def terminar_de_medir_ruido(self):
+        with self._candado:
+            niveles, self._ruido = self._ruido or [], None
+        return niveles
 
     def reiniciar(self):
         with self._candado:
@@ -535,6 +559,7 @@ def _una_vuelta_de_microfono(estado, detener, tabla, microfono):
                 estado.grabacion_lista = True
 
             volumen = audio.volumen_rms(ventana)
+            estado.anotar_volumen(volumen)
 
             if volumen < config.UMBRAL_VOLUMEN_RMS:
                 frecuencia, confianza = None, 0.0
@@ -1256,6 +1281,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._borrar_lista(cuerpo))
         if self.path == "/api/configuracion":
             return self._responder_json(self._cambiar_configuracion(cuerpo))
+        if self.path == "/api/medir-ruido":
+            return self._responder_json(self._medir_ruido())
         self.send_error(404)
 
     def _leer_cuerpo(self):
@@ -2175,6 +2202,36 @@ class Manejador(SimpleHTTPRequestHandler):
         ajustes.guardar(cambios)
 
         return {"ok": True, "inicio": self._datos_iniciales()}
+
+    def _medir_ruido(self):
+        """
+        Lo de --calibrar, desde la pantalla: escucha SEGUNDOS_DE_RUIDO en
+        silencio con el micrófono que ya está abierto (abrir otro en el mismo
+        aparato puede fallar en Windows) y deja el umbral en tres veces el
+        pico del ruido. Queda en config para ya y en ajustes.json para la
+        próxima vez.
+        """
+        from armonica import microfono
+
+        estado = type(self).estado
+        if estado.grabando:
+            return {"ok": False, "motivo": "No se puede medir mientras grabás."}
+        if not estado.escuchando:
+            return {"ok": False,
+                    "motivo": "El micrófono no está abierto: elegí uno arriba y probá de nuevo."}
+
+        estado.empezar_a_medir_ruido()
+        time.sleep(SEGUNDOS_DE_RUIDO)
+        mediana, pico = microfono.resumen_de_ruido(estado.terminar_de_medir_ruido())
+        if pico is None:
+            return {"ok": False,
+                    "motivo": "No llegó audio del micrófono. Probá con otro."}
+
+        umbral = round(microfono.umbral_sugerido(pico), 4)
+        config.UMBRAL_VOLUMEN_RMS = umbral
+        ajustes.guardar({"umbral": umbral})
+        return {"ok": True, "umbral": umbral, "pico": round(pico, 4),
+                "mediana": round(mediana, 4)}
 
     def _mandar_audio_de_frase(self, consulta):
         """
