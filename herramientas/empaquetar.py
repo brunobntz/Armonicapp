@@ -472,6 +472,25 @@ def humo(programa=None, espera=30.0):
     print(f"  Prueba de humo de {version}: ok.")
 
 
+def instalador(programa=None):
+    """Compila empaquetado/armonica.iss con Inno Setup a dist/."""
+    programa = Path(programa or ARMADO)
+    iscc = buscar_iscc()
+    if iscc is None:
+        raise SystemExit("No encuentro Inno Setup (ISCC.exe). Se instala una vez con:\n"
+                         "    winget install --id JRSoftware.InnoSetup -e")
+    version = (programa / "app" / "VERSION").read_text(encoding="utf-8").strip()
+    DIST.mkdir(exist_ok=True)
+    subprocess.run([str(iscc), f"/DVersion={version}", f"/DArmado={programa}",
+                    f"/DEjemplos={EMPAQUETADO / 'ejemplos'}", f"/O{DIST}",
+                    str(EMPAQUETADO / "armonica.iss")], check=True)
+    salida = DIST / nombre_del_instalador(version)
+    if not salida.is_file():
+        raise SystemExit(f"Inno Setup terminó pero no está {salida}.")
+    print(f"  Listo: {salida}")
+    return salida
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Arma el instalador de Windows de Armónica.")
     parser.add_argument("paso", nargs="?", default="todo",
@@ -488,7 +507,13 @@ def main(argv=None):
     if argumentos.paso == "humo":
         humo(argumentos.programa)
         return 0
-    raise SystemExit(f"El paso {argumentos.paso} todavía no está.")
+    if argumentos.paso == "instalador":
+        instalador(argumentos.programa)
+        return 0
+    armar()
+    humo()
+    instalador()
+    return 0
 
 
 if __name__ == "__main__":
