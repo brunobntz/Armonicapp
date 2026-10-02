@@ -672,6 +672,49 @@ Python sigue haciendo todo el trabajo: el navegador solo dibuja.
 
 ---
 
+## El instalador para el profe
+
+`herramientas\empaquetar.ps1` arma `dist\Armonica-<versión>-instalador.exe`:
+un instalador por usuario (sin administrador) con Python 3.14 embebido, las
+bibliotecas, ffmpeg y las licencias, que abre la app con el lanzador
+(`lanzador.pyw`). Hace falta Inno Setup 6 (`winget install --id
+JRSoftware.InnoSetup -e`) y conexión la primera vez. Inno Setup es gratis
+para uso no comercial (lo dice el banner de su compilador), y darle la app al
+profe sin cobrarle entra ahí.
+
+    powershell -ExecutionPolicy Bypass -File herramientas\empaquetar.ps1          arma, prueba y compila
+    powershell -ExecutionPolicy Bypass -File herramientas\empaquetar.ps1 fijar    después de cambiar empaquetado\requisitos.in
+
+Se llama con `-ExecutionPolicy Bypass` porque la política de PowerShell que
+trae Windows no deja correr un `.ps1` suelto (`.\herramientas\empaquetar.ps1`).
+
+Toma el código commiteado, no la carpeta: lo que tengas sin commitear (tu
+`config.py`, por ejemplo) no entra, y lo avisa. Corre los tests sobre esa
+copia, baja Python embebido, ffmpeg y las ruedas verificando el SHA-256
+fijado en `empaquetado\descargas.json` y `empaquetado\requisitos.txt`
+(quedan en `empaquetado\_descargas\`), arma el programa en
+`empaquetado\_armado\Armonica`, lo abre como el acceso directo con una
+carpeta de datos temporal y sin navegador, y lo cierra. Si el Control
+inteligente de aplicaciones de Windows (Smart App Control) bloquea el ffmpeg
+del paquete, la prueba de humo imprime un aviso y sigue: el programa anda,
+pero en esa máquina no se convierten los audios que no son `.wav`. Las fotos
+HEIC usan pi-heif, que solo lee: pillow-heif trae el codificador x265, que es
+GPL. Los ejemplos para el profe van en `empaquetado\ejemplos\` (no se
+commitean) y se copian a su `Documentos\Armonica` solo si no tiene ya ese
+archivo. Antes de mandar una versión, la prueba en un usuario limpio está en
+`empaquetado\PROBAR.md`.
+
+El programa se instala por usuario en `%LOCALAPPDATA%\Programs\Armonica`, y
+esa carpeta no se puede cambiar. Si la app está abierta, el instalador y el
+desinstalador la cierran solos (y se niegan si está grabando: hay que parar
+la grabación primero). El desinstalador solo borra esa carpeta del programa,
+nunca `Documentos\Armonica`.
+
+Para una versión nueva: cambiar `VERSION`, commitear y volver a armar. El
+profe instala encima; sus datos no se tocan.
+
+---
+
 ## Los tests
 
 ```powershell
