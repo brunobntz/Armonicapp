@@ -3170,3 +3170,18 @@ def test_solo_se_abre_lo_de_la_lista(servidor_andando, monkeypatch, que):
     monkeypatch.setattr(servidor, "abrir_en_windows", abiertos.append)
     assert mandar(servidor_andando, "/api/abrir", {"que": que})["ok"] is False
     assert abiertos == []
+
+
+def test_una_carpeta_que_no_se_puede_crear_avisa(servidor_andando, tmp_path, monkeypatch):
+    # Un archivo donde tendria que ir la carpeta: makedirs falla con
+    # FileExistsError, igual que con un disco desconectado o una ruta mala
+    # en el .env. Tiene que volver un aviso, no una conexion cortada.
+    (tmp_path / "frases").write_text("no soy una carpeta", encoding="utf-8")
+    abiertos = []
+    monkeypatch.setattr(servidor, "abrir_en_windows", abiertos.append)
+    monkeypatch.setattr(frases, "CARPETA_POR_DEFECTO", str(tmp_path / "frases"))
+
+    respuesta = mandar(servidor_andando, "/api/abrir", {"que": "frases"})
+
+    assert respuesta == {"ok": False, "motivo": "No pude abrir la carpeta."}
+    assert abiertos == []

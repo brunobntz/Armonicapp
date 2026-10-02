@@ -2369,19 +2369,28 @@ class Manejador(SimpleHTTPRequestHandler):
         """Una carpeta del usuario o una página de Windows, de la lista cerrada."""
         que = str((peticion or {}).get("que") or "")
         carpetas = carpetas_que_se_abren()
+        es_carpeta = que in carpetas and que not in PAGINAS_DE_WINDOWS
         if que in PAGINAS_DE_WINDOWS:
             destino = PAGINAS_DE_WINDOWS[que]
         elif que in carpetas:
             destino = os.path.abspath(carpetas[que])
-            os.makedirs(destino, exist_ok=True)
         else:
             return {"ok": False, "motivo": "Eso no se abre desde acá."}
+        paso = "abrir"
         try:
+            # Crear la carpeta también puede fallar (un disco desconectado, una
+            # ruta del .env que apunta a un archivo): sin avisar, el botón
+            # quedaría muerto y sin mensaje.
+            if es_carpeta:
+                paso = "crear"
+                os.makedirs(destino, exist_ok=True)
+                paso = "abrir"
             abrir_en_windows(destino)
         except (AttributeError, OSError) as error:
             # AttributeError: os.startfile solo existe en Windows.
-            print(f"  No pude abrir {destino}: {error}")
-            return {"ok": False, "motivo": "No pude abrirlo."}
+            print(f"  No pude {paso} {destino}: {error}")
+            return {"ok": False,
+                    "motivo": "No pude abrir la carpeta." if es_carpeta else "No pude abrirlo."}
         return {"ok": True}
 
     def _mandar_audio_de_frase(self, consulta):
