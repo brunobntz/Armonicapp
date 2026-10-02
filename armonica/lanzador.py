@@ -22,6 +22,7 @@ Para probarlo desde el repo, sin tocar Documentos:
 """
 
 import ctypes
+import http.client
 import json
 import os
 import sys
@@ -116,15 +117,22 @@ def preparar_entorno(raiz, carpeta_programa, entorno=None):
 
 
 def buscar_instancia(puertos=PUERTOS, espera=0.5):
-    """El puerto de una app ya abierta, o None. Pregunta /api/hola."""
+    """
+    El puerto de una app ya abierta, o None. Pregunta /api/hola.
+
+    En esos puertos puede haber cualquier otro programa: uno que no hable
+    HTTP, o que conteste algo que no es un objeto JSON. Ninguno es la app, y
+    ninguno puede impedir que se siga con el puerto que sigue.
+    """
     for puerto in puertos:
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{puerto}/api/hola",
                                         timeout=espera) as respuesta:
-                if json.loads(respuesta.read()).get("app") == "armonica":
-                    return puerto
-        except (OSError, ValueError):
+                datos = json.loads(respuesta.read())
+        except (OSError, ValueError, http.client.HTTPException):
             continue
+        if isinstance(datos, dict) and datos.get("app") == "armonica":
+            return puerto
     return None
 
 

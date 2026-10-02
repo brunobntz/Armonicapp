@@ -8,7 +8,7 @@ import os
 import socket
 import sys
 import threading
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -90,6 +90,54 @@ def test_otro_programa_en_el_puerto_no_es_la_app(tmp_path):
     otro = ThreadingHTTPServer(
         ("127.0.0.1", 0),
         lambda *a, **k: SimpleHTTPRequestHandler(*a, directory=str(tmp_path), **k))
+    threading.Thread(target=otro.serve_forever, daemon=True).start()
+    try:
+        assert lanzador.buscar_instancia([otro.server_address[1]]) is None
+    finally:
+        otro.shutdown()
+        otro.server_close()
+
+
+def test_algo_que_no_habla_http_en_el_puerto_no_es_la_app():
+    # Un programa que acepta la conexion y contesta cualquier cosa menos HTTP:
+    # el escaneo lo salta, no se cae.
+    ajeno = socket.socket()
+    ajeno.bind(("127.0.0.1", 0))
+    ajeno.listen()
+    ajeno.settimeout(5)
+
+    def atender():
+        try:
+            while True:
+                conexion, _ = ajeno.accept()
+                with conexion:
+                    conexion.settimeout(5)
+                    conexion.recv(4096)     # lee el pedido: si no, Windows corta con un reset
+                    conexion.sendall(b"hola, no soy HTTP\r\n")
+        except OSError:
+            pass    # el socket se cerro: se termino la prueba
+
+    threading.Thread(target=atender, daemon=True).start()
+    try:
+        assert lanzador.buscar_instancia([ajeno.getsockname()[1]]) is None
+    finally:
+        ajeno.close()
+
+
+def test_una_respuesta_que_no_es_un_objeto_no_es_la_app():
+    class ConLista(BaseHTTPRequestHandler):
+        def do_GET(self):
+            cuerpo = b"[1, 2]"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(cuerpo)))
+            self.end_headers()
+            self.wfile.write(cuerpo)
+
+        def log_message(self, *args):
+            pass
+
+    otro = ThreadingHTTPServer(("127.0.0.1", 0), ConLista)
     threading.Thread(target=otro.serve_forever, daemon=True).start()
     try:
         assert lanzador.buscar_instancia([otro.server_address[1]]) is None
