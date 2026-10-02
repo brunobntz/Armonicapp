@@ -138,20 +138,33 @@ def convertir_a_wav(origen, destino, frecuencia_muestreo=None):
             "(y despues cerra y abri la terminal)."
         )
 
-    resultado = subprocess.run(
-        [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-i", str(origen),
-            "-ac", "1",                       # mono: la armonica es una sola fuente
-            "-ar", str(frecuencia_muestreo),  # la frecuencia que usa la app
-            "-sample_fmt", "s16",             # 16 bits, que es lo unico que leemos
-            str(destino),
-        ],
-        capture_output=True, text=True,
-        # Sin consola (la version instalada corre con pythonw), cada llamada
-        # abriria una ventana negra un instante.
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+    try:
+        resultado = subprocess.run(
+            [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-i", str(origen),
+                "-ac", "1",                       # mono: la armonica es una sola fuente
+                "-ar", str(frecuencia_muestreo),  # la frecuencia que usa la app
+                "-sample_fmt", "s16",             # 16 bits, que es lo unico que leemos
+                str(destino),
+            ],
+            capture_output=True, text=True,
+            # Sin consola (la version instalada corre con pythonw), cada llamada
+            # abriria una ventana negra un instante.
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except OSError as error:
+        # ffmpeg esta, pero Windows no lo deja arrancar: con el Control
+        # inteligente de aplicaciones (Smart App Control) activo bloquea los
+        # .exe sin firmar ni reputacion (WinError 4551), y el ffmpeg que viaja
+        # con la app es uno de esos. Se dice que hacer en vez de mostrar el
+        # error de sistema; el original queda en el registro.
+        print(f"ffmpeg no arranco: {error}")
+        raise ValueError(
+            f"No pude abrir el convertidor de audio (ffmpeg) para "
+            f"{os.path.basename(str(origen))}: Windows no lo dejó correr. "
+            "Probá con el audio en .wav."
+        ) from error
 
     if resultado.returncode != 0:
         detalle = (resultado.stderr or "").strip().splitlines()

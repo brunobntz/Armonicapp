@@ -376,21 +376,33 @@ def armar():
 # solo mira si hay algún ffmpeg en el PATH, y en la máquina de Bruno hay uno
 # instalado aparte: por eso se comprueba además que el que se encuentra es el
 # del paquete (la carpeta esperada llega en ARMONICA_FFMPEG_ESPERADO) y que corre.
-CHEQUEO_DE_BIBLIOTECAS = (
-    "import os, shutil, subprocess; "
-    "import numpy, sounddevice, rich, pypdf; "
-    "from armonica import audio, imagenes; "
-    "assert imagenes.hay_soporte_heic(), 'falta el soporte de fotos HEIC'; "
-    "assert audio.hay_ffmpeg(), 'falta ffmpeg'; "
-    "esperado = os.path.normcase(os.environ['ARMONICA_FFMPEG_ESPERADO']); "
-    "usado = shutil.which('ffmpeg'); "
-    "assert usado and os.path.normcase(os.path.dirname(usado)) == esperado, "
-    "'se usa otro ffmpeg que el del paquete: ' + str(usado); "
-    "assert subprocess.run(['ffmpeg', '-version'], capture_output=True, "
-    "creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)).returncode == 0, "
-    "'el ffmpeg del paquete no corre'; "
-    "print('  Bibliotecas: ok')"
-)
+# Una excepción: si Windows lo bloquea (WinError 4551, el Control inteligente de
+# aplicaciones no deja correr el ffmpeg.exe sin firmar ni reputación), no es un
+# defecto del armado sino de la máquina de prueba: se avisa y se sigue. Cualquier
+# otra falla, o que ffmpeg corra y devuelva error, corta la prueba.
+CHEQUEO_DE_BIBLIOTECAS = """\
+import os, shutil, subprocess
+import numpy, sounddevice, rich, pypdf
+from armonica import audio, imagenes
+assert imagenes.hay_soporte_heic(), 'falta el soporte de fotos HEIC'
+assert audio.hay_ffmpeg(), 'falta ffmpeg'
+esperado = os.path.normcase(os.environ['ARMONICA_FFMPEG_ESPERADO'])
+usado = shutil.which('ffmpeg')
+assert usado and os.path.normcase(os.path.dirname(usado)) == esperado, (
+    'se usa otro ffmpeg que el del paquete: ' + str(usado))
+try:
+    corrio = subprocess.run(['ffmpeg', '-version'], capture_output=True,
+                            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+except OSError as error:
+    if getattr(error, 'winerror', None) != 4551:
+        raise
+    print('  Aviso: Windows (Control inteligente de aplicaciones) bloquea el ffmpeg '
+          'del paquete en esta máquina: en una sin ese control anda; la conversión '
+          'de audios no va a andar acá.')
+else:
+    assert corrio.returncode == 0, 'el ffmpeg del paquete no corre'
+print('  Bibliotecas: ok')
+"""
 
 
 def _traer_json(url):

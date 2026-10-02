@@ -351,3 +351,23 @@ def test_ffmpeg_no_abre_una_ventana(monkeypatch, tmp_path):
     monkeypatch.setattr(audio.subprocess, "run", run_falso)
     audio.convertir_a_wav(tmp_path / "clase.m4a", tmp_path / "clase.wav")
     assert vistas["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def test_si_windows_no_deja_correr_ffmpeg_se_dice_en_castellano(monkeypatch, tmp_path, capsys):
+    """
+    Con Control inteligente de aplicaciones (Smart App Control) activo,
+    Windows puede bloquear el ffmpeg.exe sin firmar: arrancarlo da un OSError
+    (WinError 4551). El usuario no tiene que ver un error de sistema, sino
+    qué hacer: pasar el audio a .wav.
+    """
+    def run_bloqueado(comando, **opciones):
+        raise OSError(4551, "Una directiva de Control de aplicaciones bloqueó este archivo")
+
+    monkeypatch.setattr(audio, "hay_ffmpeg", lambda: True)
+    monkeypatch.setattr(audio.subprocess, "run", run_bloqueado)
+    with pytest.raises(ValueError) as error:
+        audio.convertir_a_wav(tmp_path / "clase.m4a", tmp_path / "clase.wav")
+    assert ".wav" in str(error.value)
+    assert "clase.m4a" in str(error.value)
+    # El error original queda en el registro, para que Bruno vea qué pasó.
+    assert "4551" in capsys.readouterr().out
