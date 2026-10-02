@@ -295,7 +295,7 @@ Los que más se usan:
 
 | Parámetro | Para qué |
 |---|---|
-| `UMBRAL_VOLUMEN_RMS` | Qué tan fuerte hay que tocar para que cuente. **Calibralo con `--calibrar`.** |
+| `UMBRAL_VOLUMEN_RMS` | Qué tan fuerte hay que tocar para que cuente. **Medilo con "Medir el ruido" en Ajustes** (o `--calibrar`); lo medido queda en `ajustes.json` y gana a este valor. |
 | `DURACION_MINIMA_SEG` | Descarta notas más cortas que esto. Subilo si aparecen notas fantasma. |
 | `VENTANAS_SILENCIO_TOLERADAS` | Subilo si una nota tuya aparece partida en dos. |
 | `NOTACION` | `"flechas"` (↑4 ↓4') o `"guion"` (4 -4'). |
@@ -519,7 +519,24 @@ Tocar un sector abre esa posición arriba. Los datos son los de
 `tablas.POSICIONES`, que un test concilia con la fórmula de las quintas.
 **Ajustes**
 tiene el micrófono y la configuración: la armónica que tenés en la mano, la
-posición y la escala de referencia se cambian ahí, sin reiniciar nada.
+posición y la escala de referencia se cambian ahí, sin reiniciar nada, y
+quedan guardadas en `ajustes.json` para la próxima vez (el micrófono, por
+nombre: el número cambia al enchufar otro aparato). Lo que se escribe en la
+línea de comandos, como las opciones de `Armonica.bat`, gana a lo guardado.
+**Medir el ruido** escucha tres segundos en silencio y deja el umbral justo
+por encima, como `--calibrar`, pero guardado. La primera vez aparecen los
+**primeros pasos** (micrófono, mejoras de audio de Windows, ruido, tocar), y
+al pie de Ajustes están la versión y **Cerrar la app**. Sin ninguna página
+abierta, al minuto la app suelta el micrófono.
+
+**La versión instalada.** `lanzador.pyw` abre la app sin ventana negra: es
+lo que va a ejecutar el acceso directo del instalador para el profe (ver
+`docs/superpowers/specs/2026-10-02-instalador-profe-design.md`). Guarda todo
+en `Documentos\Armonica` (frases, sesiones, canciones, apuntes, `ajustes.json`
+y `registro.txt` con lo que la app imprime), abre una sola app aunque se
+haga doble clic dos veces, y muestra la pantalla sin carpetas, `.env` ni
+comandos. Para probarlo desde el repo sin tocar Documentos:
+`ARMONICA_DATOS=<carpeta>` y `.venv\Scripts\pythonw.exe lanzador.pyw`.
 
 ### El coach (opcional)
 

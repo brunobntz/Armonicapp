@@ -96,6 +96,13 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
 6. **#6 La guitarra** como instrumento hermano, en `guitarra/`, reutilizando
    `tono.py`, `ritmo.py` y la interfaz web. Cuando haya interés.
 
+- **Instalador, etapa 1: la app y el lanzador.** Hecho (2026-10-02): ajustes
+  guardados en `ajustes.json` (micrófono por nombre), Medir el ruido,
+  primeros pasos, Cerrar la app, micrófono que se suelta sin páginas,
+  puerto exclusivo y `/api/hola`, `VERSION`, textos sin jerga en la
+  instalada, ffmpeg sin ventana, y `lanzador.pyw`. Falta la etapa 2 (el
+  armado con Inno Setup) y la 3 (la guía).
+
 ## Ideas nuevas, de más útil a más lejana
 
 - **Sesión guiada.** "Practicar el plan": recorrer las recomendaciones del
