@@ -294,6 +294,149 @@ def fijar():
     return destino
 
 
+def avisar_cambios():
+    """Lo que está cambiado sin commitear no entra: se avisa y se sigue."""
+    porcelain = subprocess.run(["git", "status", "--porcelain"], cwd=RAIZ, check=True,
+                               capture_output=True, text=True).stdout
+    for ruta in cambios_sin_commitear(porcelain):
+        print(f"  Aviso: {ruta} tiene cambios sin commitear: no entran al paquete.")
+
+
+def copiar_commiteado(destino):
+    """El código de HEAD, tal cual está commiteado, en `destino`."""
+    archivo = subprocess.run(["git", "archive", "--format=tar", "HEAD"], cwd=RAIZ,
+                             check=True, capture_output=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(archivo)) as tar:
+        tar.extractall(destino, filter="data")
+
+
+def correr_tests(codigo):
+    """Los tests en la copia commiteada. Si fallan, no se arma nada."""
+    print("  Corriendo los tests sobre lo commiteado...")
+    resultado = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+                               cwd=codigo)
+    if resultado.returncode != 0:
+        raise SystemExit("Los tests fallan sobre lo commiteado: no se arma.")
+
+
+def armar():
+    """
+    El programa en empaquetado/_armado/Armonica, con el layout que espera
+    el lanzador. Devuelve la versión.
+    """
+    avisar_cambios()
+    descargas = leer_descargas()
+    with tempfile.TemporaryDirectory(prefix="armonica-armado-") as temporal:
+        codigo = Path(temporal) / "codigo"
+        copiar_commiteado(codigo)
+        correr_tests(codigo)
+        zip_python = bajar(descargas["python"])
+        zip_ffmpeg = bajar(descargas["ffmpeg"])
+        requisitos = EMPAQUETADO / "requisitos.txt"
+        _pip("download", "--require-hashes", "-r", str(requisitos), "-d", str(RUEDAS),
+             *OPCIONES_DE_RUEDAS)
+
+        if ARMADO.exists():
+            shutil.rmtree(ARMADO)
+        python = ARMADO / "python"
+        with zipfile.ZipFile(zip_python) as zip_:
+            zip_.extractall(python)
+        escribir_pth(python)
+        site_packages = python / "Lib" / "site-packages"
+        _pip("install", "--no-index", "--find-links", str(RUEDAS), "--require-hashes",
+             "-r", str(requisitos), "--target", str(site_packages))
+
+        for relativo in archivos_de_la_app(codigo):
+            final = ARMADO / "app" / relativo
+            final.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(codigo / relativo, final)
+        shutil.copyfile(codigo / "Armonica.ico", ARMADO / "Armonica.ico")
+
+        licencias = ARMADO / "licencias"
+        extraer_ffmpeg(zip_ffmpeg, ARMADO / "ffmpeg", licencias / "ffmpeg")
+        (licencias / "Armonica").mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(codigo / "LICENSE", licencias / "Armonica" / "LICENSE")
+        (licencias / "Python").mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(python / "LICENSE.txt", licencias / "Python" / "LICENSE.txt")
+        for paquete in copiar_licencias(site_packages, licencias):
+            print(f"  Aviso: {paquete} no trae archivo de licencia en su .dist-info.")
+        (licencias / "LEEME.txt").write_text(texto_leeme_licencias(descargas), encoding="utf-8")
+
+        version = (codigo / "VERSION").read_text(encoding="utf-8").strip()
+    print(f"  Armado {version} en {ARMADO.relative_to(RAIZ)}.")
+    return version
+
+
+# Lo que el programa armado tiene que poder importar y encontrar.
+CHEQUEO_DE_BIBLIOTECAS = (
+    "import numpy, sounddevice, rich, pypdf; "
+    "from armonica import audio, imagenes; "
+    "assert imagenes.hay_soporte_heic(), 'falta el soporte de fotos HEIC'; "
+    "assert audio.hay_ffmpeg(), 'falta ffmpeg'; "
+    "print('  Bibliotecas: ok')"
+)
+
+
+def _traer_json(url):
+    with urllib.request.urlopen(url, timeout=15) as respuesta:
+        return json.loads(respuesta.read())
+
+
+def _mandar_json(url, cuerpo):
+    pedido = urllib.request.Request(url, data=json.dumps(cuerpo).encode("utf-8"), method="POST",
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido, timeout=15) as respuesta:
+        return json.loads(respuesta.read())
+
+
+def humo(programa=None, espera=30.0):
+    """
+    Abre el programa armado (o instalado) como lo abre el acceso directo
+    (pythonw + lanzador.pyw), con los datos en una carpeta temporal y sin
+    navegador; verifica que conteste como la versión instalada y lo cierra
+    con /api/apagar, el botón de Ajustes. Prende el micrófono un momento.
+    """
+    from armonica import lanzador
+
+    programa = Path(programa or ARMADO)
+    if lanzador.buscar_instancia() is not None:
+        raise SystemExit("Hay una Armónica abierta (puertos 8000 a 8010): cerrala antes de la prueba.")
+    version = (programa / "app" / "VERSION").read_text(encoding="utf-8").strip()
+
+    with tempfile.TemporaryDirectory(prefix="armonica-humo-") as temporal:
+        entorno = dict(os.environ)
+        entorno["PATH"] = str(programa / "ffmpeg") + os.pathsep + entorno.get("PATH", "")
+        subprocess.run([str(programa / "python" / "python.exe"), "-c", CHEQUEO_DE_BIBLIOTECAS],
+                       cwd=temporal, env=entorno, check=True)
+
+        datos = Path(temporal) / "Armonica"
+        entorno_app = dict(os.environ, ARMONICA_DATOS=str(datos), ARMONICA_SIN_NAVEGADOR="1")
+        proceso = subprocess.Popen([str(programa / "python" / "pythonw.exe"),
+                                    str(programa / "app" / "lanzador.pyw")],
+                                   cwd=str(programa / "app"), env=entorno_app)
+        try:
+            puerto = lanzador.esperar_instancia(espera=espera)
+            if puerto is None:
+                raise SystemExit("La app armada no contestó /api/hola.")
+            base = f"http://127.0.0.1:{puerto}"
+            inicio = _traer_json(base + "/api/inicio")
+            if inicio.get("empaquetada") is not True or inicio.get("version") != version:
+                raise SystemExit(f"La app armada no se presenta bien: empaquetada="
+                                 f"{inicio.get('empaquetada')}, version={inicio.get('version')}.")
+            if not _traer_json(base + "/api/canciones").get("ok"):
+                raise SystemExit("La app armada no pudo listar las canciones.")
+            if not (datos / "registro.txt").is_file():
+                raise SystemExit("La app armada no escribió registro.txt.")
+            if not _mandar_json(base + "/api/apagar", {}).get("ok"):
+                raise SystemExit("La app armada no aceptó cerrarse.")
+            proceso.wait(timeout=15)
+        finally:
+            if proceso.poll() is None:
+                proceso.kill()
+                proceso.wait()
+    print(f"  Prueba de humo de {version}: ok.")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Arma el instalador de Windows de Armónica.")
     parser.add_argument("paso", nargs="?", default="todo",
@@ -303,6 +446,12 @@ def main(argv=None):
     argumentos = parser.parse_args(argv)
     if argumentos.paso == "fijar":
         fijar()
+        return 0
+    if argumentos.paso == "armar":
+        armar()
+        return 0
+    if argumentos.paso == "humo":
+        humo(argumentos.programa)
         return 0
     raise SystemExit(f"El paso {argumentos.paso} todavía no está.")
 
