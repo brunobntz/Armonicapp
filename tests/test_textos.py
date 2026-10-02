@@ -60,3 +60,47 @@ def test_ningun_aviso_manda_a_la_terminal():
                  os.path.join(RAIZ, "armonica", "transcripcion.py")):
         with open(ruta, encoding="utf-8") as archivo:
             assert "python main.py" not in archivo.read(), ruta
+
+
+class ClasesDeUnElemento(HTMLParser):
+    """Las clases del elemento con cierto id y las de todos sus ancestros."""
+
+    VACIOS = TextoVisible.VACIOS
+
+    def __init__(self, id_buscado):
+        super().__init__()
+        self.id_buscado = id_buscado
+        self.pila = []          # (etiqueta, clases)
+        self.encontrado = False
+        self.clases_en_la_cadena = []
+
+    def handle_starttag(self, etiqueta, atributos):
+        if etiqueta in self.VACIOS:
+            return
+        propios = dict(atributos)
+        clases = (propios.get("class") or "").split()
+        self.pila.append((etiqueta, clases))
+        if propios.get("id") == self.id_buscado:
+            self.encontrado = True
+            for _, de_cada_uno in self.pila:
+                self.clases_en_la_cadena.extend(de_cada_uno)
+
+    def handle_endtag(self, etiqueta):
+        for i in range(len(self.pila) - 1, -1, -1):
+            if self.pila[i][0] == etiqueta:
+                del self.pila[i:]
+                return
+
+
+def test_mi_plan_no_se_muestra_en_la_version_instalada():
+    """
+    El plan lo arma el coach, y el coach no es para el profe: si no hay coach,
+    el bloque dice que hace falta configurar una clave en el .env. Todo el
+    contenedor donde se dibuja el plan queda adentro de un solo-desarrollo.
+    """
+    with open(INDEX, encoding="utf-8") as archivo:
+        html = archivo.read()
+    lector = ClasesDeUnElemento("aprendizaje-plan")
+    lector.feed(html)
+    assert lector.encontrado, "no está el contenedor aprendizaje-plan"
+    assert "solo-desarrollo" in lector.clases_en_la_cadena
