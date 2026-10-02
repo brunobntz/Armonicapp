@@ -3285,3 +3285,31 @@ def test_la_propia_pagina_pasa(servidor_andando, tmp_path):
     assert pedir_con(servidor_andando, "/api/inicio",
                      {"Host": f"localhost:{puerto}", "Origin": f"http://localhost:{puerto}"}) == 200
     assert ajustes.cargar(str(tmp_path / "ajustes.json")) == {"primeros_pasos": True}
+
+
+def test_un_pedido_desde_otro_puerto_se_rechaza(servidor_andando, tmp_path):
+    """Otra página local (un servidor en otro puerto) tampoco puede cambiar nada."""
+    puerto = int(servidor_andando.rsplit(":", 1)[1])
+    codigo = pedir_con(servidor_andando, "/api/primeros-pasos",
+                       {"Origin": f"http://127.0.0.1:{puerto + 1}"}, {"hechos": True})
+    assert codigo == 403
+    # Sin puerto explícito sería el 80: la app nunca corre ahí.
+    codigo = pedir_con(servidor_andando, "/api/primeros-pasos",
+                       {"Origin": "http://127.0.0.1"}, {"hechos": True})
+    assert codigo == 403
+    assert ajustes.cargar(str(tmp_path / "ajustes.json")) == {}
+
+
+def test_un_pedido_con_cabeceras_rotas_recibe_403(servidor_andando):
+    """Un Host o un Origin que no se puede leer es un pedido ajeno, no un hilo muerto."""
+    import http.client
+    puerto = int(servidor_andando.rsplit(":", 1)[1])
+    conexion = http.client.HTTPConnection("127.0.0.1", puerto, timeout=5)
+    try:
+        conexion.putrequest("GET", "/api/inicio", skip_host=True)
+        conexion.putheader("Host", "[::1")
+        conexion.endheaders()
+        assert conexion.getresponse().status == 403
+    finally:
+        conexion.close()
+    assert pedir_con(servidor_andando, "/api/inicio", {"Origin": "http://[::1"}) == 403

@@ -1244,12 +1244,26 @@ class Manejador(SimpleHTTPRequestHandler):
         escondida en la máquina del profe, así que esos pedidos se
         rechazan. Un pedido sin Origin (la barra de direcciones, el
         instalador, los tests) pasa si el Host es propio.
+
+        Del Host se mira solo el nombre (el rebinding es cuestión de
+        nombre). El Origin tiene que ser además el de ESTE servidor: el
+        mismo puerto, porque otra página local (un servidor de pruebas en
+        localhost:5173, por ejemplo) también escribe "localhost" y no por
+        eso es de la app. Un Origin sin puerto cuenta como ajeno: la app
+        nunca corre en el 80. Y un Host u Origin que ni se puede leer
+        (un "[::1" suelto) se rechaza igual, con un 403 limpio.
         """
         host = (self.headers.get("Host") or "").strip()
-        if host and (urllib.parse.urlsplit("//" + host).hostname or "") not in self.NOMBRES_PROPIOS:
-            return True
         origen = self.headers.get("Origin")
-        if origen is not None and (urllib.parse.urlsplit(origen).hostname or "") not in self.NOMBRES_PROPIOS:
+        try:
+            if host and (urllib.parse.urlsplit("//" + host).hostname or "") not in self.NOMBRES_PROPIOS:
+                return True
+            if origen is not None:
+                partes = urllib.parse.urlsplit(origen)
+                if ((partes.hostname or "") not in self.NOMBRES_PROPIOS
+                        or partes.port != self.server.server_address[1]):
+                    return True
+        except ValueError:
             return True
         return False
 
