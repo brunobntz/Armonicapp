@@ -112,7 +112,12 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
   un usuario limpio (`empaquetado\PROBAR.md`) y la etapa 3 (la guía).
   Abierto: Smart App Control bloquea el ffmpeg sin firma (la conversión
   de audios no anda en esas máquinas): decidir entre firmar el `ffmpeg.exe`
-  (o todo el paquete) o usar un ffmpeg con reputación.
+  (o todo el paquete) o usar un ffmpeg con reputación. Es la misma decisión
+  que el ffmpeg fijado: es una compilación diaria de BtbN que GitHub guarda
+  solo unos 14 días (hasta cerca del 2026-10-15). `empaquetado\_descargas` la
+  tiene en caché, pero hay que volver a fijarla: una compilación de fin de
+  mes de BtbN se guarda dos años, o el ffmpeg que se elija por Smart App
+  Control.
 
 ## Ideas nuevas, de más útil a más lejana
 
