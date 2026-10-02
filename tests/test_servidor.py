@@ -52,6 +52,7 @@ def servidor_andando(tmp_path, monkeypatch):
     servidor.Manejador.ultima_comparacion = None
     servidor.Manejador.empaquetada = False
     servidor.Manejador.conectados = 0
+    servidor.Manejador.servidor_http = None
 
     instancia = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Manejador)
     puerto = instancia.server_address[1]
@@ -3113,3 +3114,35 @@ def test_el_vigia_corta_la_grabacion_y_apaga(monkeypatch):
     assert servidor.un_paso_del_vigia(clase, 8000, memoria, 62.0) == "prender"
     assert llamadas[-1] == "prender"
     assert memoria["apagado_por_vigia"] is False
+
+
+# =============================================================================
+# Cerrar la app
+# =============================================================================
+
+def test_cerrar_la_app_corta_el_servidor():
+    """Con pythonw no hay ventana negra que cerrar: el botón es la forma."""
+    servidor.Manejador.estado = servidor.EstadoCompartido("C", None, None)
+    servidor.Manejador.hilo_audio = None
+    servidor.Manejador.detener = None
+    instancia = servidor.ServidorExclusivo(("127.0.0.1", 0), servidor.Manejador)
+    servidor.Manejador.servidor_http = instancia
+    hilo = threading.Thread(target=instancia.serve_forever, daemon=True)
+    hilo.start()
+    try:
+        base = f"http://127.0.0.1:{instancia.server_address[1]}"
+        assert mandar(base, "/api/apagar")["ok"] is True
+        hilo.join(timeout=5)
+        assert not hilo.is_alive()
+    finally:
+        servidor.Manejador.servidor_http = None
+        instancia.server_close()
+
+
+def test_no_se_cierra_mientras_graba(servidor_andando):
+    servidor.Manejador.estado.grabando = True
+    try:
+        respuesta = mandar(servidor_andando, "/api/apagar")
+    finally:
+        servidor.Manejador.estado.grabando = False
+    assert respuesta["ok"] is False

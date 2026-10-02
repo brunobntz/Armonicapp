@@ -2020,6 +2020,7 @@ function dibujarNivel(estado) {
    ========================================================================== */
 
 async function cargarAjustes() {
+  document.getElementById("version-app").textContent = inicio.version || "";
   mostrarEstadoDelCoach();
   mostrarOrigenDeLasClases();
   llenarSelector("ajuste-tonalidad",
@@ -2122,6 +2123,21 @@ async function medirRuido(donde) {
 function configurarLaApp() {
   document.getElementById("boton-medir-ruido").addEventListener("click", () =>
     medirRuido(document.getElementById("resultado-ruido")));
+  document.getElementById("boton-cerrar-app").addEventListener("click", cerrarLaApp);
+}
+
+
+async function cerrarLaApp() {
+  if (!confirm("\u00bfCerrar la app? Para volver a abrirla, el \u00edcono Arm\u00f3nica del escritorio.")) return;
+  const respuesta = await pedir("/api/apagar", { method: "POST" });
+  if (!respuesta.ok) {
+    alert(respuesta.motivo);
+    return;
+  }
+  if (fuente) fuente.close();
+  document.body.innerHTML = '<main class="panel"><section><h2>La app est\u00e1 cerrada</h2>' +
+    '<p class="ayuda">Para volver a abrirla, el \u00edcono Arm\u00f3nica del escritorio.</p>' +
+    "</section></main>";
 }
 
 

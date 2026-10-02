@@ -686,6 +686,18 @@ def apagar_microfono(clase):
     clase.estado.escuchando = False
 
 
+def apagar_todo(clase):
+    """
+    Lo que hace "Cerrar la app": suelta el micrófono y corta el servidor.
+    Corre en un hilo aparte y espera un poco, para que la respuesta llegue a
+    la página antes de que se corte todo.
+    """
+    time.sleep(0.2)
+    apagar_microfono(clase)
+    if clase.servidor_http is not None:
+        clase.servidor_http.shutdown()
+
+
 def que_hacer_con_el_microfono(conectados, sin_nadie_desde, ahora, prendido,
                                apagado_por_vigia, espera=SEGUNDOS_SIN_PAGINA):
     """
@@ -1184,6 +1196,10 @@ class Manejador(SimpleHTTPRequestHandler):
     conectados = 0
     candado_conexiones = threading.Lock()
 
+    # El servidor que está corriendo, para que "Cerrar la app" lo pueda
+    # cortar. Lo pone arrancar().
+    servidor_http = None
+
     # Lo ultimo que tocaste practicando: (muestras, frecuencia_muestreo). Vive
     # en memoria para poder escucharlo al lado de la referencia. Es UNO solo:
     # el siguiente intento lo reemplaza.
@@ -1356,6 +1372,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._cambiar_configuracion(cuerpo))
         if self.path == "/api/medir-ruido":
             return self._responder_json(self._medir_ruido())
+        if self.path == "/api/apagar":
+            return self._responder_json(self._apagar())
         self.send_error(404)
 
     def _leer_cuerpo(self):
@@ -2312,6 +2330,15 @@ class Manejador(SimpleHTTPRequestHandler):
         return {"ok": True, "umbral": umbral, "pico": round(pico, 4),
                 "mediana": round(mediana, 4)}
 
+    def _apagar(self):
+        """Cerrar la app. Grabando no: se perdería lo grabado."""
+        clase = type(self)
+        if clase.estado.grabando:
+            return {"ok": False, "motivo": "Estás grabando: pará la grabación primero."}
+        print("  Cerrada desde la pantalla.")
+        threading.Thread(target=apagar_todo, args=(clase,), daemon=True).start()
+        return {"ok": True}
+
     def _mandar_audio_de_frase(self, consulta):
         """
         Manda el .wav de una frase para que el navegador lo pueda reproducir.
@@ -2892,6 +2919,7 @@ def arrancar(tonalidad=None, posicion=None, escala=None, puerto=8000,
     Manejador.empaquetada = empaquetada
 
     servidor = enlazar(puertos or [puerto])
+    Manejador.servidor_http = servidor
     direccion = f"http://127.0.0.1:{servidor.server_address[1]}"
 
     print()
