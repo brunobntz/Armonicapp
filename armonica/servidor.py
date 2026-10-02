@@ -80,6 +80,11 @@ ESPERA_ENTRE_INTENTOS = 0.5
 # Cuánto escucha "Medir el ruido". Lo mismo que --calibrar.
 SEGUNDOS_DE_RUIDO = 3.0
 
+# Si lo medido como silencio da un umbral más alto que esto, sonó algo
+# mientras medía (o la habitación es muy ruidosa): 0,05 ya obliga a tocar
+# fuerte. Se pide medir de nuevo en vez de dejar la app sorda.
+UMBRAL_MAXIMO_MEDIDO = 0.05
+
 # Lo que se le dice al navegador cuando el archivo no se puede leer. El error
 # de audio.leer_wav nombra el archivo, que en la terminal es justo lo que
 # queres saber; acá ese archivo es un temporal con nombre inventado y decirlo
@@ -2228,8 +2233,14 @@ class Manejador(SimpleHTTPRequestHandler):
                     "motivo": "No llegó audio del micrófono. Probá con otro."}
 
         umbral = round(microfono.umbral_sugerido(pico), 4)
-        config.UMBRAL_VOLUMEN_RMS = umbral
+        if umbral > UMBRAL_MAXIMO_MEDIDO:
+            return {"ok": False,
+                    "motivo": "Sonó algo mientras medía, o hay mucho ruido: probá de nuevo en silencio."}
+
+        # Primero se guarda y recién después se cambia config: si guardar falla,
+        # la app sigue con el umbral que tenía.
         ajustes.guardar({"umbral": umbral})
+        config.UMBRAL_VOLUMEN_RMS = umbral
         return {"ok": True, "umbral": umbral, "pico": round(pico, 4),
                 "mediana": round(mediana, 4)}
 

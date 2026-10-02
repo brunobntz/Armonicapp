@@ -3002,6 +3002,39 @@ def test_medir_el_ruido_guarda_el_umbral(servidor_andando, tmp_path, monkeypatch
     assert ajustes.cargar(str(tmp_path / "ajustes.json"))["umbral"] == 0.006
 
 
+# (0.2, 0.3) daría un umbral de 0.9, válido pero sordo; (0.4, 0.5) daría 1.5,
+# que ajustes.json ni siquiera acepta.
+@pytest.mark.parametrize("volumenes", [(0.2, 0.3), (0.4, 0.5)])
+def test_una_medicion_con_ruido_fuerte_no_deja_la_app_sorda(
+        servidor_andando, tmp_path, monkeypatch, volumenes):
+    """
+    Si suena algo fuerte mientras se mide (un soplido, un golpe, una pieza muy
+    ruidosa), el umbral que saldría deja la app sorda. Se pide medir de nuevo
+    y no se toca ni config ni ajustes.json.
+    """
+    monkeypatch.setattr(servidor, "SEGUNDOS_DE_RUIDO", 0.3)
+    monkeypatch.setattr(config, "UMBRAL_VOLUMEN_RMS", 0.01)
+    estado = servidor.Manejador.estado
+    estado.escuchando = True
+
+    def microfono_con_ruido():
+        fin = time.monotonic() + 1.0
+        while time.monotonic() < fin:
+            for volumen in volumenes:
+                estado.anotar_volumen(volumen)
+            time.sleep(0.01)
+
+    hilo = threading.Thread(target=microfono_con_ruido, daemon=True)
+    hilo.start()
+    respuesta = mandar(servidor_andando, "/api/medir-ruido")
+    hilo.join()
+
+    assert respuesta["ok"] is False
+    assert "probá de nuevo" in respuesta["motivo"]
+    assert config.UMBRAL_VOLUMEN_RMS == 0.01
+    assert "umbral" not in ajustes.cargar(str(tmp_path / "ajustes.json"))
+
+
 def test_sin_microfono_abierto_no_se_mide(servidor_andando):
     servidor.Manejador.estado.escuchando = False
     respuesta = mandar(servidor_andando, "/api/medir-ruido")
