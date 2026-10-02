@@ -325,14 +325,19 @@ def armar():
     el lanzador. Devuelve la versión.
     """
     avisar_cambios()
-    descargas = leer_descargas()
     with tempfile.TemporaryDirectory(prefix="armonica-armado-") as temporal:
         codigo = Path(temporal) / "codigo"
         copiar_commiteado(codigo)
+        # Lo fijado también se lee de lo commiteado: un descargas.json o un
+        # requisitos.txt editado y sin commitear (justo después de `fijar`)
+        # no puede cambiar en silencio qué se baja y qué entra al paquete.
+        # RUEDAS, en la carpeta de trabajo, es solo un caché: pip verifica
+        # cada rueda contra los hashes de requisitos.txt.
+        descargas = leer_descargas(codigo / "empaquetado" / "descargas.json")
         correr_tests(codigo)
         zip_python = bajar(descargas["python"])
         zip_ffmpeg = bajar(descargas["ffmpeg"])
-        requisitos = EMPAQUETADO / "requisitos.txt"
+        requisitos = codigo / "empaquetado" / "requisitos.txt"
         _pip("download", "--require-hashes", "-r", str(requisitos), "-d", str(RUEDAS),
              *OPCIONES_DE_RUEDAS)
 
@@ -367,12 +372,23 @@ def armar():
     return version
 
 
-# Lo que el programa armado tiene que poder importar y encontrar.
+# Lo que el programa armado tiene que poder importar y encontrar. audio.hay_ffmpeg()
+# solo mira si hay algún ffmpeg en el PATH, y en la máquina de Bruno hay uno
+# instalado aparte: por eso se comprueba además que el que se encuentra es el
+# del paquete (la carpeta esperada llega en ARMONICA_FFMPEG_ESPERADO) y que corre.
 CHEQUEO_DE_BIBLIOTECAS = (
+    "import os, shutil, subprocess; "
     "import numpy, sounddevice, rich, pypdf; "
     "from armonica import audio, imagenes; "
     "assert imagenes.hay_soporte_heic(), 'falta el soporte de fotos HEIC'; "
     "assert audio.hay_ffmpeg(), 'falta ffmpeg'; "
+    "esperado = os.path.normcase(os.environ['ARMONICA_FFMPEG_ESPERADO']); "
+    "usado = shutil.which('ffmpeg'); "
+    "assert usado and os.path.normcase(os.path.dirname(usado)) == esperado, "
+    "'se usa otro ffmpeg que el del paquete: ' + str(usado); "
+    "assert subprocess.run(['ffmpeg', '-version'], capture_output=True, "
+    "creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)).returncode == 0, "
+    "'el ffmpeg del paquete no corre'; "
     "print('  Bibliotecas: ok')"
 )
 
@@ -398,19 +414,26 @@ def humo(programa=None, espera=30.0):
     """
     from armonica import lanzador
 
-    programa = Path(programa or ARMADO)
+    programa = Path(programa or ARMADO).resolve()
     if lanzador.buscar_instancia() is not None:
         raise SystemExit("Hay una Armónica abierta (puertos 8000 a 8010): cerrala antes de la prueba.")
     version = (programa / "app" / "VERSION").read_text(encoding="utf-8").strip()
 
     with tempfile.TemporaryDirectory(prefix="armonica-humo-") as temporal:
-        entorno = dict(os.environ)
-        entorno["PATH"] = str(programa / "ffmpeg") + os.pathsep + entorno.get("PATH", "")
+        # Con el PATH mínimo (la carpeta de ffmpeg del paquete y System32), no
+        # puede aparecer otro ffmpeg del sistema que tape uno faltante o roto.
+        # Sin bytecode: el python armado no ensucia app\ con __pycache__ en la
+        # carpeta que después empaqueta Inno Setup.
+        ffmpeg = programa / "ffmpeg"
+        sistema = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+        entorno = dict(os.environ, PATH=str(ffmpeg) + os.pathsep + sistema,
+                       ARMONICA_FFMPEG_ESPERADO=str(ffmpeg), PYTHONDONTWRITEBYTECODE="1")
         subprocess.run([str(programa / "python" / "python.exe"), "-c", CHEQUEO_DE_BIBLIOTECAS],
                        cwd=temporal, env=entorno, check=True)
 
         datos = Path(temporal) / "Armonica"
-        entorno_app = dict(os.environ, ARMONICA_DATOS=str(datos), ARMONICA_SIN_NAVEGADOR="1")
+        entorno_app = dict(os.environ, ARMONICA_DATOS=str(datos), ARMONICA_SIN_NAVEGADOR="1",
+                           PYTHONDONTWRITEBYTECODE="1")
         proceso = subprocess.Popen([str(programa / "python" / "pythonw.exe"),
                                     str(programa / "app" / "lanzador.pyw")],
                                    cwd=str(programa / "app"), env=entorno_app)
