@@ -118,6 +118,16 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
   tiene en caché, pero hay que volver a fijarla: una compilación de fin de
   mes de BtbN se guarda dos años, o el ffmpeg que se elija por Smart App
   Control.
+  Novedad (2026-10-02, a la noche): con Smart App Control todavía activado
+  en la portátil, ese mismo `ffmpeg.exe` (n8.1.3-14-g330caae0c1) ya corre.
+  Windows lo bloqueó hasta las 19:55 y una hora después lo dejó: la
+  reputación en la nube se le da a ese archivo exacto (su hash), y la ganó
+  después de las primeras corridas. Así que en la máquina del profe este
+  ffmpeg probablemente ande. Pero un ffmpeg distinto (otra compilación,
+  aunque sea de la misma versión) arranca sin reputación y puede volver a
+  bloquearse. Conviene seguir armando con el que está en
+  `empaquetado\_descargas` (no borrar esa carpeta) y, si hay que fijar
+  otro, probarlo antes con Smart App Control activado.
 
 ## Ideas nuevas, de más útil a más lejana
 
