@@ -31,6 +31,7 @@ import time
 import traceback
 import urllib.request
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 PUERTOS = range(8000, 8011)
@@ -135,24 +136,37 @@ def preparar_entorno(raiz, carpeta_programa, entorno=None):
         entorno["PATH"] = ffmpeg + os.pathsep + entorno.get("PATH", "")
 
 
+def _contesta_la_app(puerto, espera):
+    """Si en ese puerto contesta la app: /api/hola con {"app": "armonica"}."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{puerto}/api/hola",
+                                    timeout=espera) as respuesta:
+            datos = json.loads(respuesta.read())
+    except (OSError, ValueError, http.client.HTTPException):
+        return False
+    return isinstance(datos, dict) and datos.get("app") == "armonica"
+
+
 def buscar_instancia(puertos=PUERTOS, espera=0.5):
     """
-    El puerto de una app ya abierta, o None. Pregunta /api/hola.
+    El puerto de una app ya abierta, o None. Pregunta /api/hola. Si contestan
+    varias, el más bajo: es el primero que prueba arrancar().
+
+    Los puertos se prueban a la vez. En Windows cada puerto cerrado de
+    localhost gasta el tiempo de espera entero, y probados de a uno los 11
+    harían esperar ~5,5 s en cada arranque en frío; a la vez, lo que tarda uno.
 
     En esos puertos puede haber cualquier otro programa: uno que no hable
     HTTP, o que conteste algo que no es un objeto JSON. Ninguno es la app, y
     ninguno puede impedir que se siga con el puerto que sigue.
     """
-    for puerto in puertos:
-        try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{puerto}/api/hola",
-                                        timeout=espera) as respuesta:
-                datos = json.loads(respuesta.read())
-        except (OSError, ValueError, http.client.HTTPException):
-            continue
-        if isinstance(datos, dict) and datos.get("app") == "armonica":
-            return puerto
-    return None
+    puertos = list(puertos)
+    if not puertos:
+        return None
+    with ThreadPoolExecutor(max_workers=len(puertos)) as hilos:
+        contestaron = list(hilos.map(lambda puerto: _contesta_la_app(puerto, espera), puertos))
+    de_la_app = [puerto for puerto, es_la_app in zip(puertos, contestaron) if es_la_app]
+    return min(de_la_app) if de_la_app else None
 
 
 def tomar_el_turno(nombre=NOMBRE_DEL_TURNO):

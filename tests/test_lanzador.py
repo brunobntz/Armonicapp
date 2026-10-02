@@ -8,6 +8,7 @@ import os
 import socket
 import sys
 import threading
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler, ThreadingHTTPServer
 
@@ -91,6 +92,44 @@ def test_encuentra_una_app_ya_abierta():
     finally:
         abierta.shutdown()
         abierta.server_close()
+
+
+def _puertos_cerrados(cuantos):
+    """Puertos de localhost donde no escucha nadie."""
+    sockets = []
+    for _ in range(cuantos):
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        sockets.append(s)
+    puertos = [s.getsockname()[1] for s in sockets]
+    for s in sockets:
+        s.close()
+    return puertos
+
+
+def test_los_puertos_cerrados_no_suman_espera():
+    # En Windows cada puerto cerrado de localhost cuesta todo el timeout: probados
+    # uno por uno, los 11 puertos de la app tardan ~5,5 s en cada arranque en frio.
+    # Probados a la vez, tarda lo de uno solo.
+    puertos = _puertos_cerrados(11)
+    inicio = time.monotonic()
+    assert lanzador.buscar_instancia(puertos, espera=0.5) is None
+    assert time.monotonic() - inicio < 1.5
+
+
+def test_si_contestan_dos_gana_el_puerto_mas_bajo():
+    servidor.Manejador.estado = servidor.EstadoCompartido("C", None, None)
+    abiertas = [ThreadingHTTPServer(("127.0.0.1", 0), servidor.Manejador) for _ in range(2)]
+    for abierta in abiertas:
+        threading.Thread(target=abierta.serve_forever, daemon=True).start()
+    try:
+        puertos = sorted(abierta.server_address[1] for abierta in abiertas)
+        # Al revés: el orden en que se pasan no decide, el numero de puerto si.
+        assert lanzador.buscar_instancia(list(reversed(puertos))) == puertos[0]
+    finally:
+        for abierta in abiertas:
+            abierta.shutdown()
+            abierta.server_close()
 
 
 def test_otro_programa_en_el_puerto_no_es_la_app(tmp_path):
