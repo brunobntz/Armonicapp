@@ -3146,3 +3146,27 @@ def test_no_se_cierra_mientras_graba(servidor_andando):
     finally:
         servidor.Manejador.estado.grabando = False
     assert respuesta["ok"] is False
+
+
+# =============================================================================
+# Abrir carpetas y páginas de Windows
+# =============================================================================
+
+def test_abre_la_configuracion_de_sonido_y_las_carpetas(servidor_andando, tmp_path, monkeypatch):
+    abiertos = []
+    monkeypatch.setattr(servidor, "abrir_en_windows", abiertos.append)
+    monkeypatch.setattr(frases, "CARPETA_POR_DEFECTO", str(tmp_path / "frases"))
+
+    assert mandar(servidor_andando, "/api/abrir", {"que": "sonido"})["ok"] is True
+    assert mandar(servidor_andando, "/api/abrir", {"que": "frases"})["ok"] is True
+
+    assert abiertos == ["ms-settings:sound", os.path.abspath(str(tmp_path / "frases"))]
+    assert (tmp_path / "frases").is_dir()
+
+
+@pytest.mark.parametrize("que", ["C:\\Windows", "..", "notepad", ""])
+def test_solo_se_abre_lo_de_la_lista(servidor_andando, monkeypatch, que):
+    abiertos = []
+    monkeypatch.setattr(servidor, "abrir_en_windows", abiertos.append)
+    assert mandar(servidor_andando, "/api/abrir", {"que": que})["ok"] is False
+    assert abiertos == []

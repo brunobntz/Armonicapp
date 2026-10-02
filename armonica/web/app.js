@@ -32,6 +32,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarAprendizaje();
   configurarDestinos();
   configurarLaApp();
+  configurarAbrir();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -2138,6 +2139,27 @@ async function cerrarLaApp() {
   document.body.innerHTML = '<main class="panel"><section><h2>La app est\u00e1 cerrada</h2>' +
     '<p class="ayuda">Para volver a abrirla, el \u00edcono Arm\u00f3nica del escritorio.</p>' +
     "</section></main>";
+}
+
+
+/* "Abrir la carpeta" (o una pagina de Windows): un boton con data-abrir.
+ * Lo abre el servidor; aca solo se avisa si no pudo. */
+function botonAbrir(que, texto) {
+  return '<button class="secundario chico" data-abrir="' + que + '">' +
+    escapar(texto || "Abrir la carpeta") + "</button>";
+}
+
+
+function configurarAbrir() {
+  document.addEventListener("click", async (evento) => {
+    const boton = evento.target.closest("[data-abrir]");
+    if (!boton) return;
+    const respuesta = await pedir("/api/abrir", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ que: boton.dataset.abrir }),
+    });
+    if (!respuesta.ok) alert(respuesta.motivo);
+  });
 }
 
 

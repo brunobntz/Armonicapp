@@ -84,6 +84,15 @@ SEGUNDOS_DE_RUIDO = 3.0
 # Cuánto se espera sin ninguna página abierta antes de soltar el micrófono.
 SEGUNDOS_SIN_PAGINA = 60.0
 
+# Las páginas de Configuración de Windows que la app abre en los primeros
+# pasos. Las abre el servidor y no el navegador, que preguntaría antes de
+# abrir un "ms-settings:". Lista cerrada: nada que venga de la página se
+# abre si no está acá.
+PAGINAS_DE_WINDOWS = {
+    "sonido": "ms-settings:sound",
+    "permisos-microfono": "ms-settings:privacy-microphone",
+}
+
 # Si lo medido como silencio da un umbral más alto que esto, sonó algo
 # mientras medía (o la habitación es muy ruidosa): 0,05 ya obliga a tocar
 # fuerte. Se pide medir de nuevo en vez de dejar la app sorda.
@@ -696,6 +705,21 @@ def apagar_todo(clase):
     apagar_microfono(clase)
     if clase.servidor_http is not None:
         clase.servidor_http.shutdown()
+
+
+def carpetas_que_se_abren():
+    """Las carpetas del usuario que tienen botón "Abrir la carpeta"."""
+    return {
+        "frases": frases.CARPETA_POR_DEFECTO,
+        "sesiones": exportacion.CARPETA_POR_DEFECTO,
+        "canciones": canciones.carpeta_de_canciones(),
+        "apuntes": clases.carpeta_de_clases(),
+    }
+
+
+def abrir_en_windows(destino):
+    """Abre una carpeta o una página de Configuración como un doble clic."""
+    os.startfile(destino)
 
 
 def que_hacer_con_el_microfono(conectados, sin_nadie_desde, ahora, prendido,
@@ -1374,6 +1398,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._medir_ruido())
         if self.path == "/api/apagar":
             return self._responder_json(self._apagar())
+        if self.path == "/api/abrir":
+            return self._responder_json(self._abrir(cuerpo))
         self.send_error(404)
 
     def _leer_cuerpo(self):
@@ -2337,6 +2363,25 @@ class Manejador(SimpleHTTPRequestHandler):
             return {"ok": False, "motivo": "Estás grabando: pará la grabación primero."}
         print("  Cerrada desde la pantalla.")
         threading.Thread(target=apagar_todo, args=(clase,), daemon=True).start()
+        return {"ok": True}
+
+    def _abrir(self, peticion):
+        """Una carpeta del usuario o una página de Windows, de la lista cerrada."""
+        que = str((peticion or {}).get("que") or "")
+        carpetas = carpetas_que_se_abren()
+        if que in PAGINAS_DE_WINDOWS:
+            destino = PAGINAS_DE_WINDOWS[que]
+        elif que in carpetas:
+            destino = os.path.abspath(carpetas[que])
+            os.makedirs(destino, exist_ok=True)
+        else:
+            return {"ok": False, "motivo": "Eso no se abre desde acá."}
+        try:
+            abrir_en_windows(destino)
+        except (AttributeError, OSError) as error:
+            # AttributeError: os.startfile solo existe en Windows.
+            print(f"  No pude abrir {destino}: {error}")
+            return {"ok": False, "motivo": "No pude abrirlo."}
         return {"ok": True}
 
     def _mandar_audio_de_frase(self, consulta):
