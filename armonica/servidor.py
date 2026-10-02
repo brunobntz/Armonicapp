@@ -71,6 +71,12 @@ REFRESCOS_POR_SEGUNDO = 15
 # archivo equivocado no se lea entero a memoria antes de darnos cuenta.
 MAXIMO_SUBIDA_BYTES = 60 * 1024 * 1024
 
+# Hasta cuánto cuerpo se lee y se tira de un pedido ajeno antes de contestarle
+# el 403. Hace falta leerlo: si el servidor cierra con el cuerpo sin leer,
+# Windows manda un RST y el cliente se queda sin ver el 403. Más que esto no
+# se lee: un pedido ajeno enorme no merece que el servidor se lo trague.
+MAXIMO_CUERPO_AJENO = 64 * 1024
+
 # Cuantas veces seguidas se intenta reabrir el microfono antes de darse por
 # vencido, y cuanto se espera entre intento e intento. Ver `escuchar`: con el
 # microfono prendido todo el tiempo, que el hilo se muera una vez ya no es un
@@ -1276,6 +1282,23 @@ class Manejador(SimpleHTTPRequestHandler):
             return True
         return False
 
+    def _descartar_cuerpo(self):
+        """
+        Lee y tira el cuerpo de un pedido que se va a rechazar, para que el
+        403 le llegue limpio al cliente (ver MAXIMO_CUERPO_AJENO). Si el
+        cuerpo es demasiado grande o el largo no se entiende, no se lee y la
+        conexión se cierra: el cliente puede ver un corte en vez del 403, y
+        para un pedido hostil está bien.
+        """
+        try:
+            largo = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            largo = -1
+        if 0 < largo <= MAXIMO_CUERPO_AJENO:
+            self.rfile.read(largo)
+        elif largo != 0:
+            self.close_connection = True
+
     # Lo ultimo que tocaste practicando: (muestras, frecuencia_muestreo). Vive
     # en memoria para poder escucharlo al lado de la referencia. Es UNO solo:
     # el siguiente intento lo reemplaza.
@@ -1392,6 +1415,7 @@ class Manejador(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if self._es_ajeno():
+            self._descartar_cuerpo()
             return self.send_error(403)
         # Las rutas que traen un .wav se atienden primero: su cuerpo son bytes
         # de audio, y leerlo como JSON lo consumiria sin poder recuperarlo.

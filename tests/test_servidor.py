@@ -3337,3 +3337,19 @@ def test_el_vigia_sigue_aunque_una_mirada_falle(monkeypatch):
 
     assert len(miradas) >= 3
     assert not hilo.is_alive()
+
+
+def test_un_pedido_ajeno_con_cuerpo_recibe_un_403_limpio(servidor_andando, tmp_path):
+    """
+    El 403 llega siempre, también cuando el pedido trae un cuerpo.
+
+    Si el servidor cerrara el socket con el cuerpo sin leer, Windows manda un
+    RST y el cliente se queda con un ConnectionAbortedError en vez del 403.
+    Una sola vez no alcanza para verlo: por eso se repite.
+    """
+    cuerpo = {"hechos": True, "relleno": "x" * 40000}
+    for _ in range(50):
+        codigo = pedir_con(servidor_andando, "/api/primeros-pasos",
+                           {"Origin": "http://evil.example"}, cuerpo)
+        assert codigo == 403
+    assert ajustes.cargar(str(tmp_path / "ajustes.json")) == {}
