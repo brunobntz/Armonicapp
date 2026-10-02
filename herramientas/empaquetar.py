@@ -234,6 +234,13 @@ def texto_leeme_licencias(descargas):
     ffmpeg = descargas["ffmpeg"]
     python = descargas["python"]
     version_python = re.search(r"python-([\d.]+)-embed", python["archivo"]).group(1)
+    # De la URL y el nombre fijados salen la versión de BtbN y el commit de
+    # FFmpeg: el código fuente exacto del binario, sin escribirlo a mano.
+    etiqueta = re.search(r"/download/([^/]+)/", ffmpeg["url"])
+    commit = re.search(r"-g([0-9a-f]+)-", ffmpeg["archivo"])
+    if not etiqueta or not commit:
+        raise ValueError("No saco la versión de BtbN ni el commit de FFmpeg de "
+                         f"{ffmpeg['url']}: el LEEME tiene que decir de dónde sale el código.")
     return (
         "Armónica viene con estas piezas, cada una con su licencia en esta carpeta.\n\n"
         "Armónica (MIT): Armonica\\LICENSE\n"
@@ -241,10 +248,11 @@ def texto_leeme_licencias(descargas):
         f"  {python['url']}\n"
         "Paquetes de Python: una carpeta por paquete, con lo que trae cada uno.\n"
         "PortAudio (lo usa sounddevice): portaudio\\README.md\n"
-        "ffmpeg (LGPL 2.1 o posterior), compilado por BtbN/FFmpeg-Builds: ffmpeg\\LICENSE.txt\n"
+        "ffmpeg (LGPL 3 o posterior), compilado por BtbN/FFmpeg-Builds: ffmpeg\\LICENSE.txt\n"
         f"  binario: {ffmpeg['url']}\n"
-        "  código fuente de FFmpeg: https://git.ffmpeg.org/ffmpeg.git\n"
-        "  scripts con que se compiló: https://github.com/BtbN/FFmpeg-Builds\n"
+        f"  código fuente de FFmpeg: https://git.ffmpeg.org/ffmpeg.git, commit {commit.group(1)}\n"
+        f"  scripts con que se compiló: https://github.com/BtbN/FFmpeg-Builds, "
+        f"versión {etiqueta.group(1)}\n"
     )
 
 
@@ -350,6 +358,10 @@ def armar():
         site_packages = python / "Lib" / "site-packages"
         _pip("install", "--no-index", "--find-links", str(RUEDAS), "--require-hashes",
              "-r", str(requisitos), "--target", str(site_packages))
+        # pip --target deja en bin\ lanzadores .exe (de numpy y otros) con un
+        # shebang a la ruta del .venv de Bruno: sin firma y inservibles.
+        if (site_packages / "bin").exists():
+            shutil.rmtree(site_packages / "bin")
 
         for relativo in archivos_de_la_app(codigo):
             final = ARMADO / "app" / relativo
@@ -438,14 +450,18 @@ def humo(programa=None, espera=30.0):
         # carpeta que después empaqueta Inno Setup.
         ffmpeg = programa / "ffmpeg"
         sistema = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+        # Sin PYTHONOPTIMIZE (en ningún entorno): con -O los assert del chequeo
+        # no corren y la prueba daría ok sin comprobar nada.
         entorno = dict(os.environ, PATH=str(ffmpeg) + os.pathsep + sistema,
                        ARMONICA_FFMPEG_ESPERADO=str(ffmpeg), PYTHONDONTWRITEBYTECODE="1")
+        entorno.pop("PYTHONOPTIMIZE", None)
         subprocess.run([str(programa / "python" / "python.exe"), "-c", CHEQUEO_DE_BIBLIOTECAS],
                        cwd=temporal, env=entorno, check=True)
 
         datos = Path(temporal) / "Armonica"
         entorno_app = dict(os.environ, ARMONICA_DATOS=str(datos), ARMONICA_SIN_NAVEGADOR="1",
                            PYTHONDONTWRITEBYTECODE="1")
+        entorno_app.pop("PYTHONOPTIMIZE", None)
         proceso = subprocess.Popen([str(programa / "python" / "pythonw.exe"),
                                     str(programa / "app" / "lanzador.pyw")],
                                    cwd=str(programa / "app"), env=entorno_app)

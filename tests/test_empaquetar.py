@@ -168,8 +168,12 @@ def test_requisitos_in_mal_escrito():
 def test_el_leeme_de_licencias_dice_de_donde_sale_ffmpeg():
     texto = empaquetar.texto_leeme_licencias(empaquetar.leer_descargas())
     assert "github.com/BtbN/FFmpeg-Builds" in texto
-    assert "LGPL" in texto
+    assert "LGPL 3" in texto        # el LICENSE.txt de la compilación de BtbN es la v3
     assert "3.14.6" in texto
+    # El código fuente exacto: la versión de BtbN y el commit de FFmpeg, sacados
+    # del archivo fijado en descargas.json.
+    assert "autobuild-2026-10-01-13-06" in texto
+    assert "330caae0c1" in texto
 
 
 def test_buscar_inno_setup(tmp_path):
