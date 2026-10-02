@@ -10,6 +10,8 @@ Cómo correrlos:   python -m pytest tests/test_servidor.py -v
 
 import json
 import os
+import re
+import socket
 import tempfile
 import threading
 import urllib.error
@@ -21,7 +23,7 @@ import pytest
 
 import config
 from armonica import (ajustes, audio, clases, coach, exportacion, frases, mapeo,
-                      microfono, plan, segmentacion, servidor)
+                      microfono, plan, segmentacion, servidor, version)
 from herramientas import generar_wav
 
 
@@ -46,6 +48,7 @@ def servidor_andando(tmp_path, monkeypatch):
     servidor.Manejador.sesion_pendiente = None
     servidor.Manejador.ultimo_intento = None
     servidor.Manejador.ultima_comparacion = None
+    servidor.Manejador.empaquetada = False
 
     instancia = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Manejador)
     puerto = instancia.server_address[1]
@@ -2900,3 +2903,65 @@ def test_el_circulo_de_quintas_por_armonica_y_por_cancion(servidor_andando):
     # Sin parametros usa la armonica puesta.
     assert traer_json(servidor_andando, "/api/quintas")["tono"] == "C"
     assert traer_json(servidor_andando, "/api/quintas?armonica=H")["ok"] is False
+
+
+# =============================================================================
+# Una sola app por puerto, y quién es
+# =============================================================================
+
+def test_un_puerto_ocupado_no_se_comparte():
+    """
+    En Windows, HTTPServer pide SO_REUSEADDR y una segunda app se quedaba con
+    el mismo puerto sin ningún error. Ahora un puerto ocupado es un error.
+    """
+    ocupante = socket.socket()
+    ocupante.bind(("127.0.0.1", 0))
+    ocupante.listen()
+    puerto = ocupante.getsockname()[1]
+    try:
+        with pytest.raises(servidor.PuertoOcupado):
+            servidor.enlazar([puerto])
+    finally:
+        ocupante.close()
+
+
+def test_si_el_primero_esta_ocupado_usa_el_siguiente():
+    ocupante = socket.socket()
+    ocupante.bind(("127.0.0.1", 0))
+    ocupante.listen()
+    puerto = ocupante.getsockname()[1]
+    try:
+        libre = servidor.enlazar([puerto, 0])
+        try:
+            assert libre.server_address[1] != puerto
+        finally:
+            libre.server_close()
+    finally:
+        ocupante.close()
+
+
+def test_dos_apps_no_comparten_el_puerto():
+    primera = servidor.enlazar([0])
+    try:
+        with pytest.raises(servidor.PuertoOcupado):
+            servidor.enlazar([primera.server_address[1]])
+    finally:
+        primera.server_close()
+
+
+def test_hola_dice_que_es_esta_app(servidor_andando):
+    assert traer_json(servidor_andando, "/api/hola") == \
+        {"app": "armonica", "version": version.version()}
+
+
+def test_la_version_sale_del_archivo():
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "VERSION"), encoding="utf-8") as archivo:
+        assert version.version() == archivo.read().strip()
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version.version())
+
+
+def test_inicio_dice_la_version_y_si_es_la_instalada(servidor_andando):
+    datos = traer_json(servidor_andando, "/api/inicio")
+    assert datos["version"] == version.version()
+    assert datos["empaquetada"] is False

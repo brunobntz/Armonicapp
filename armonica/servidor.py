@@ -44,6 +44,7 @@ from datetime import datetime
 import json
 import mimetypes
 import os
+import socket
 import tempfile
 import threading
 import time
@@ -55,7 +56,7 @@ import config
 from armonica import ajustes, canciones, canciones_ajustes, compas_uno, imagenes, sobre_la_base
 from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
-                      segmentacion, tablas, teoria, tono, transcripcion)
+                      segmentacion, tablas, teoria, tono, transcripcion, version)
 
 
 CARPETA_WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -1081,6 +1082,10 @@ class Manejador(SimpleHTTPRequestHandler):
     # que permite probar todo el servidor sin una placa de sonido.
     audio_automatico = False
 
+    # Si es la versión instalada (la abre el lanzador): la pantalla usa los
+    # textos para el profe, sin carpetas ni comandos.
+    empaquetada = False
+
     # Lo ultimo que tocaste practicando: (muestras, frecuencia_muestreo). Vive
     # en memoria para poder escucharlo al lado de la referencia. Es UNO solo:
     # el siguiente intento lo reemplaza.
@@ -1147,6 +1152,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._transmitir_estado()
         if self.path == "/api/inicio":
             return self._responder_json(self._datos_iniciales())
+        if self.path == "/api/hola":
+            return self._responder_json({"app": "armonica", "version": version.version()})
         if self.path == "/api/historial":
             return self._responder_json(historial())
         if self.path == "/api/frases":
@@ -2643,6 +2650,8 @@ class Manejador(SimpleHTTPRequestHandler):
             "corrida": corrida_de_la_escala(
                 estado.tonalidad, estado.posicion, estado.escala
             ),
+            "version": version.version(),
+            "empaquetada": type(self).empaquetada,
         }
 
     # --- Las respuestas ---
@@ -2684,13 +2693,52 @@ class Manejador(SimpleHTTPRequestHandler):
             pass
 
 
+class PuertoOcupado(OSError):
+    """Ninguno de los puertos pedidos estaba libre."""
+
+
+class ServidorExclusivo(ThreadingHTTPServer):
+    """
+    El servidor de la app, dueño exclusivo de su puerto.
+
+    HTTPServer pide SO_REUSEADDR, y en Windows eso deja que una SEGUNDA app
+    se enganche al mismo puerto sin ningún error: dos servidores, dos
+    micrófonos abiertos, y el navegador hablando con cualquiera de los dos.
+    Sin SO_REUSEADDR y con SO_EXCLUSIVEADDRUSE, un puerto ocupado falla al
+    enlazar, que es lo que necesitan el lanzador (para probar el siguiente)
+    y main.py (para decir que ya hay una abierta).
+    """
+
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+def enlazar(puertos):
+    """El servidor en el primer puerto libre de `puertos`."""
+    puertos = list(puertos)
+    for puerto in puertos:
+        try:
+            return ServidorExclusivo(("127.0.0.1", puerto), Manejador)
+        except OSError:
+            continue
+    if len(puertos) == 1:
+        raise PuertoOcupado(f"El puerto {puertos[0]} está ocupado.")
+    raise PuertoOcupado(f"Los puertos del {puertos[0]} al {puertos[-1]} están ocupados.")
+
+
 def arrancar(tonalidad=None, posicion=None, escala=None, puerto=8000,
-             abrir_navegador=True):
+             abrir_navegador=True, empaquetada=False, puertos=None):
     """
     Levanta el servidor y bloquea hasta que lo cortes con Ctrl+C.
 
     tonalidad, posicion y escala en None quieren decir "no vinieron": manda
     lo guardado en Ajustes (ajustes.json) y, si no hay nada, la fabrica.
+    `puertos` es la lista que prueba el lanzador; sin ella, solo `puerto`.
+    Si no hay ninguno libre, PuertoOcupado.
     """
     guardados = ajustes.cargar()
     ajustes.aplicar_a_config(guardados)
@@ -2700,9 +2748,10 @@ def arrancar(tonalidad=None, posicion=None, escala=None, puerto=8000,
     Manejador.estado = EstadoCompartido(tonalidad, posicion, escala)
     Manejador.estado.dispositivo, Manejador.estado.aviso_microfono = \
         microfono_guardado(guardados)
+    Manejador.empaquetada = empaquetada
 
-    servidor = ThreadingHTTPServer(("127.0.0.1", puerto), Manejador)
-    direccion = f"http://127.0.0.1:{puerto}"
+    servidor = enlazar(puertos or [puerto])
+    direccion = f"http://127.0.0.1:{servidor.server_address[1]}"
 
     print()
     print("=" * 72)

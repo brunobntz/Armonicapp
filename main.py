@@ -1414,8 +1414,12 @@ def main():
 
     if argumentos.web:
         from armonica import servidor
-        return servidor.arrancar(puerto=argumentos.puerto,
-                                 **_explicitos_para_la_web(sys.argv[1:]))
+        try:
+            return servidor.arrancar(puerto=argumentos.puerto,
+                                     **_explicitos_para_la_web(sys.argv[1:]))
+        except servidor.PuertoOcupado as error:
+            print(f"  {error} ¿Ya está abierta la app? Cerrala, o usá --puerto con otro número.")
+            return 1
 
     if argumentos.calibrar:
         return _calibrar()
