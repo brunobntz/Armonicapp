@@ -203,7 +203,7 @@ def test_un_audio_fuera_de_rango_avisa_pero_deja_seguir(tmp_path):
     assert sirve is True
     assert motivo == ""
     assert avisos
-    assert "--que-tono" in avisos[0]
+    assert "elegí esa al importarla" in avisos[0]
 
 
 # =============================================================================

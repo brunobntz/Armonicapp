@@ -250,8 +250,8 @@ def revisar(transcripcion, tonalidad):
     if calidad["con_sonido"] == 0:
         return False, (
             "En el audio no hay nada por encima del umbral de volumen. "
-            f"{calidad['explicacion']} Si grabaste bajito, corré  "
-            "python main.py --calibrar  para medir el ruido de tu pieza."
+            f"{calidad['explicacion']} Si grabaste bajito, medí el ruido en "
+            "Ajustes y probá de nuevo."
         ), avisos
 
     if calidad["puntaje"] < MONOFONIA_MINIMA:
@@ -271,8 +271,8 @@ def revisar(transcripcion, tonalidad):
         avisos.append(
             f"Solo el {cobertura * 100:.0f}% de lo que suena entra en una "
             f"armónica en {tonalidad}: el resto queda fuera de su alcance y "
-            "se pierde. Si la grabación es de otra armónica, corré  "
-            "python main.py --wav <archivo> --que-tono  para saber cuál."
+            "se pierde. Si la grabación es de otra armónica, elegí esa al "
+            "importarla."
         )
 
     return True, "", avisos

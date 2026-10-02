@@ -306,8 +306,8 @@
       El audio puede ser tuyo o del profe. <strong>Decile con qué armónica se
       grabó</strong>: eso la app no lo puede deducir, y con la armónica
       equivocada la tablatura sale mal sin dar ningún error.
-      Si no es un <code>.wav</code> lo convierte sola, siempre que tengas
-      ffmpeg instalado. Si atrás hay una base sonando, el detector no puede
+      Si no es un <code>.wav</code> lo convierte sola<span class="solo-desarrollo">,
+      siempre que tengas ffmpeg instalado</span>. Si atrás hay una base sonando, el detector no puede
       separarlas: te lo va a decir y te va a mostrar qué habría transcrito,
       para que decidas vos si sirve.
     </p>
@@ -423,15 +423,20 @@
 
   <section>
     <h2>Los apuntes de las clases</h2>
-    <p class="ayuda">
+    <p class="ayuda solo-desarrollo">
       La solapa Aprendizaje lee los resúmenes de tus clases de
       <code>material/</code>, o de la carpeta que diga <code>CARPETA_CLASES</code>
       en el <code>.env</code>. Solo lee: nunca escribe ahí.
     </p>
+    <p class="ayuda solo-empaquetada">
+      La solapa Aprendizaje lee los resúmenes de tus clases de tu carpeta de
+      apuntes. Solo lee: nunca escribe ahí.
+      <button class="secundario chico" data-abrir="apuntes">Abrir la carpeta</button>
+    </p>
     <p id="estado-clases" class="ayuda"></p>
   </section>
 
-  <section>
+  <section class="solo-desarrollo">
     <h2>El coach</h2>
     <p class="ayuda">
       Un modelo de lenguaje que explica lo que la app midió: recibe los
@@ -506,9 +511,11 @@
        tablatura en foto. La app solo LEE esa carpeta. -->
   <section>
     <p class="ayuda">
-      Una carpeta por canción en <code>material/canciones/</code> (o en la
-      que diga <code>CARPETA_CANCIONES</code> en el <code>.env</code>), con
-      lo que te manden: la base de Band-in-a-Box (<code>.sgu</code> o
+      <span class="solo-desarrollo">Una carpeta por canción en <code>material/canciones/</code> (o en la
+      que diga <code>CARPETA_CANCIONES</code> en el <code>.env</code>),</span>
+      <span class="solo-empaquetada">Una carpeta por canción en tu carpeta de canciones
+      <button class="secundario chico" data-abrir="canciones">Abrir la carpeta</button>,</span>
+      con lo que te manden: la base de Band-in-a-Box (<code>.sgu</code> o
       <code>.mgu</code>), los audios (m4a, mp3, mp4) y la tablatura en foto.
       De la base salen el tono, el tempo, el compás y el cifrado; los audios
       se escuchan acá y se pueden importar como frases. La app solo lee esa

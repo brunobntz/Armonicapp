@@ -1646,3 +1646,8 @@ table.intentos { font-size: 13px; max-width: 620px; }
 .primeros-pasos ol { margin: 8px 0 12px; padding-left: 22px; line-height: 1.6; }
 .primeros-pasos li { margin-bottom: 10px; }
 .primeros-pasos li button { margin-left: 6px; }
+
+/* Lo que es solo para quien usa la app desde el repo (carpetas, .env, el
+ * coach) no se ve en la versión instalada, y al revés. */
+body.empaquetada .solo-desarrollo,
+body:not(.empaquetada) .solo-empaquetada { display: none !important; }

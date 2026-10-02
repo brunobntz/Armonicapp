@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarPrimerosPasos();
 
   inicio = await pedir("/api/inicio");
+  document.body.classList.toggle("empaquetada", esLaInstalada());
   TOLERANCIA = inicio.tolerancia_cents || 10;
   mostrarPrimerosPasos(!inicio.primeros_pasos_hechos);
 
@@ -70,6 +71,13 @@ function mostrarEncabezado() {
     texto += " · " + inicio.nombre_escala.toLowerCase();
   }
   document.getElementById("encabezado").textContent = texto;
+}
+
+
+/* Si es la version instalada (la abre el lanzador): sin carpetas, sin .env,
+ * sin comandos. */
+function esLaInstalada() {
+  return Boolean(inicio && inicio.empaquetada);
 }
 
 
@@ -1100,7 +1108,8 @@ function avisarQueSeGuardo(respuesta) {
   } else {
     aviso.className = "";
     const notas = (respuesta.resumen || {}).notas || 0;
-    aviso.textContent = "Guardado en sesiones/ — " + notas + " notas.";
+    aviso.textContent = (esLaInstalada() ? "Guardado \u2014 " : "Guardado en sesiones/ \u2014 ") +
+      notas + " notas.";
     // Y llevamos la vista al resumen, que es lo que queres leer ahora.
     document.getElementById("seccion-resumen")
       .scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1155,8 +1164,10 @@ function mostrarResumen(respuesta) {
   if (respuesta.sobre_la_base) html += htmlSobreLaBase(respuesta.sobre_la_base);
 
   if (respuesta.guardado && Object.keys(respuesta.guardado).length) {
-    html += "<p class='ayuda'>Guardado en sesiones/: " +
-            Object.values(respuesta.guardado).join(", ") + "</p>";
+    html += esLaInstalada()
+      ? "<p class='ayuda'>Guardado en tu carpeta de sesiones. " + botonAbrir("sesiones") + "</p>"
+      : "<p class='ayuda'>Guardado en sesiones/: " +
+        Object.values(respuesta.guardado).join(", ") + "</p>";
   }
 
   contenedor.innerHTML = html;
@@ -1994,9 +2005,11 @@ function dibujarNivel(estado) {
   if (!texto) return;
 
   if (estado.error_de_audio) {
-    texto.innerHTML = "<strong>El micr\u00f3fono fall\u00f3:</strong> " +
-      escapar(estado.error_de_audio) +
-      " \u2014 prob\u00e1 con otro en <strong>Ajustes</strong>.";
+    texto.innerHTML = esLaInstalada()
+      ? "<strong>El micr\u00f3fono fall\u00f3.</strong> Prob\u00e1 con otro en <strong>Ajustes</strong>; " +
+        "el detalle qued\u00f3 en registro.txt."
+      : "<strong>El micr\u00f3fono fall\u00f3:</strong> " + escapar(estado.error_de_audio) +
+        " \u2014 prob\u00e1 con otro en <strong>Ajustes</strong>.";
     texto.className = "ayuda lejos";
     return;
   }
@@ -2685,11 +2698,15 @@ async function cargarAprendizaje() {
   carpeta.textContent = datos.cantidad + (datos.cantidad === 1 ? " clase" : " clases");
 
   if (!datos.existe || !datos.cantidad) {
-    contenedor.innerHTML = '<div class="aviso">Todavía no hay apuntes. Dejá los resúmenes ' +
-      "de tus clases (Markdown, texto o Word, con la fecha en el nombre: " +
-      "<code>2026-09-08.md</code>) en <code>material/</code>, o apuntá " +
-      "<code>CARPETA_CLASES</code> en el <code>.env</code> a la carpeta donde ya los tenés. " +
-      "La app solo lee esa carpeta: nunca escribe ahí.</div>";
+    contenedor.innerHTML = esLaInstalada()
+      ? '<div class="aviso">Todav\u00eda no hay apuntes. Dej\u00e1 los res\u00famenes de tus clases ' +
+        "(Markdown, texto o Word, con la fecha en el nombre: <code>2026-09-08.md</code>) en tu " +
+        "carpeta de apuntes. " + botonAbrir("apuntes") + "</div>"
+      : '<div class="aviso">Todav\u00eda no hay apuntes. Dej\u00e1 los res\u00famenes ' +
+        "de tus clases (Markdown, texto o Word, con la fecha en el nombre: " +
+        "<code>2026-09-08.md</code>) en <code>material/</code>, o apunt\u00e1 " +
+        "<code>CARPETA_CLASES</code> en el <code>.env</code> a la carpeta donde ya los ten\u00e9s. " +
+        "La app solo lee esa carpeta: nunca escribe ah\u00ed.</div>";
     return;
   }
 
@@ -2846,9 +2863,12 @@ async function cargarCanciones() {
   estado.textContent = cuantas ? (cuantas === 1 ? "Hay 1 canción." : "Hay " + cuantas + " canciones.") : "";
 
   if (!cuantas) {
-    contenedor.innerHTML = '<div class="aviso">Todavía no hay canciones. Creá una carpeta ' +
-      "por canción adentro de <code>material/canciones/</code> y dejá ahí la base, los " +
-      "audios y la foto de la tablatura. Con volver a esta solapa alcanza.</div>";
+    contenedor.innerHTML = '<div class="aviso">Todav\u00eda no hay canciones. Cre\u00e1 una carpeta ' +
+      "por canci\u00f3n adentro de " +
+      (esLaInstalada() ? "tu carpeta de canciones " + botonAbrir("canciones")
+                       : "<code>material/canciones/</code>") +
+      " y dej\u00e1 ah\u00ed la base, los audios y la foto de la tablatura. " +
+      "Con volver a esta solapa alcanza.</div>";
     return;
   }
 
@@ -3005,7 +3025,7 @@ function htmlDeLaExplicacion(cancion, datos) {
       ? "El cifrado se le manda al modelo: con " + escapar(nombreDelProveedor(datos.coach.proveedor)) +
         " sale de tu máquina. Con Ollama, no."
       : "El cifrado se le manda al modelo local: no sale de tu máquina.") + "</span>";
-  } else if (!(e && e.texto)) {
+  } else if (!(e && e.texto) && !esLaInstalada()) {
     html += "<span class='ayuda'>Con el coach activo (mirá Ajustes), un botón acá le pide que " +
       "explique la base: la forma, las cadencias, dónde apuntar las guías.</span>";
   }
@@ -4098,12 +4118,15 @@ async function mostrarOrigenDeLasClases() {
   if (!donde) return;
   const datos = await pedir("/api/aprendizaje");
   if (!datos.ok) { donde.textContent = datos.motivo; return; }
-  donde.innerHTML = (datos.origen === "configurada"
-    ? "Se leen de la carpeta configurada en <code>CARPETA_CLASES</code> del <code>.env</code>"
-    : "Se leen de <code>material/</code>, la carpeta por defecto") +
-    ": " + datos.cantidad + (datos.cantidad === 1 ? " clase" : " clases") +
-    (datos.existe ? "" : " (la carpeta no existe todavía)") +
-    ". La app solo lee esa carpeta.";
+  donde.innerHTML = esLaInstalada()
+    ? "Se leen de tu carpeta de apuntes: " + datos.cantidad +
+      (datos.cantidad === 1 ? " clase." : " clases.")
+    : (datos.origen === "configurada"
+        ? "Se leen de la carpeta configurada en <code>CARPETA_CLASES</code> del <code>.env</code>"
+        : "Se leen de <code>material/</code>, la carpeta por defecto") +
+      ": " + datos.cantidad + (datos.cantidad === 1 ? " clase" : " clases") +
+      (datos.existe ? "" : " (la carpeta no existe todav\u00eda)") +
+      ". La app solo lee esa carpeta.";
 }
 
 
