@@ -7,6 +7,8 @@ crea y borra sola (el parámetro `tmp_path`).
 Cómo correrlos:   python -m pytest tests/test_audio.py -v
 """
 
+import subprocess
+
 import numpy as np
 import pytest
 
@@ -328,3 +330,24 @@ def test_un_archivo_que_no_es_wav_da_un_error_claro(tmp_path):
         audio.leer_wav(str(ruta))
 
     assert ".wav" in str(fallo.value)
+
+
+# =============================================================================
+# ffmpeg sin ventana negra
+# =============================================================================
+
+def test_ffmpeg_no_abre_una_ventana(monkeypatch, tmp_path):
+    """
+    Desde pythonw (la versión instalada) no hay consola: cada llamada a
+    ffmpeg abriría una ventana negra un instante. CREATE_NO_WINDOW lo evita.
+    """
+    vistas = {}
+
+    def run_falso(comando, **opciones):
+        vistas.update(opciones)
+        return subprocess.CompletedProcess(comando, 0, "", "")
+
+    monkeypatch.setattr(audio, "hay_ffmpeg", lambda: True)
+    monkeypatch.setattr(audio.subprocess, "run", run_falso)
+    audio.convertir_a_wav(tmp_path / "clase.m4a", tmp_path / "clase.wav")
+    assert vistas["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)

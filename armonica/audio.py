@@ -148,6 +148,9 @@ def convertir_a_wav(origen, destino, frecuencia_muestreo=None):
             str(destino),
         ],
         capture_output=True, text=True,
+        # Sin consola (la version instalada corre con pythonw), cada llamada
+        # abriria una ventana negra un instante.
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
 
     if resultado.returncode != 0:
