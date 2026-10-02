@@ -19,6 +19,7 @@ Para probarlo desde el repo, sin tocar Documentos:
 
     set ARMONICA_DATOS=C:\\ruta\\de\\prueba
     .venv\\Scripts\\pythonw.exe lanzador.pyw
+    set ARMONICA_SIN_NAVEGADOR=1     (opcional: no abre el navegador)
 """
 
 import ctypes
@@ -26,6 +27,7 @@ import http.client
 import json
 import os
 import sys
+import time
 import traceback
 import urllib.request
 import webbrowser
@@ -38,6 +40,18 @@ CONSERVAR_REGISTRO = 200_000
 
 # app\armonica\lanzador.py -> app -> la carpeta del programa, donde está ffmpeg\.
 CARPETA_PROGRAMA = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# El turno: un mutex de Windows con nombre. Lo toma el primer lanzador y lo
+# tiene mientras vive su app; un segundo lanzador lo encuentra tomado.
+NOMBRE_DEL_TURNO = "Local\\Armonica-lanzador"
+ERROR_ALREADY_EXISTS = 183
+
+# Cuánto espera un segundo lanzador a que la app del primero conteste.
+ESPERA_A_LA_OTRA = 20.0
+
+# La manija del turno: tiene que vivir lo que vive el proceso. Si se
+# cerrara, el próximo lanzador creería que es el primero.
+_turno = None
 
 
 def carpeta_de_documentos():
@@ -141,6 +155,50 @@ def buscar_instancia(puertos=PUERTOS, espera=0.5):
     return None
 
 
+def tomar_el_turno(nombre=NOMBRE_DEL_TURNO):
+    """
+    (es_el_primero, manija). Dos clics rápidos en el ícono abren dos
+    lanzadores casi juntos: el segundo no llega a ver la app del primero,
+    que todavía está arrancando, y levantaría otra con otro micrófono
+    abierto. El que crea el mutex es el primero; el otro espera a que la
+    app conteste y solo abre el navegador. Fuera de Windows no hay turno.
+    """
+    if sys.platform != "win32":
+        return True, None
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+    manija = kernel32.CreateMutexW(None, False, nombre)
+    if not manija:
+        raise OSError(f"CreateMutexW falló: {ctypes.get_last_error()}")
+    return ctypes.get_last_error() != ERROR_ALREADY_EXISTS, manija
+
+
+def esperar_instancia(espera=ESPERA_A_LA_OTRA, cada=0.5, buscar=None):
+    """El puerto de la app cuando conteste, o None si no contesta a tiempo."""
+    buscar = buscar or buscar_instancia
+    limite = time.monotonic() + espera
+    while True:
+        puerto = buscar()
+        if puerto is not None or time.monotonic() >= limite:
+            return puerto
+        time.sleep(cada)
+
+
+def abrir_el_navegador(puerto, entorno=None):
+    """
+    Abre la página de la app. Con ARMONICA_SIN_NAVEGADOR no abre nada: la
+    prueba de humo del armado abre y cierra la app sin tocar el navegador
+    de quien la corre.
+    """
+    entorno = os.environ if entorno is None else entorno
+    if entorno.get("ARMONICA_SIN_NAVEGADOR"):
+        return False
+    webbrowser.open(f"http://127.0.0.1:{puerto}")
+    return True
+
+
 def avisar(texto):
     """
     Un cartel de Windows. Sin consola y antes de que haya página, es la
@@ -159,16 +217,30 @@ def main():
         print(f"--- {datetime.now():%Y-%m-%d %H:%M:%S} ---")
         preparar_entorno(raiz, CARPETA_PROGRAMA)
 
+        global _turno
+        es_el_primero, _turno = tomar_el_turno()
+        if not es_el_primero:
+            puerto = esperar_instancia()
+            if puerto is None:
+                avisar("Armónica ya se está abriendo pero todavía no contesta. "
+                       "Esperá un momento y volvé a probar.")
+                return 1
+            print(f"Otro lanzador la está abriendo en el {puerto}: solo abro el navegador.")
+            abrir_el_navegador(puerto)
+            return 0
+
+        # Una app de una versión anterior, sin turno, también cuenta.
         puerto = buscar_instancia()
         if puerto is not None:
             print(f"Ya estaba abierta en el {puerto}: solo abro el navegador.")
-            webbrowser.open(f"http://127.0.0.1:{puerto}")
+            abrir_el_navegador(puerto)
             return 0
 
         # Recién ahora: con la carpeta y el entorno listos.
         from armonica import servidor
         try:
-            return servidor.arrancar(puertos=PUERTOS, empaquetada=True)
+            return servidor.arrancar(puertos=PUERTOS, empaquetada=True,
+                                     abrir_navegador=not os.environ.get("ARMONICA_SIN_NAVEGADOR"))
         except servidor.PuertoOcupado as error:
             avisar(f"{error} Cerrá otros programas y probá de nuevo.")
             return 1

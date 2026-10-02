@@ -8,6 +8,7 @@ import os
 import socket
 import sys
 import threading
+import uuid
 from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -150,3 +151,32 @@ def test_una_respuesta_que_no_es_un_objeto_no_es_la_app():
     finally:
         otro.shutdown()
         otro.server_close()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="el turno es un mutex de Windows")
+def test_el_turno_es_de_uno_solo():
+    import ctypes
+    nombre = f"Local\\Armonica-prueba-{uuid.uuid4()}"
+    primero, manija_1 = lanzador.tomar_el_turno(nombre)
+    segundo, manija_2 = lanzador.tomar_el_turno(nombre)
+    try:
+        assert primero is True
+        assert segundo is False
+    finally:
+        ctypes.windll.kernel32.CloseHandle(manija_1)
+        ctypes.windll.kernel32.CloseHandle(manija_2)
+
+
+def test_esperar_a_la_app_que_esta_arrancando():
+    respuestas = iter([None, None, 8003])
+    assert lanzador.esperar_instancia(espera=5, cada=0, buscar=lambda: next(respuestas)) == 8003
+    assert lanzador.esperar_instancia(espera=0.05, cada=0.01, buscar=lambda: None) is None
+
+
+def test_sin_navegador_para_la_prueba_de_humo(monkeypatch):
+    abiertas = []
+    monkeypatch.setattr(lanzador.webbrowser, "open", abiertas.append)
+    assert lanzador.abrir_el_navegador(8001, {"ARMONICA_SIN_NAVEGADOR": "1"}) is False
+    assert abiertas == []
+    assert lanzador.abrir_el_navegador(8001, {}) is True
+    assert abiertas == ["http://127.0.0.1:8001"]
