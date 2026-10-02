@@ -25,3 +25,7 @@ separado/
 
 # La clave del coach (LLM). Es tuya y se queda en tu maquina.
 .env
+
+# Lo que la app guarda al usarla desde el repo (en la instalada va a Documentos\Armonica)
+ajustes.json
+registro.txt
