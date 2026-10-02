@@ -42,11 +42,11 @@ def _valido(clave, valor):
         return (isinstance(valor, (int, float)) and not isinstance(valor, bool)
                 and 0 < valor < 1)
     if clave == "tonalidad":
-        return valor in tablas.TONALIDADES
+        return isinstance(valor, str) and valor in tablas.TONALIDADES
     if clave == "posicion":
         return valor is None or (_es_entero(valor) and valor in tablas.POSICIONES_CON_TABLA)
     if clave == "escala":
-        return valor is None or valor in tablas.ESCALAS_INTERVALOS
+        return valor is None or (isinstance(valor, str) and valor in tablas.ESCALAS_INTERVALOS)
     if clave == "primeros_pasos":
         return isinstance(valor, bool)
     return False

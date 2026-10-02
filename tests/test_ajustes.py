@@ -37,7 +37,7 @@ def test_guardar_pisa_solo_lo_que_viene(tmp_path):
 @pytest.mark.parametrize("clave, valor", [
     ("tonalidad", "H"), ("posicion", 7), ("posicion", True), ("umbral", 0),
     ("umbral", "alto"), ("escala", "inventada"), ("primeros_pasos", "si"),
-    ("microfono", 3), ("otra_cosa", 1),
+    ("microfono", 3), ("otra_cosa", 1), ("tonalidad", ["C"]), ("escala", {}),
 ])
 def test_un_ajuste_invalido_no_se_guarda(tmp_path, clave, valor):
     ruta = str(tmp_path / "ajustes.json")
@@ -57,6 +57,13 @@ def test_un_archivo_roto_no_rompe(tmp_path):
     ruta = tmp_path / "ajustes.json"
     ruta.write_text("{esto no es json", encoding="utf-8")
     assert ajustes.cargar(str(ruta)) == {}
+
+
+def test_lo_invalido_por_tipo_en_el_archivo_se_ignora(tmp_path):
+    """Valores que son listas o dicts no rompen cargar(), se filtran."""
+    ruta = tmp_path / "ajustes.json"
+    ruta.write_text(json.dumps({"tonalidad": ["C"], "escala": {"a": 1}, "umbral": 0.004}), encoding="utf-8")
+    assert ajustes.cargar(str(ruta)) == {"umbral": 0.004}
 
 
 def test_la_linea_de_comandos_le_gana_a_lo_guardado_y_lo_guardado_a_la_fabrica():
