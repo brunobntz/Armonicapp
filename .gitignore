@@ -29,3 +29,8 @@ separado/
 # Lo que la app guarda al usarla desde el repo (en la instalada va a Documentos\Armonica)
 ajustes.json
 registro.txt
+# El armado del instalador (herramientas/empaquetar.py)
+empaquetado/_descargas/
+empaquetado/_armado/
+empaquetado/ejemplos/
+dist/
