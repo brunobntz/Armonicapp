@@ -87,6 +87,12 @@ var
   Respuesta: String;
 begin
   Result := '';
+  { El lanzador tiene el mutex Local\Armonica-lanzador mientras vive su app: si
+    no existe, no hay app abierta y no hay nada que cerrar. Sin esta salida se
+    probarían los 11 puertos, y cada uno cerrado tarda unos 2 segundos en
+    fallar: unos 22 segundos en pantalla sin que parezca pasar nada. }
+  if not CheckForMutexes('Local\Armonica-lanzador') then
+    Exit;
   for Puerto := PrimerPuerto to UltimoPuerto do
   begin
     try
@@ -107,6 +113,8 @@ begin
           Sleep(2000)
         else
           Result := 'Armónica está grabando. Pará la grabación, cerrala desde Ajustes y volvé a abrir este programa.';
+        { Hay una sola app: se cierre o no, no se siguen probando los otros puertos. }
+        Exit;
       end;
     except
       { Nada escuchando en ese puerto, u otro programa: se sigue. }
