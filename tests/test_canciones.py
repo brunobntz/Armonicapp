@@ -10,6 +10,8 @@ Cómo correrlos:   python -m pytest tests/test_canciones.py -v
 import inspect
 import os
 import re
+import sys
+import types
 
 import pytest
 
@@ -107,6 +109,22 @@ def test_sin_pillow_heif_el_error_dice_como_instalarlo(tmp_path, monkeypatch):
 
 def test_un_jpg_no_se_convierte():
     assert imagenes.como_jpg("foto.jpg") == "foto.jpg"
+
+
+def test_sin_pillow_heif_sirve_pi_heif(monkeypatch):
+    """El instalador lleva pi-heif: solo lee, y no trae el codificador x265 (GPL)."""
+    pi_heif = types.SimpleNamespace(register_heif_opener=lambda: None)
+    monkeypatch.setitem(sys.modules, "pillow_heif", None)
+    monkeypatch.setitem(sys.modules, "pi_heif", pi_heif)
+    assert imagenes._modulo_heif() is pi_heif
+    assert imagenes.hay_soporte_heic() is True
+
+
+def test_sin_ninguna_de_las_dos_no_hay_heic(monkeypatch):
+    monkeypatch.setitem(sys.modules, "pillow_heif", None)
+    monkeypatch.setitem(sys.modules, "pi_heif", None)
+    assert imagenes._modulo_heif() is None
+    assert imagenes.hay_soporte_heic() is False
 
 
 # =============================================================================

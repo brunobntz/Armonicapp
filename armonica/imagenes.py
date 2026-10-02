@@ -3,9 +3,10 @@ imagenes.py — Mostrar en el navegador una foto que el navegador no sabe abrir.
 
 Las fotos del iPhone vienen en .HEIC, y ningún navegador las muestra. Para
 verlas en la app hay que convertirlas a JPG, y eso necesita dos bibliotecas
-que no vienen con Python: Pillow, y pillow-heif, que le enseña a Pillow a
-leer HEIC. Son OPCIONALES, como pypdf para los apuntes en PDF: sin ellas
-la app anda igual, y en el lugar de la foto dice cómo instalarlas.
+que no vienen con Python: Pillow, y pillow-heif (o pi-heif, que es la que
+lleva el instalador), que le enseña a Pillow a leer HEIC. Son OPCIONALES,
+como pypdf para los apuntes en PDF: sin ellas la app anda igual, y en el
+lugar de la foto dice cómo instalarlas.
 
 Los JPG van a una caché aparte, material/_cache/, y NUNCA a la carpeta de
 la canción: esa carpeta es del usuario y la app solo la lee. El nombre del
@@ -14,6 +15,7 @@ otra con el mismo nombre se vuelve a convertir sola.
 """
 
 import hashlib
+import importlib
 import os
 
 CARPETA_CACHE = os.path.join("material", "_cache")
@@ -25,10 +27,26 @@ def es_heic(ruta):
     return str(ruta).lower().endswith(EXTENSIONES_HEIC)
 
 
+def _modulo_heif():
+    """
+    La biblioteca que le enseña a Pillow a leer HEIC: pillow-heif (la que se
+    instala en el repo) o pi-heif (la que lleva el instalador). Se usan
+    igual; pi-heif solo lee, y por eso no trae el codificador x265, que es
+    GPL y no puede ir en un instalador que se le pasa a otro.
+    """
+    for nombre in ("pillow_heif", "pi_heif"):
+        try:
+            return importlib.import_module(nombre)
+        except ImportError:
+            continue
+    return None
+
+
 def hay_soporte_heic():
     """Si están las dos bibliotecas que hacen falta para leer un .HEIC."""
+    if _modulo_heif() is None:
+        return False
     try:
-        import pillow_heif  # noqa: F401
         from PIL import Image  # noqa: F401
     except ImportError:
         return False
@@ -60,9 +78,8 @@ def como_jpg(ruta, carpeta_cache=None, lado_maximo=2000):
     if os.path.isfile(destino):
         return destino
 
-    import pillow_heif
     from PIL import Image
-    pillow_heif.register_heif_opener()
+    _modulo_heif().register_heif_opener()
 
     os.makedirs(carpeta_cache, exist_ok=True)
     with Image.open(ruta) as imagen:
