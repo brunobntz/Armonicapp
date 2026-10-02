@@ -84,8 +84,18 @@ def guardar(cambios, ruta=None):
     carpeta = os.path.dirname(ruta)
     if carpeta:
         os.makedirs(carpeta, exist_ok=True)
-    with open(ruta, "w", encoding="utf-8") as archivo:
-        json.dump(actuales, archivo, indent=2, ensure_ascii=False)
+    # A un temporal y después se reemplaza: si algo corta el guardado (el
+    # instalador cerrando la app, un disco lleno), queda el archivo de antes
+    # entero y no uno vacío que haría arrancar con la fábrica.
+    temporal = ruta + ".tmp"
+    try:
+        with open(temporal, "w", encoding="utf-8") as archivo:
+            json.dump(actuales, archivo, indent=2, ensure_ascii=False)
+        os.replace(temporal, ruta)
+    except BaseException:
+        if os.path.exists(temporal):
+            os.remove(temporal)
+        raise
     return actuales
 
 

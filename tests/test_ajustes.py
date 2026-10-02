@@ -90,3 +90,23 @@ def test_el_microfono_se_busca_por_nombre():
     assert ajustes.resolver_microfono(" micrófono (usb audio) ", entradas) == 1
     assert ajustes.resolver_microfono("Cámara", entradas) is None
     assert ajustes.resolver_microfono("", entradas) is None
+
+
+def test_un_guardado_que_falla_no_rompe_lo_que_habia(tmp_path, monkeypatch):
+    """
+    El instalador de una versión nueva puede cerrar la app en cualquier
+    momento: un guardado cortado no puede dejar un ajustes.json vacío.
+    """
+    ruta = str(tmp_path / "ajustes.json")
+    ajustes.guardar({"tonalidad": "A"}, ruta)
+
+    def dump_que_falla(*args, **kwargs):
+        raise OSError("disco lleno")
+
+    monkeypatch.setattr(ajustes, "json", types.SimpleNamespace(load=json.load, dump=dump_que_falla))
+    with pytest.raises(OSError):
+        ajustes.guardar({"tonalidad": "D"}, ruta)
+    monkeypatch.undo()
+
+    assert ajustes.cargar(ruta) == {"tonalidad": "A"}
+    assert not (tmp_path / "ajustes.json.tmp").exists()
