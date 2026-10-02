@@ -19,9 +19,15 @@ def test_los_datos_van_donde_diga_armonica_datos(tmp_path):
     assert lanzador.carpeta_de_datos({"ARMONICA_DATOS": str(tmp_path)}) == str(tmp_path)
 
 
-def test_sin_la_variable_van_a_documentos(monkeypatch):
-    monkeypatch.setattr(lanzador, "carpeta_de_documentos", lambda: os.path.join("D:", "Docs"))
-    assert lanzador.carpeta_de_datos({}) == os.path.join("D:", "Docs", "Armonica")
+def test_una_ruta_relativa_se_vuelve_absoluta(tmp_path, monkeypatch):
+    """La app hace os.chdir a la carpeta de datos: una ruta relativa se perdería."""
+    monkeypatch.chdir(tmp_path)     # monkeypatch vuelve a la carpeta de antes al final
+    assert lanzador.carpeta_de_datos({"ARMONICA_DATOS": "prueba"}) == str(tmp_path / "prueba")
+
+
+def test_sin_la_variable_van_a_documentos(tmp_path, monkeypatch):
+    monkeypatch.setattr(lanzador, "carpeta_de_documentos", lambda: str(tmp_path / "Docs"))
+    assert lanzador.carpeta_de_datos({}) == str(tmp_path / "Docs" / "Armonica")
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Documentos se le pregunta a Windows")

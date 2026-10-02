@@ -536,7 +536,7 @@ en `Documentos\Armonica` (frases, sesiones, canciones, apuntes, `ajustes.json`
 y `registro.txt` con lo que la app imprime), abre una sola app aunque se
 haga doble clic dos veces, y muestra la pantalla sin carpetas, `.env` ni
 comandos. Para probarlo desde el repo sin tocar Documentos:
-`ARMONICA_DATOS=<carpeta>` y `.venv\Scripts\pythonw.exe lanzador.pyw`.
+`set ARMONICA_DATOS=C:\ruta\de\prueba` y después `.venv\Scripts\pythonw.exe lanzador.pyw`.
 
 ### El coach (opcional)
 

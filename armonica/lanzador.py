@@ -75,9 +75,14 @@ def _documentos_segun_windows():
 
 
 def carpeta_de_datos(entorno=None):
-    """Documentos\\Armonica, o ARMONICA_DATOS si está (pruebas)."""
+    """
+    Documentos\\Armonica, o ARMONICA_DATOS si está (pruebas). Siempre absoluta:
+    la app hace os.chdir a esta carpeta, y una ruta relativa dejaría de
+    apuntar a ella.
+    """
     entorno = os.environ if entorno is None else entorno
-    return entorno.get("ARMONICA_DATOS") or os.path.join(carpeta_de_documentos(), "Armonica")
+    return os.path.abspath(entorno.get("ARMONICA_DATOS")
+                           or os.path.join(carpeta_de_documentos(), "Armonica"))
 
 
 def preparar_carpeta(raiz):
