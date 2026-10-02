@@ -1629,3 +1629,20 @@ table.intentos { font-size: 13px; max-width: 620px; }
   margin-left: 6px;
 }
 .tramo-todos { margin: 0 0 10px; }
+
+/* Los primeros pasos: arriba de todo, con el borde cobre de lo que hay que
+ * hacer, hasta que se aprieta Listo. */
+.primeros-pasos {
+  position: relative;
+  z-index: 1;
+  max-width: 884px;
+  margin: 18px auto 0;
+  padding: 18px 22px;
+  border: 1px solid var(--cobre);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.primeros-pasos h2 { margin-top: 0; }
+.primeros-pasos ol { margin: 8px 0 12px; padding-left: 22px; line-height: 1.6; }
+.primeros-pasos li { margin-bottom: 10px; }
+.primeros-pasos li button { margin-left: 6px; }

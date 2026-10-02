@@ -3185,3 +3185,14 @@ def test_una_carpeta_que_no_se_puede_crear_avisa(servidor_andando, tmp_path, mon
 
     assert respuesta == {"ok": False, "motivo": "No pude abrir la carpeta."}
     assert abiertos == []
+
+
+# =============================================================================
+# Los primeros pasos
+# =============================================================================
+
+def test_los_primeros_pasos_se_muestran_hasta_que_se_hacen(servidor_andando, tmp_path):
+    assert traer_json(servidor_andando, "/api/inicio")["primeros_pasos_hechos"] is False
+    assert mandar(servidor_andando, "/api/primeros-pasos", {"hechos": True})["ok"] is True
+    assert traer_json(servidor_andando, "/api/inicio")["primeros_pasos_hechos"] is True
+    assert ajustes.cargar(str(tmp_path / "ajustes.json"))["primeros_pasos"] is True

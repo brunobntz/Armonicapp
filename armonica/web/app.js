@@ -33,9 +33,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarDestinos();
   configurarLaApp();
   configurarAbrir();
+  configurarPrimerosPasos();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
+  mostrarPrimerosPasos(!inicio.primeros_pasos_hechos);
 
   mostrarEncabezado();
   llenarTonalidades();
@@ -2159,6 +2161,37 @@ function configurarAbrir() {
       body: JSON.stringify({ que: boton.dataset.abrir }),
     });
     if (!respuesta.ok) alert(respuesta.motivo);
+  });
+}
+
+
+/* Los primeros pasos: el cartel de arriba la primera vez. Cada paso lleva a
+ * donde se hace; Listo lo guarda en ajustes.json. */
+function mostrarPrimerosPasos(mostrar) {
+  document.getElementById("primeros-pasos").hidden = !mostrar;
+}
+
+
+function configurarPrimerosPasos() {
+  const caja = document.getElementById("primeros-pasos");
+  caja.addEventListener("click", (evento) => {
+    const boton = evento.target.closest("[data-paso]");
+    if (!boton) return;
+    if (boton.dataset.paso === "ajustes") irASolapa("ajustes");
+    if (boton.dataset.paso === "vivo") irASolapa("vivo");
+    if (boton.dataset.paso === "medir") medirRuido(caja.querySelector(".resultado-ruido"));
+  });
+  document.getElementById("primeros-pasos-listo").addEventListener("click", async () => {
+    await pedir("/api/primeros-pasos", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hechos: true }),
+    });
+    inicio.primeros_pasos_hechos = true;
+    mostrarPrimerosPasos(false);
+  });
+  document.getElementById("boton-primeros-pasos").addEventListener("click", () => {
+    mostrarPrimerosPasos(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   });
 }
 

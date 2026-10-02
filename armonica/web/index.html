@@ -26,6 +26,32 @@
   </nav>
 </header>
 
+<!-- Los primeros pasos: arriba de todo, sobre cualquier solapa, hasta que
+     se aprieta Listo. Se vuelven a ver desde Ajustes. -->
+<section id="primeros-pasos" class="primeros-pasos" hidden>
+  <h2>Primeros pasos</h2>
+  <ol>
+    <li><strong>Elegí el micrófono.</strong> En Ajustes, el que tenés cerca
+      de la boca. <button class="secundario chico" data-paso="ajustes">Ir a Ajustes</button></li>
+    <li><strong>Sacá las mejoras de audio de Windows.</strong> Están pensadas
+      para la voz y se comen la armónica. En la configuración de sonido,
+      entrá a tu micrófono y apagá "Mejoras de audio".
+      <button class="secundario chico" data-abrir="sonido">Abrir la configuración de sonido</button></li>
+    <li><strong>Medí el ruido.</strong> Tres segundos en silencio.
+      <button class="secundario chico" data-paso="medir">Medir el ruido</button>
+      <span class="resultado-ruido ayuda"></span></li>
+    <li><strong>Tocá.</strong> En En vivo, una nota cualquiera: la barra se
+      tiene que mover y aparecer el agujero.
+      <button class="secundario chico" data-paso="vivo">Ir a En vivo</button></li>
+  </ol>
+  <p class="ayuda">
+    Si la barra no se mueve con nada, Windows puede estar bloqueando el
+    micrófono: <button class="secundario chico" data-abrir="permisos-microfono">Abrir los permisos del micrófono</button>
+    y prendé "Permitir que las aplicaciones de escritorio accedan al micrófono".
+  </p>
+  <button id="primeros-pasos-listo" class="principal">Listo</button>
+</section>
+
 <!-- ===================== EN VIVO ===================== -->
 <main id="panel-vivo" class="panel">
 
@@ -441,6 +467,7 @@
     <h2>La app</h2>
     <p class="ayuda">Versión <span id="version-app"></span>.</p>
     <div class="controles">
+      <button id="boton-primeros-pasos" class="secundario">Ver los primeros pasos</button>
       <button id="boton-cerrar-app" class="secundario">Cerrar la app</button>
     </div>
     <p class="ayuda">

@@ -1400,6 +1400,9 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._apagar())
         if self.path == "/api/abrir":
             return self._responder_json(self._abrir(cuerpo))
+        if self.path == "/api/primeros-pasos":
+            ajustes.guardar({"primeros_pasos": bool((cuerpo or {}).get("hechos"))})
+            return self._responder_json({"ok": True})
         self.send_error(404)
 
     def _leer_cuerpo(self):
@@ -2869,6 +2872,7 @@ class Manejador(SimpleHTTPRequestHandler):
             ),
             "version": version.version(),
             "empaquetada": type(self).empaquetada,
+            "primeros_pasos_hechos": bool(ajustes.cargar().get("primeros_pasos", False)),
         }
 
     # --- Las respuestas ---
