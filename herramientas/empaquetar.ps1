@@ -2,8 +2,11 @@
 #
 # Todo lo hace herramientas\empaquetar.py; esto solo lo llama con el Python
 # del entorno virtual, desde la raiz del repo. Los pasos se pueden pedir de a
-# uno:  .\herramientas\empaquetar.ps1 fijar | armar | humo | instalador
-# Sin nada, arma, prueba y compila el instalador en dist\.
+# uno, con la politica de ejecucion por defecto (que no deja correr un .ps1
+# suelto, .\empaquetar.ps1):
+#   powershell -ExecutionPolicy Bypass -File herramientas\empaquetar.ps1 [paso]
+# donde paso es fijar | armar | humo | instalador.
+# Sin paso, arma, prueba y compila el instalador en dist\.
 
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)

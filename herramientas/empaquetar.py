@@ -474,7 +474,7 @@ def humo(programa=None, espera=30.0):
 
 def instalador(programa=None):
     """Compila empaquetado/armonica.iss con Inno Setup a dist/."""
-    programa = Path(programa or ARMADO)
+    programa = Path(programa or ARMADO).resolve()
     iscc = buscar_iscc()
     if iscc is None:
         raise SystemExit("No encuentro Inno Setup (ISCC.exe). Se instala una vez con:\n"

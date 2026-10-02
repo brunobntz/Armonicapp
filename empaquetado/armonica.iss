@@ -27,6 +27,9 @@ AppPublisher=Bruno
 DefaultDirName={autopf}\Armonica
 DefaultGroupName=Armónica
 DisableProgramGroupPage=yes
+; La carpeta es fija (instalación por usuario): sin pantalla para elegirla,
+; así el profe no puede apuntar el programa a Documentos ni al Escritorio.
+DisableDirPage=yes
 PrivilegesRequired=lowest
 OutputBaseFilename=Armonica-{#Version}-instalador
 SetupIconFile={#Armado}\Armonica.ico
@@ -61,9 +64,13 @@ Name: "{autodesktop}\Armónica"; Filename: "{app}\python\pythonw.exe"; Parameter
 Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; Description: "Abrir Armónica"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
-; Las cachés que Python escribe al usar la app. Los datos están en
-; Documentos\Armonica, fuera de {app}.
-Type: filesandordirs; Name: "{app}"
+; Las cachés que Python escribe al usar la app (__pycache__) viven en app\
+; y en python\. Se borran solo esas dos carpetas, nunca {app} entera y
+; recursiva: los datos del profe están en Documentos\Armonica, fuera de
+; {app}, y el desinstalador no los toca.
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\python"
+Type: dirifempty; Name: "{app}"
 
 [Code]
 const
