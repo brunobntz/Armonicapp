@@ -2311,7 +2311,8 @@ class Manejador(SimpleHTTPRequestHandler):
             "heic": imagenes.hay_soporte_heic(),
             "como_instalar_heic": imagenes.COMO_INSTALAR,
             "canciones": [
-                dict(c.como_diccionario(self.estado.tonalidad),
+                dict(c.como_diccionario(self.estado.tonalidad,
+                                        canciones_ajustes.destinos(c.nombre, ajustes)),
                      ajustes=self._ajustes_con_compas1(c, ajustes))
                 for c in lista
             ],
@@ -2375,9 +2376,10 @@ class Manejador(SimpleHTTPRequestHandler):
 
     def _ajustar_cancion(self, peticion):
         """
-        Guarda que audio es la base de una cancion y en que segundo cae su
-        compas 1. Va a material/_canciones.json, nunca a la carpeta de la
-        cancion.
+        Guarda que audio es la base de una cancion, en que segundo cae su
+        compas 1 y lo que el usuario escribio en un compas (`compas` y
+        `destino`); eso ultimo vuelve pintado contra el acorde. Va a
+        material/_canciones.json, nunca a la carpeta de la cancion.
         """
         peticion = peticion or {}
         nombre = (peticion.get("cancion") or "").strip()
@@ -2385,6 +2387,17 @@ class Manejador(SimpleHTTPRequestHandler):
         if cancion is None:
             return {"ok": False, "motivo": "esa cancion no esta en la carpeta"}
         cambios = {}
+        compas = None
+        if "destino" in peticion:
+            if cancion.base is None:
+                return {"ok": False, "motivo": "esa cancion no tiene una base con compases"}
+            try:
+                compas = int(peticion.get("compas"))
+            except (TypeError, ValueError):
+                return {"ok": False, "motivo": "falta el numero de compas"}
+            if not 1 <= compas <= cancion.base.compases:
+                return {"ok": False, "motivo": f"la base no tiene compas {compas}"}
+            cambios["destinos"] = {compas: peticion.get("destino") or ""}
         if "audio" in peticion:
             audio = str(peticion.get("audio") or "")
             if audio and audio not in cancion.audios:
@@ -2394,10 +2407,15 @@ class Manejador(SimpleHTTPRequestHandler):
             cambios["compas1_seg"] = peticion.get("compas1_seg")
             cambios["compas1_origen"] = "marcado"
         try:
-            canciones_ajustes.guardar(nombre, cambios)
+            quedo = canciones_ajustes.guardar(nombre, cambios)
         except ValueError as error:
             return {"ok": False, "motivo": str(error)}
-        return {"ok": True, "ajustes": canciones_ajustes.de_la_cancion(cancion)}
+        respuesta = {"ok": True, "ajustes": canciones_ajustes.de_la_cancion(cancion)}
+        if compas is not None:
+            texto = (quedo.get("destinos") or {}).get(str(compas), "")
+            respuesta["destino"] = canciones.destino(cancion.base, compas, texto,
+                                                     self.estado.tonalidad)
+        return respuesta
 
     def _mandar_archivo_de_cancion(self, consulta):
         """

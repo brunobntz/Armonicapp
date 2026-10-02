@@ -88,3 +88,43 @@ def test_los_ajustes_de_una_cancion_traen_los_valores_por_defecto(tmp_path):
     # Un audio guardado que ya no está en la carpeta no se propone.
     guardados = {"Georgia": {"audio": "borrado.m4a"}}
     assert canciones_ajustes.de_la_cancion(cancion, guardados)["audio"] == "base.wav"
+
+
+# =============================================================================
+# Lo que el usuario escribe en cada compás
+# =============================================================================
+
+def test_lo_escrito_se_guarda_compas_por_compas(tmp_path):
+    carpeta = str(tmp_path)
+    canciones_ajustes.guardar("Georgia", {"audio": "base.wav"}, carpeta)
+    quedo = canciones_ajustes.guardar("Georgia", {"destinos": {5: "  -4   5 "}}, carpeta)
+    assert quedo == {"audio": "base.wav", "destinos": {"5": "-4 5"}}
+
+    # Otro compás se suma; no pisa los demás.
+    quedo = canciones_ajustes.guardar("Georgia", {"destinos": {"6": "-3'"}}, carpeta)
+    assert quedo["destinos"] == {"5": "-4 5", "6": "-3'"}
+
+    # Vacío, se borra; y sin ninguno, la clave no queda.
+    quedo = canciones_ajustes.guardar("Georgia", {"destinos": {5: ""}}, carpeta)
+    assert quedo["destinos"] == {"6": "-3'"}
+    quedo = canciones_ajustes.guardar("Georgia", {"destinos": {6: "   "}}, carpeta)
+    assert quedo == {"audio": "base.wav"}
+
+
+def test_lo_escrito_se_lee_por_numero_de_compas(tmp_path):
+    canciones_ajustes.guardar("Georgia", {"destinos": {5: "-4", 12: "6"}}, str(tmp_path))
+    todos = canciones_ajustes.cargar(str(tmp_path))
+    assert canciones_ajustes.destinos("Georgia", todos) == {5: "-4", 12: "6"}
+    assert canciones_ajustes.destinos("otra", todos) == {}
+
+
+@pytest.mark.parametrize("compas", ["cero", 0, -1, None])
+def test_un_compas_invalido_se_rechaza(tmp_path, compas):
+    with pytest.raises(ValueError):
+        canciones_ajustes.guardar("Georgia", {"destinos": {compas: "-4"}}, str(tmp_path))
+
+
+def test_un_texto_demasiado_largo_se_rechaza(tmp_path):
+    """Son uno o dos agujeros, una frase corta: no un párrafo."""
+    with pytest.raises(ValueError):
+        canciones_ajustes.guardar("Georgia", {"destinos": {1: "-4 " * 30}}, str(tmp_path))

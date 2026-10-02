@@ -446,20 +446,30 @@ quieras. Exportar desde Band-in-a-Box: *Archivo → Guardar especial →
 Guardar canción como archivo de audio*, en WAV, a la carpeta de la
 canción.
 
-**Las notas de cada acorde, en el cifrado.** Debajo de cada renglón de
-cuatro compases va otro renglón con las notas de cada compás, alineadas
-con su acorde: el agujero más cómodo para cada una en la armónica que
-tenés puesta, bajo FMaj7 en Do "F ↓5 · A ↓6 · C ↑4 · E ↑5", con las guías
-(la 3ª y la 7ª) en cobre. Así los acordes se leen limpios arriba y las
-notas no estiran las casillas. Al pasar el mouse por una nota, qué grado
-es y todas las formas de agarrarla; por el nombre del acorde, sus notas,
-las guías y las **notas a evitar**, que son las naturales de la armónica a
-medio tono por encima de una nota del acorde (sobre F7, el Mi). La app dice
-la regla, no el gusto: como nota de paso puede ir. Sale del cifrado de cada
-acorde, así que cubre también los que las tablas de la app no tienen, como
-un Em7b5. Mientras suena la base, la línea del acorde que suena se agranda
-un poco y el acorde que viene queda en lavanda tenue, para anticiparlo. La
-casilla "notas" pliega las líneas cuando querés el cifrado limpio.
+**Tus notas en el cifrado.** La app no te sugiere qué tocar en cada
+compás: lo decidís vos con lo que aprendiste. Debajo de cada renglón de
+cuatro compases va otro con una casilla por compás, alineada con su
+acorde. Un clic y escribís dónde querés aterrizar, como en las tablas:
+`-4` aspirado, `4` (o `+4`) soplado, `-3'` con bend; uno o dos agujeros, o
+una frase corta (`-4 5`). Enter guarda, Escape deja lo que estaba, y Tab
+pasa al compás siguiente para escribir la canción de corrido. La app lo
+pinta contra el acorde que suena en ese compás, con su nota al lado (sobre
+F7 en Do, `-6` queda "A ↓6"): la guía (3ª o 7ª) en cobre, una nota del
+acorde clara, una que cae fuera apagada, y lo que no es un agujero,
+subrayado. Con dos acordes en el compás vale cualquiera de los dos. Al
+pasar el mouse, qué es esa nota en el acorde. No te propone nada: te dice
+si le acertaste. Queda guardado por canción en `material/_canciones.json`
+y se ve igual en Canciones y en En vivo. Mientras suena la base, lo
+escrito para el compás que suena se agranda un poco, y lo del que viene
+queda en lavanda tenue, para anticiparlo. La casilla "mis notas" pliega
+el renglón cuando querés el cifrado limpio.
+
+Las notas de cada acorde siguen a mano, como consulta: al pasar el mouse
+por el nombre del acorde, sus notas, las guías y las **notas a evitar**,
+que son las naturales de la armónica a medio tono por encima de una nota
+del acorde (sobre F7, el Mi). La app dice la regla, no el gusto: como nota
+de paso puede ir. Sale del cifrado de cada acorde, así que cubre también
+los que las tablas de la app no tienen, como un Em7b5.
 
 **Qué dice la base.** Debajo del cifrado, una línea de hechos que la app
 cuenta sola: tono, cuántos acordes distintos, cuántos compases con más de

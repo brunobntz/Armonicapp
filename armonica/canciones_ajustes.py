@@ -12,7 +12,10 @@ en ningún archivo del profe:
   compás 1 cayó en 7,38 s a 65 BPM— y sin ese dato el cifrado no se puede
   iluminar siguiendo el audio.
 
-Las dos van a material/_canciones.json, que es de la app, como _plan.json.
+Y una que es del usuario: LO QUE ESCRIBIÓ EN CADA COMPÁS, el agujero donde
+quiere aterrizar ("-4", "-4 5"), compás por compás.
+
+Todo va a material/_canciones.json, que es de la app, como _plan.json.
 El nombre de la canción es la clave.
 """
 
@@ -24,6 +27,9 @@ ARCHIVO = "_canciones.json"
 
 # Band-in-a-Box exporta, por defecto, dos compases de conteo antes del 1.
 COMPASES_DE_CONTEO_POR_DEFECTO = 2
+
+# Lo escrito en un compás son uno o dos agujeros, una frase corta.
+LARGO_MAXIMO_DESTINO = 40
 
 
 def ruta_del_archivo(carpeta=None):
@@ -74,10 +80,23 @@ def guardar(nombre, ajustes, carpeta=None):
                 raise ValueError("El instante del compás 1 tiene que ser un número de segundos.")
             if limpios["compas1_seg"] < 0:
                 raise ValueError("El instante del compás 1 no puede ser negativo.")
+    escritos = _destinos_limpios(ajustes["destinos"]) if "destinos" in ajustes else {}
 
     todos = cargar(carpeta)
     actual = dict(todos.get(nombre, {}))
     actual.update(limpios)
+    if "destinos" in ajustes:
+        # Lo escrito se pisa compás por compás; un texto vacío borra el suyo.
+        quedan = dict(actual.get("destinos") or {})
+        for compas, texto in escritos.items():
+            if texto:
+                quedan[compas] = texto
+            else:
+                quedan.pop(compas, None)
+        if quedan:
+            actual["destinos"] = quedan
+        else:
+            actual.pop("destinos", None)
     todos[nombre] = actual
 
     carpeta = carpeta or CARPETA_POR_DEFECTO
@@ -85,6 +104,32 @@ def guardar(nombre, ajustes, carpeta=None):
     with open(ruta_del_archivo(carpeta), "w", encoding="utf-8") as archivo:
         json.dump(todos, archivo, indent=2, ensure_ascii=False)
     return actual
+
+
+def _destinos_limpios(destinos):
+    """{compás: texto} con el compás como texto ("5", la clave del JSON) y
+    los espacios de más sacados. Un compás que no es un número de 1 en
+    adelante, o un texto largo, es un error: no se guarda a medias."""
+    limpios = {}
+    for compas, texto in dict(destinos).items():
+        try:
+            numero = int(compas)
+        except (TypeError, ValueError):
+            raise ValueError(f"El compás tiene que ser un número: {compas!r}.")
+        if numero < 1:
+            raise ValueError("Los compases empiezan en el 1.")
+        texto = " ".join(str(texto or "").split())
+        if len(texto) > LARGO_MAXIMO_DESTINO:
+            raise ValueError(f"Es mucho para un compás: hasta {LARGO_MAXIMO_DESTINO} letras.")
+        limpios[str(numero)] = texto
+    return limpios
+
+
+def destinos(nombre, todos=None):
+    """Lo escrito en cada compás de una canción, {número de compás: texto}."""
+    todos = cargar() if todos is None else todos
+    guardados = (todos.get(nombre) or {}).get("destinos") or {}
+    return {int(compas): texto for compas, texto in guardados.items() if str(compas).isdigit()}
 
 
 def compas1_por_defecto(base):

@@ -1280,34 +1280,53 @@ table.guias tr.esta td { color: var(--cobre); }
 }
 .cifrado .acorde.repite { color: var(--tenue); }
 
-/* El renglon de notas debajo de cada renglon de compases: una casilla por
- * compas, alineada con la de su acorde, con la nota y el agujero mas comodo
- * de cada una, las guias en cobre. Con varios acordes en el compas, una
- * linea por acorde, con su nombre adelante. */
+/* El renglon de lo escrito debajo de cada renglon de compases: una casilla
+ * por compas, alineada con la de su acorde, con el agujero donde aterrizar
+ * y su nota, pintados contra el acorde: guia en cobre, del acorde clara,
+ * fuera apagada, y lo que no es un agujero subrayado. */
 .cifrado .notas-compas {
   margin: -2px 0 6px;
   padding: 0 10px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.5;
-  color: var(--tenue);
 }
-.cifrado .acorde-notas {
-  display: flex; flex-wrap: wrap; gap: 0 8px;
+.cifrado .destino {
+  display: inline-flex; flex-wrap: wrap; gap: 0 10px;
+  min-width: 40px;
+  margin-left: -6px;
+  padding: 0 6px;
+  border: 1px dashed transparent;
+  border-radius: 6px;
+  cursor: text;
   transform-origin: left top;
-  transition: transform 0.25s ease, color 0.25s ease;
+  transition: transform 0.25s ease;
 }
-.cifrado .acorde-notas .de { color: var(--texto); opacity: 0.7; margin-right: 2px; }
-.cifrado .nota-acorde { white-space: nowrap; cursor: help; }
-.cifrado .nota-acorde.guia { color: var(--cobre); }
-.cifrado .nota-acorde.no-esta { opacity: 0.5; }
+.cifrado .destino:hover, .cifrado .destino:focus-visible { border-color: var(--borde); outline: none; }
+.cifrado .destino.vacio { color: var(--tenue); opacity: 0.35; }
+.cifrado .destino.vacio:hover, .cifrado .destino.vacio:focus-visible { opacity: 1; color: var(--cobre); }
+.cifrado .destino.editando { border-color: transparent; }
+.cifrado .escrita { white-space: nowrap; cursor: help; }
+.cifrado .escrita.guia { color: var(--cobre); }
+.cifrado .escrita.acorde { color: var(--texto); }
+.cifrado .escrita.fuera { color: var(--tenue); opacity: 0.6; }
+.cifrado .escrita.mal { color: var(--rojo); text-decoration: underline wavy; }
+.cifrado .destino-entrada {
+  width: 9em;
+  padding: 0 4px;
+  font: inherit;
+  color: var(--texto);
+  background: var(--panel);
+  border: 1px solid var(--cobre);
+  border-radius: 4px;
+}
 .cifrado.sin-notas .notas-compas { display: none; }
 
-/* El que suena: su linea de notas se agranda un poco y se aclara. El que
- * viene: en lavanda tenue, para anticiparlo. */
-.cifrado .acorde-notas.sonando { transform: scale(1.1); color: var(--texto); }
-.cifrado .acorde-notas.sonando .nota-acorde.guia { color: var(--cobre); font-weight: 600; }
-.cifrado .acorde-notas.proximo { color: var(--aguja); opacity: 0.8; }
+/* El compas que suena: lo escrito se agranda un poco. El que viene: en
+ * lavanda tenue, para anticiparlo. */
+.cifrado .notas-compas.sonando .destino { transform: scale(1.15); }
+.cifrado .notas-compas.sonando .escrita.guia { font-weight: 600; }
+.cifrado .notas-compas.proximo .escrita { color: var(--aguja); opacity: 0.8; }
 .cifrado .acorde.proximo { color: var(--aguja); opacity: 0.75; }
 .base-en-vivo .acorde-actual .proximo { color: var(--aguja); opacity: 0.75; font-size: 15px; }
 

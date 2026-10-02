@@ -30,6 +30,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarSesionPendiente();
   configurarTeoria();
   configurarAprendizaje();
+  configurarDestinos();
 
   inicio = await pedir("/api/inicio");
   TOLERANCIA = inicio.tolerancia_cents || 10;
@@ -2788,7 +2789,7 @@ async function cargarCanciones() {
         "</p>";
       f.avisos.forEach((aviso) => { html += '<div class="aviso">' + escapar(aviso) + "</div>"; });
       html += htmlDelReproductorDeBase(f, { conPracticar: true, cancion: cancion });
-      html += dibujarCifrado(f);
+      html += dibujarCifrado(f, cancion.nombre);
       html += htmlDeLaExplicacion(cancion, datos);
     }
 
@@ -2972,14 +2973,22 @@ function urlDeArchivo(cancion, nombre) {
  * reproductor los pueda iluminar. */
 const COMPASES_POR_RENGLON = 4;
 
+/* La ultima ficha dibujada de cada cancion, para que lo que escribis quede
+ * tambien en ella: "Practicar sobre esta base" la lleva a En vivo tal cual. */
+const fichasDelCifrado = new Map();
+
+
 /* El cifrado como en un atril: cuatro compases por renglon, con los cambios
- * de acorde marcados. Y debajo de cada renglon, otro con las notas de cada
- * compas: la casilla de notas queda alineada con la de su acorde, y los
- * acordes se leen limpios arriba. */
-function dibujarCifrado(ficha) {
+ * de acorde marcados. Y debajo de cada renglon, otro con lo que escribiste
+ * en cada compas, alineado con su acorde: los acordes se leen limpios
+ * arriba. La app no sugiere que tocar; las notas de cada acorde estan al
+ * pasar el mouse por su nombre. */
+function dibujarCifrado(ficha, cancion) {
+  fichasDelCifrado.set(cancion, ficha);
   const cambios = new Set(ficha.compases_de_cambio);
   const conNotas = mostrarNotasDelCifrado();
-  let html = '<div class="cifrado' + (conNotas ? "" : " sin-notas") + '">';
+  let html = '<div class="cifrado' + (conNotas ? "" : " sin-notas") +
+    '" data-cancion="' + escapar(cancion) + '">';
   for (let desde = 0; desde < ficha.cifrado.length; desde += COMPASES_POR_RENGLON) {
     const renglon = ficha.cifrado.slice(desde, desde + COMPASES_POR_RENGLON);
     renglon.forEach((compas) => {
@@ -2994,45 +3003,129 @@ function dibujarCifrado(ficha) {
     });
     renglon.forEach((compas) => {
       html += '<div class="notas-compas" data-compas="' + compas.compas + '">' +
-        compas.acordes.map((a) => lineaDeNotas(a, compas.compas, compas.acordes.length > 1)).join("") +
-        "</div>";
+        htmlDelDestino(compas.destino) + "</div>";
     });
   }
   return html + "</div>";
 }
 
+/* Lo que escribiste en un compas: el agujero donde aterrizar, pintado contra
+ * el acorde. Las guias en cobre, las del acorde claras, las que caen fuera
+ * apagadas, y lo que no es un agujero, subrayado. Un clic lo abre para
+ * escribir; vacio, queda un "+" tenue. */
+function htmlDelDestino(destino) {
+  const d = destino || { texto: "", acordes: [], notas: [] };
+  let contenido = "+";
+  if (d.notas.length) {
+    contenido = d.notas.map((n) => n.clase === "mal"
+      ? '<span class="escrita mal" title="' + escapar(n.error + ". Se escribe -4 (aspirado), 4 (soplado), -3' (con bend).") +
+        '">' + escapar(n.escrito) + "</span>"
+      : '<span class="escrita ' + n.clase + '" title="' + escapar(explicacionDeLoEscrito(n, d)) + '">' +
+        escapar(n.nota + " " + n.tab) + "</span>").join("");
+  } else if (d.texto) {
+    contenido = escapar(d.texto);
+  }
+  return '<span class="destino' + (d.texto ? "" : " vacio") + '" tabindex="0" data-texto="' +
+    escapar(d.texto) + "\" title=\"dónde aterrizar: -4, 5, -3' (Tab pasa al compás siguiente)\">" +
+    contenido + "</span>";
+}
 
-/* Las notas de un acorde, cada una con su agujero mas comodo. Las guias (la
- * 3a y la 7a) en cobre. Al pasar el mouse, el porque: que grado es, todas
- * las formas de agarrarla. Con varios acordes en el compas, cada linea
- * empieza con el nombre del suyo. */
-function lineaDeNotas(acorde, compas, conNombre) {
-  if (!acorde.notas || !acorde.notas.length) return "";
-  return '<div class="acorde-notas" data-compas="' + compas + '" data-tiempo="' + acorde.tiempo + '">' +
-    (conNombre ? '<span class="de">' + escapar(acorde.nombre) + "</span>" : "") +
-    acorde.notas.map((n) =>
-      '<span class="nota-acorde' + (n.es_guia ? " guia" : "") + (n.facil ? "" : " no-esta") +
-      '" title="' + escapar(explicacionDeLaNota(n, acorde)) + '">' +
-      escapar(n.nota) + " " + escapar(n.facil || "—") + "</span>").join("") + "</div>";
+
+function explicacionDeLoEscrito(n, destino) {
+  if (!n.papeles.length) {
+    return n.nota + " no es de " + (destino.acordes.join(" ni de ") || "ningún acorde") + ".";
+  }
+  return n.nota + " es la " +
+    n.papeles.map((p) => nombreDelGrado(p.grado) + " de " + p.acorde).join(" y la ") +
+    (n.clase === "guia" ? ": nota guía, de las que definen el acorde." : ".");
+}
+
+
+/* Escribir donde aterrizar: un clic (o Enter) en la casilla de abajo del
+ * compas la abre; Enter o salir de ella guarda, Escape deja lo que estaba,
+ * y Tab pasa al compas siguiente (Shift+Tab, al anterior), para escribir la
+ * cancion de corrido. */
+function configurarDestinos() {
+  document.addEventListener("click", (evento) => {
+    const destino = evento.target.closest(".cifrado .destino");
+    if (destino && !destino.classList.contains("editando")) editarDestino(destino);
+  });
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter" && evento.target.matches && evento.target.matches(".cifrado .destino")) {
+      evento.preventDefault();
+      editarDestino(evento.target);
+    }
+  });
+}
+
+
+function editarDestino(destino) {
+  const cifrado = destino.closest(".cifrado");
+  const compas = Number(destino.closest(".notas-compas").dataset.compas);
+  const antes = destino.innerHTML;
+  const entrada = document.createElement("input");
+  entrada.className = "destino-entrada";
+  entrada.value = destino.dataset.texto || "";
+  entrada.placeholder = "-4 5";
+  entrada.maxLength = 40;
+  entrada.spellcheck = false;
+  destino.classList.add("editando");
+  destino.replaceChildren(entrada);
+  entrada.focus();
+  entrada.select();
+
+  let terminado = false;
+  const terminar = async (guardar, paso) => {
+    if (terminado) return;
+    terminado = true;
+    destino.classList.remove("editando");
+    const texto = entrada.value.trim().split(/\s+/).join(" ");
+    const cambio = guardar && texto !== (destino.dataset.texto || "");
+    destino.innerHTML = cambio ? (escapar(texto) || "+") : antes;
+    if (paso) {
+      const vecino = cifrado.querySelector('.notas-compas[data-compas="' + (compas + paso) + '"] .destino');
+      if (vecino) editarDestino(vecino);
+    }
+    if (!cambio) return;
+    const respuesta = await pedir("/api/canciones/ajustes", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cancion: cifrado.dataset.cancion, compas: compas, destino: texto }),
+    });
+    if (!respuesta.ok) {
+      destino.innerHTML = antes;
+      alert(respuesta.motivo || "no pude guardar lo escrito en el compás " + compas);
+      return;
+    }
+    ponerDestino(cifrado.dataset.cancion, compas, respuesta.destino);
+  };
+  entrada.addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") { evento.preventDefault(); terminar(true); }
+    else if (evento.key === "Escape") { evento.preventDefault(); terminar(false); }
+    else if (evento.key === "Tab") { evento.preventDefault(); terminar(true, evento.shiftKey ? -1 : 1); }
+  });
+  entrada.addEventListener("blur", () => terminar(true));
+}
+
+
+/* Lo escrito ya guardado y pintado, en todos los cifrados de esa cancion
+ * (Canciones y En vivo) y en sus fichas. */
+function ponerDestino(cancion, compas, destino) {
+  [fichasDelCifrado.get(cancion), baseEnVivo && baseEnVivo.nombre === cancion && baseEnVivo.ficha]
+    .forEach((ficha) => {
+      const delCompas = ficha && ficha.cifrado[compas - 1];
+      if (delCompas) delCompas.destino = destino;
+    });
+  document.querySelectorAll(".cifrado").forEach((cifrado) => {
+    if (cifrado.dataset.cancion !== cancion) return;
+    const viejo = cifrado.querySelector('.notas-compas[data-compas="' + compas + '"] .destino');
+    if (viejo && !viejo.classList.contains("editando")) viejo.outerHTML = htmlDelDestino(destino);
+  });
 }
 
 
 function nombreDelGrado(grado) {
   return grado.replace("tonica", "tónica").replace("3a mayor", "3ª").replace("3a menor", "3ª menor")
     .replace("7a menor", "7ª").replace("7a mayor", "7ª mayor").replace(/^(\d)a\b/, "$1ª");
-}
-
-
-function explicacionDeLaNota(n, acorde) {
-  let texto = n.nota + " es la " + nombreDelGrado(n.grado) + " de " + acorde.nombre +
-    (n.es_guia ? ": nota guía, de las que definen el acorde." : ".");
-  if (n.formas && n.formas.length) {
-    texto += " Se agarra en " + n.formas.join(" ") +
-      (n.formas.length > 1 ? "; el más cómodo, " + n.facil + "." : ".");
-  } else {
-    texto += " Esta armónica no la tiene.";
-  }
-  return texto;
 }
 
 
@@ -3057,7 +3150,7 @@ function explicacionDelAcorde(a) {
 }
 
 
-/* Si se muestran o no las notas bajo los acordes. Se recuerda en el
+/* Si se muestra o no lo escrito bajo los acordes. Se recuerda en el
  * navegador: es una preferencia de lectura, no un dato. */
 function mostrarNotasDelCifrado(valor) {
   try {
@@ -3114,7 +3207,7 @@ function ponerBaseEnVivo(nombre, ficha, cancion) {
     ficha.pulsos_por_compas + "/4" + (ficha.con_swing ? " con swing" : "");
   document.getElementById("base-en-vivo-controles").innerHTML =
     htmlDelReproductorDeBase(ficha, { cancion: cancion });
-  document.getElementById("base-en-vivo-cifrado").innerHTML = dibujarCifrado(ficha);
+  document.getElementById("base-en-vivo-cifrado").innerHTML = dibujarCifrado(ficha, nombre);
 
   const reproductor = conectarReproductorDeBase(seccion, ficha, {
     alAcorde: (acorde, compas, tiempo, proximo) => mostrarAcordeEnVivo(acorde, compas, proximo),
@@ -3318,9 +3411,9 @@ function htmlDelReproductorDeBase(ficha, opciones) {
         '><input type="checkbox" class="melodia-base"> melodía</label>'
       : "") +
     '<label class="casilla"><input type="checkbox" class="repetir-base" checked> repetir</label>' +
-    '<label class="casilla" title="las notas de cada acorde con su agujero, bajo el cifrado">' +
+    '<label class="casilla" title="lo que escribiste en cada compás, bajo el cifrado: dónde aterrizar">' +
     '<input type="checkbox" class="notas-cifrado"' + (mostrarNotasDelCifrado() ? " checked" : "") +
-    "> notas</label>" +
+    "> mis notas</label>" +
     fuente +
     '<span class="ayuda nota-fuente">' + (conAudio
       ? "el audio de la carpeta; el cifrado lo sigue desde el compás 1"
@@ -3475,6 +3568,15 @@ function iluminarCompas(caja, compas, tiempo) {
   if (!compas) return;
   const celda = caja.querySelector('.cifrado .compas[data-compas="' + compas + '"]');
   if (celda) celda.classList.add("sonando");
+  // Lo que escribiste para este compas se agranda, y lo del que viene queda
+  // en lavanda, para anticiparlo; despues del ultimo viene el primero.
+  const escritos = [...caja.querySelectorAll(".cifrado .notas-compas")];
+  const escrito = escritos.find((e) => Number(e.dataset.compas) === compas);
+  if (escrito) {
+    escrito.classList.add("sonando");
+    const siguiente = escritos[(escritos.indexOf(escrito) + 1) % escritos.length];
+    if (siguiente !== escrito) siguiente.classList.add("proximo");
+  }
   // El acorde que suena es el ultimo que empezo en este compas hasta este tiempo.
   let actual = null;
   caja.querySelectorAll('.cifrado .acorde[data-compas="' + compas + '"]').forEach((a) => {
@@ -3488,20 +3590,12 @@ function iluminarCompas(caja, compas, tiempo) {
     }
   }
   if (!actual) return;
-  const notasDe = (acorde) => caja.querySelector('.cifrado .acorde-notas[data-compas="' +
-    acorde.dataset.compas + '"][data-tiempo="' + acorde.dataset.tiempo + '"]');
   actual.classList.add("sonando");
-  const notasActual = notasDe(actual);
-  if (notasActual) notasActual.classList.add("sonando");
   // Y el que viene, para anticiparlo: el siguiente en el cifrado, dando la
   // vuelta al principio si es el ultimo.
   const todos = [...caja.querySelectorAll(".cifrado .acorde:not(.repite)")];
   const proximo = todos[(todos.indexOf(actual) + 1) % todos.length];
-  if (proximo && proximo !== actual) {
-    proximo.classList.add("proximo");
-    const notasProximo = notasDe(proximo);
-    if (notasProximo) notasProximo.classList.add("proximo");
-  }
+  if (proximo && proximo !== actual) proximo.classList.add("proximo");
 }
 
 

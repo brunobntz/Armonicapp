@@ -369,3 +369,81 @@ def test_un_ii_v_i_y_un_acorde_fuera_de_la_tonalidad():
 def test_la_ficha_trae_los_hechos(carpeta):
     ficha = canciones.listar(carpeta)[1].como_diccionario("C")["ficha"]
     assert ficha["hechos"]["acordes_distintos"] == 3
+
+
+# =============================================================================
+# Lo que escribís en cada compás: dónde aterrizar, pintado contra el acorde
+# =============================================================================
+
+def blues_con_cambios():
+    """F7 en el 1, el 2 sigue con el mismo (%), y Bb7 entra en el tiempo 3 del 3."""
+    base = blues_en_fa()
+    base.acordes = [bandinabox.Acorde(1, 1, "F", "7", numero_tipo=64),
+                    bandinabox.Acorde(3, 3, "Bb", "7", numero_tipo=64)]
+    base.compases = 3
+    return base
+
+
+def test_los_acordes_que_suenan_en_cada_compas():
+    """
+    Un compás con % sigue con el acorde del anterior, y uno donde el cambio
+    cae en el tiempo 3 arranca con el que venía sonando.
+    """
+    base = blues_con_cambios()
+
+    def nombres(compas):
+        return [a.nombre() for a in canciones.acordes_que_suenan(base, compas)]
+
+    assert nombres(1) == ["F7"]
+    assert nombres(2) == ["F7"]
+    assert nombres(3) == ["F7", "Bb7"]
+
+
+def test_lo_escrito_se_pinta_contra_el_acorde():
+    """
+    Sobre F7 (Fa La Do Mib) en armónica de Do: el -6 es La, la 3a, guía; el
+    4 es Do, la 5a, del acorde; el 6 es Sol, fuera. Con "+" adelante también
+    es soplado. Lo que no es un agujero queda marcado como mal escrito: no
+    se adivina.
+    """
+    f7 = [bandinabox.Acorde(1, 1, "F", "7", numero_tipo=64)]
+    pintadas = canciones.pintar_destino("-6 4, +6 x 11", f7, "C")
+    assert [(p["tab"], p["nota"], p["clase"]) for p in pintadas] == [
+        ("-6", "A", "guia"), ("4", "C", "acorde"), ("6", "G", "fuera"),
+        (None, None, "mal"), (None, None, "mal")]
+    assert [p["escrito"] for p in pintadas] == ["-6", "4", "+6", "x", "11"]
+    assert pintadas[0]["papeles"] == [{"acorde": "F7", "grado": "3a mayor", "es_guia": True}]
+    assert pintadas[2]["papeles"] == []
+    assert pintadas[0]["error"] is None
+    assert pintadas[3]["error"] and pintadas[4]["error"]
+
+
+def test_con_dos_acordes_en_el_compas_vale_cualquiera_de_los_dos():
+    """
+    Sobre F7 y Bb7: el -4 es Re, que no está en F7 pero es la 3a de Bb7:
+    guía. El -5 es Fa, tónica de uno y 5a del otro: del acorde, con los dos
+    papeles.
+    """
+    acordes = [bandinabox.Acorde(1, 1, "F", "7", numero_tipo=64),
+               bandinabox.Acorde(1, 3, "Bb", "7", numero_tipo=64)]
+    re_, fa = canciones.pintar_destino("-4 -5", acordes, "C")
+    assert re_["clase"] == "guia"
+    assert re_["papeles"] == [{"acorde": "Bb7", "grado": "3a mayor", "es_guia": True}]
+    assert fa["clase"] == "acorde"
+    assert [p["acorde"] for p in fa["papeles"]] == ["F7", "Bb7"]
+
+
+def test_sin_armonica_no_se_pinta():
+    f7 = [bandinabox.Acorde(1, 1, "F", "7", numero_tipo=64)]
+    assert canciones.pintar_destino("-6", f7, None) == []
+
+
+def test_la_ficha_trae_lo_escrito_en_cada_compas_ya_pintado():
+    ficha = canciones.ficha(blues_con_cambios(), "C", destinos={2: "-6", 3: "-4"})
+    uno, dos, tres = ficha["cifrado"]
+    assert uno["destino"] == {"texto": "", "acordes": ["F7"], "notas": []}
+    assert dos["destino"]["texto"] == "-6"
+    assert dos["destino"]["acordes"] == ["F7"]
+    assert dos["destino"]["notas"][0]["clase"] == "guia"
+    assert tres["destino"]["acordes"] == ["F7", "Bb7"]
+    assert tres["destino"]["notas"][0]["clase"] == "guia"   # Re, la 3a de Bb7

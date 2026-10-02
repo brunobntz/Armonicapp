@@ -2712,6 +2712,43 @@ def test_los_ajustes_de_la_cancion_viajan_y_se_guardan(servidor_andando, carpeta
                   {"cancion": "otra", "compas1_seg": 1})["ok"] is False
 
 
+def test_lo_escrito_en_un_compas_se_guarda_y_vuelve_pintado(servidor_andando, carpeta_de_canciones,
+                                                            tmp_path, monkeypatch):
+    """
+    Debajo de cada compás el usuario escribe donde aterrizar. Se guarda con
+    los ajustes de la canción y vuelve pintado contra el acorde, para la
+    armónica puesta (Do): sobre el F7 del compás 1, el -6 es La, la 3a.
+    """
+    from armonica import canciones_ajustes, compas_uno
+    monkeypatch.setattr(canciones_ajustes, "CARPETA_POR_DEFECTO", str(tmp_path / "_app"))
+    monkeypatch.setattr(compas_uno, "desde_archivo", lambda *a, **k: None)
+    # La lista de canciones pregunta por el coach; con un Ollama de verdad en
+    # el .env eso tarda segundos, y aca no importa.
+    monkeypatch.setattr(coach, "estado", lambda *a, **k: {
+        "disponible": False, "motivo": "", "proveedor": "ollama", "modelo": ""})
+
+    respuesta = mandar(servidor_andando, "/api/canciones/ajustes",
+                       {"cancion": "Georgia", "compas": 1, "destino": " -6 "})
+    assert respuesta["ok"] is True
+    assert respuesta["destino"]["texto"] == "-6"
+    assert [(n["tab"], n["nota"], n["clase"]) for n in respuesta["destino"]["notas"]] == \
+        [("-6", "A", "guia")]
+
+    georgia = traer_json(servidor_andando, "/api/canciones")["canciones"][0]
+    assert georgia["ficha"]["cifrado"][0]["destino"]["texto"] == "-6"
+    assert georgia["ficha"]["cifrado"][1]["destino"]["texto"] == ""
+
+    # Vacío, se borra.
+    respuesta = mandar(servidor_andando, "/api/canciones/ajustes",
+                       {"cancion": "Georgia", "compas": 1, "destino": ""})
+    assert respuesta["destino"] == {"texto": "", "acordes": ["F7"], "notas": []}
+
+    # Un compás que la base no tiene, o que no es un número, no se guarda.
+    for compas in (13, 0, "uno"):
+        assert mandar(servidor_andando, "/api/canciones/ajustes",
+                      {"cancion": "Georgia", "compas": compas, "destino": "-4"})["ok"] is False
+
+
 def test_el_compas_uno_se_mide_en_el_audio_la_primera_vez(servidor_andando, carpeta_de_canciones,
                                                           tmp_path, monkeypatch):
     """

@@ -49,13 +49,13 @@ class Cancion:
     imagenes: list = field(default_factory=list)
     documentos: list = field(default_factory=list)
 
-    def como_diccionario(self, tonalidad_armonica=None):
+    def como_diccionario(self, tonalidad_armonica=None, destinos=None):
         """Lo que va a la pantalla. La ruta de la carpeta no viaja: solo nombres."""
         return {
             "nombre": self.nombre,
             "archivo_base": self.archivo_base,
             "error_base": self.error_base,
-            "ficha": ficha(self.base, tonalidad_armonica) if self.base else None,
+            "ficha": ficha(self.base, tonalidad_armonica, destinos) if self.base else None,
             "audios": list(self.audios),
             "imagenes": list(self.imagenes),
             "documentos": list(self.documentos),
@@ -136,18 +136,21 @@ def ruta_de_archivo(cancion, nombre, carpeta=None):
     return ruta
 
 
-def ficha(base, tonalidad_armonica=None):
+def ficha(base, tonalidad_armonica=None, destinos=None):
     """
     Lo que la pantalla muestra de una base: tono, tempo, compás, el cifrado
-    compás por compás con las notas de cada acorde, y la melodía cruda para
-    el reproductor. Todo ya calculado: el navegador solo dibuja.
+    compás por compás con las notas de cada acorde y lo que el usuario
+    escribió en cada compás (`destinos`, {compás: texto}), y la melodía
+    cruda para el reproductor. Todo ya calculado: el navegador solo dibuja.
     """
+    destinos = destinos or {}
     compases = []
     for numero in range(1, base.compases + 1):
         acordes = [a for a in base.acordes if a.compas == numero]
         compases.append({
             "compas": numero,
             "acordes": [_acorde_para_la_pantalla(a, tonalidad_armonica) for a in acordes],
+            "destino": destino(base, numero, destinos.get(numero, ""), tonalidad_armonica),
         })
 
     # La melodía cruda, en segundos y MIDI, para que el reproductor la toque.
@@ -278,6 +281,82 @@ def notas_a_evitar(acorde, tonalidad_armonica):
                     "porque": f"medio tono arriba de la {grado} ({nombre})",
                 })
     return resultado
+
+
+# =============================================================================
+# Lo que el usuario escribe en cada compás: dónde aterrizar
+# =============================================================================
+#
+# La app no sugiere qué tocar en cada compás: eso lo decide el que toca, con
+# lo que aprendió. Debajo de cada compás escribe uno o dos agujeros ("-4",
+# "-4 5") y la app los pinta contra el acorde: guía, del acorde o fuera. No
+# propone nada; dice si le acertó.
+
+def acordes_que_suenan(base, compas):
+    """
+    Los acordes que suenan en un compás: los que empiezan en él y, si el
+    primero no cae en el tiempo 1 (o el compás es un %), el que venía
+    sonando del anterior.
+    """
+    propios = sorted((a for a in base.acordes if a.compas == compas), key=lambda a: a.tiempo)
+    if propios and propios[0].tiempo == 1:
+        return propios
+    anteriores = [a for a in base.acordes if a.compas < compas]
+    if not anteriores:
+        return propios
+    return [max(anteriores, key=lambda a: (a.compas, a.tiempo))] + propios
+
+
+def pintar_destino(texto, acordes, tonalidad_armonica):
+    """
+    Cada agujero escrito, con su nota y lo que es sobre los acordes del
+    compás: "guia" si es la 3a o la 7a de alguno, "acorde" si es de alguno,
+    "fuera" si no es de ninguno, "mal" si no es un agujero de la armónica.
+    Con dos acordes en el compás vale cualquiera de los dos: no se sabe
+    sobre cuál va a caer. `papeles` dice qué es en cada acorde.
+
+    Se escribe como en las tablas: "-4" o "↓4" aspirado, "4", "+4" o "↑4"
+    soplado, "-3'" con bend. Separados por espacios o comas.
+    """
+    if not tonalidad_armonica:
+        return []
+    pintadas = []
+    for escrito in texto.replace(",", " ").split():
+        try:
+            nota = mapeo.tab_a_nota(escrito[1:] if escrito.startswith("+") else escrito,
+                                    tonalidad_armonica)
+        except ValueError as error:
+            pintadas.append({"escrito": escrito, "tab": None, "nota": None, "clase": "mal",
+                             "papeles": [], "error": str(error)})
+            continue
+        clase = nota.midi % 12
+        papeles = []
+        for acorde in acordes:
+            for intervalo in acorde.intervalos():
+                if (acorde.clase_raiz() + intervalo) % 12 == clase:
+                    papeles.append({
+                        "acorde": acorde.nombre(),
+                        "grado": tablas.NOMBRES_GRADOS.get(intervalo, f"{intervalo} semitonos"),
+                        "es_guia": intervalo in tablas.GRADOS_GUIA,
+                    })
+        if any(p["es_guia"] for p in papeles):
+            que_es = "guia"
+        else:
+            que_es = "acorde" if papeles else "fuera"
+        pintadas.append({"escrito": escrito, "tab": nota.como_tab(),
+                         "nota": notas.nombre_de_clase(clase), "clase": que_es,
+                         "papeles": papeles, "error": None})
+    return pintadas
+
+
+def destino(base, compas, texto, tonalidad_armonica):
+    """Lo escrito en un compás, pintado contra los acordes que suenan en él."""
+    acordes = acordes_que_suenan(base, compas)
+    return {
+        "texto": texto,
+        "acordes": [a.nombre() for a in acordes],
+        "notas": pintar_destino(texto, acordes, tonalidad_armonica),
+    }
 
 
 def melodia_en_tablatura(base, tonalidad_armonica):
