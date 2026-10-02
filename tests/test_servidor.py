@@ -87,6 +87,21 @@ def mandar(base, ruta, cuerpo=None):
         return json.loads(respuesta.read())
 
 
+def pedir_con(base, ruta, cabeceras, cuerpo=None):
+    """Un pedido con cabeceras a elección; devuelve el código HTTP."""
+    datos = None if cuerpo is None else json.dumps(cuerpo).encode("utf-8")
+    cabeceras = dict(cabeceras)
+    if datos is not None:
+        cabeceras["Content-Type"] = "application/json"
+    pedido = urllib.request.Request(base + ruta, data=datos, headers=cabeceras,
+                                    method="POST" if datos is not None else "GET")
+    try:
+        with urllib.request.urlopen(pedido, timeout=5) as respuesta:
+            return respuesta.status
+    except urllib.error.HTTPError as error:
+        return error.code
+
+
 # =============================================================================
 # Los archivos de la página
 # =============================================================================
@@ -3243,3 +3258,30 @@ def test_los_primeros_pasos_se_muestran_hasta_que_se_hacen(servidor_andando, tmp
     assert mandar(servidor_andando, "/api/primeros-pasos", {"hechos": True})["ok"] is True
     assert traer_json(servidor_andando, "/api/inicio")["primeros_pasos_hechos"] is True
     assert ajustes.cargar(str(tmp_path / "ajustes.json"))["primeros_pasos"] is True
+
+
+# =============================================================================
+# Pedidos de otros sitios
+# =============================================================================
+
+def test_un_pedido_con_otro_host_se_rechaza(servidor_andando):
+    """Un dominio que apunta a 127.0.0.1 (DNS rebinding) no lee nada."""
+    assert pedir_con(servidor_andando, "/api/inicio", {"Host": "evil.example"}) == 403
+
+
+def test_un_pedido_desde_otra_pagina_se_rechaza(servidor_andando, tmp_path):
+    """Una página cualquiera del navegador no puede cambiar nada."""
+    codigo = pedir_con(servidor_andando, "/api/primeros-pasos",
+                       {"Origin": "http://evil.example"}, {"hechos": True})
+    assert codigo == 403
+    assert ajustes.cargar(str(tmp_path / "ajustes.json")) == {}
+    assert pedir_con(servidor_andando, "/api/inicio", {"Origin": "null"}) == 403
+
+
+def test_la_propia_pagina_pasa(servidor_andando, tmp_path):
+    puerto = servidor_andando.rsplit(":", 1)[1]
+    assert pedir_con(servidor_andando, "/api/primeros-pasos",
+                     {"Origin": f"http://127.0.0.1:{puerto}"}, {"hechos": True}) == 200
+    assert pedir_con(servidor_andando, "/api/inicio",
+                     {"Host": f"localhost:{puerto}", "Origin": f"http://localhost:{puerto}"}) == 200
+    assert ajustes.cargar(str(tmp_path / "ajustes.json")) == {"primeros_pasos": True}

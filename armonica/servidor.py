@@ -1231,6 +1231,28 @@ class Manejador(SimpleHTTPRequestHandler):
     # cortar. Lo pone arrancar().
     servidor_http = None
 
+    # Los nombres con que la propia página llama al servidor.
+    NOMBRES_PROPIOS = ("127.0.0.1", "localhost")
+
+    def _es_ajeno(self):
+        """
+        Si el pedido viene de otro sitio. El servidor escucha solo en esta
+        máquina, pero cualquier página abierta en el navegador puede
+        mandarle pedidos: con su propio Origin (un formulario o un fetch
+        hacia 127.0.0.1) o con otro Host (un dominio que apunta a
+        127.0.0.1: el "DNS rebinding"). La versión instalada corre días
+        escondida en la máquina del profe, así que esos pedidos se
+        rechazan. Un pedido sin Origin (la barra de direcciones, el
+        instalador, los tests) pasa si el Host es propio.
+        """
+        host = (self.headers.get("Host") or "").strip()
+        if host and (urllib.parse.urlsplit("//" + host).hostname or "") not in self.NOMBRES_PROPIOS:
+            return True
+        origen = self.headers.get("Origin")
+        if origen is not None and (urllib.parse.urlsplit(origen).hostname or "") not in self.NOMBRES_PROPIOS:
+            return True
+        return False
+
     # Lo ultimo que tocaste practicando: (muestras, frecuencia_muestreo). Vive
     # en memoria para poder escucharlo al lado de la referencia. Es UNO solo:
     # el siguiente intento lo reemplaza.
@@ -1293,6 +1315,8 @@ class Manejador(SimpleHTTPRequestHandler):
     # --- GET ---
 
     def do_GET(self):
+        if self._es_ajeno():
+            return self.send_error(403)
         if self.path == "/api/vivo":
             return self._transmitir_estado()
         if self.path == "/api/inicio":
@@ -1344,6 +1368,8 @@ class Manejador(SimpleHTTPRequestHandler):
     # --- POST ---
 
     def do_POST(self):
+        if self._es_ajeno():
+            return self.send_error(403)
         # Las rutas que traen un .wav se atienden primero: su cuerpo son bytes
         # de audio, y leerlo como JSON lo consumiria sin poder recuperarlo.
         ruta, _, consulta = self.path.partition("?")
