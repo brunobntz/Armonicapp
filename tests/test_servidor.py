@@ -3313,3 +3313,27 @@ def test_un_pedido_con_cabeceras_rotas_recibe_403(servidor_andando):
     finally:
         conexion.close()
     assert pedir_con(servidor_andando, "/api/inicio", {"Origin": "http://[::1"}) == 403
+
+
+def test_el_vigia_sigue_aunque_una_mirada_falle(monkeypatch):
+    """Un vigía muerto dejaría el micrófono tomado para siempre."""
+    miradas = []
+
+    def mirada(clase, puerto, memoria, ahora):
+        miradas.append(ahora)
+        if len(miradas) == 1:
+            raise RuntimeError("algo inesperado")
+
+    monkeypatch.setattr(servidor, "un_paso_del_vigia", mirada)
+    detener = threading.Event()
+    hilo = threading.Thread(target=servidor.vigilar_el_microfono, args=(None, 8000),
+                            kwargs={"cada": 0.01, "detener": detener}, daemon=True)
+    hilo.start()
+    limite = time.monotonic() + 3
+    while len(miradas) < 3 and time.monotonic() < limite:
+        time.sleep(0.01)
+    detener.set()
+    hilo.join(timeout=2)
+
+    assert len(miradas) >= 3
+    assert not hilo.is_alive()

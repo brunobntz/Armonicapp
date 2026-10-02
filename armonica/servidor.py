@@ -779,12 +779,21 @@ def un_paso_del_vigia(clase, puerto, memoria, ahora):
     return accion
 
 
-def vigilar_el_microfono(clase, puerto, cada=1.0):
-    """El vigía: mira cada `cada` segundos. Corre en un hilo daemon."""
+def vigilar_el_microfono(clase, puerto, cada=1.0, detener=None):
+    """
+    El vigía: mira cada `cada` segundos. Corre en un hilo daemon.
+
+    Si una mirada falla por algo inesperado, lo anota y sigue: un vigía
+    muerto dejaría el micrófono tomado para siempre, sin que nadie se entere
+    (con pythonw no hay consola). `detener` es para los tests.
+    """
     memoria = {"sin_nadie_desde": time.monotonic(), "apagado_por_vigia": False}
-    while True:
+    while detener is None or not detener.is_set():
         time.sleep(cada)
-        un_paso_del_vigia(clase, puerto, memoria, time.monotonic())
+        try:
+            un_paso_del_vigia(clase, puerto, memoria, time.monotonic())
+        except Exception as error:      # noqa: BLE001
+            print(f"  El vigía del micrófono tropezó y sigue: {error}")
 
 
 # =============================================================================
