@@ -56,6 +56,13 @@ Source: "{#Armado}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs 
 ; ese nombre, y el desinstalador no los borra.
 Source: "{#Ejemplos}\*"; DestDir: "{userdocs}\Armonica"; Flags: recursesubdirs createallsubdirs onlyifdoesntexist uninsneveruninstall skipifsourcedoesntexist
 
+[InstallDelete]
+; Una versión nueva no puede dejar módulos ni DLL de la anterior: se borran
+; app\ y python\ antes de copiar. La app ya la cerró PrepareToInstall, y los
+; datos del profe están en Documentos\Armonica, fuera de {app}.
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\python"
+
 [Icons]
 Name: "{group}\Armónica"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; IconFilename: "{app}\Armonica.ico"
 Name: "{autodesktop}\Armónica"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; IconFilename: "{app}\Armonica.ico"; Tasks: escritorio
