@@ -15,6 +15,9 @@ inteligente de aplicaciones. Dice una de tres cosas:
 - **Evaluación:** todavía no bloquea nada, pero Windows puede activarlo solo.
 - **Desactivado:** no pasa nada de lo que sigue.
 
+Si no aparece esa opción, no aplica (por ejemplo, en una máquina que vino de
+Windows 10).
+
 Con el control activado, el instalador sin firma corrió (probado en la máquina
 de Bruno, que lo tiene en Activado), y la app anda. Lo que no anda es el
 `ffmpeg.exe` que viaja con ella, que tampoco está firmado: Windows no lo deja
@@ -23,10 +26,12 @@ etc.). La app lo dice en castellano: "Windows no lo dejó correr. Probá con el
 audio en .wav." La grabación, el En vivo, las frases, las fotos y los .wav
 andan igual.
 
-No le pidas al profe que lo apague a la ligera: una vez desactivado no se
-puede volver a activar sin reinstalar Windows. Si lo tiene activado, hay que
-decidir entre un ffmpeg con firma o reputación, o firmar el instalador
-(queda en `PROXIMOS_PASOS.md`).
+No le pidas al profe que lo apague a la ligera: en la mayoría de las
+versiones de Windows, una vez desactivado no se puede volver a activar sin
+reinstalar. Si lo tiene activado, hay que decidir entre firmar el `ffmpeg.exe`
+(o todo el paquete) o usar un ffmpeg con reputación (queda en
+`PROXIMOS_PASOS.md`). Firmar solo el instalador no alcanza: lo que Windows
+bloquea es el `ffmpeg.exe`, que el instalador apenas copia.
 
 ## La prueba
 
@@ -39,11 +44,11 @@ decidir entre un ffmpeg con firma o reputación, o firmar el instalador
    ninguna ventana negra.
 4. Hacer los primeros pasos. Tocar en En vivo: la aguja se mueve.
 5. Grabar una sesión, guardar una frase, abrir una canción de ejemplo y
-   reproducir su base, importar un audio de WhatsApp (usa ffmpeg), ver una
-   foto .HEIC de una canción.
-6. Con una foto .HEIC y un audio de WhatsApp, anotar si la conversión anda o
-   si sale "Windows no lo dejó correr" (ver Control inteligente de
-   aplicaciones, arriba). La foto no usa ffmpeg: tiene que verse siempre.
+   reproducir su base.
+6. Con una foto .HEIC de una canción y un audio de WhatsApp (usa ffmpeg),
+   anotar si la conversión anda o si sale "Windows no lo dejó correr" (ver
+   Control inteligente de aplicaciones, arriba). La foto no usa ffmpeg: tiene
+   que verse siempre.
 7. Hacer doble clic en el ícono dos veces seguidas, rápido: una sola app;
    la segunda vez solo se abre el navegador.
 8. Cerrar la pestaña: al minuto se apaga el ícono de micrófono en uso de

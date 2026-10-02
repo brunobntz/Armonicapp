@@ -100,8 +100,8 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
   guardados en `ajustes.json` (micrófono por nombre), Medir el ruido,
   primeros pasos, Cerrar la app, micrófono que se suelta sin páginas,
   puerto exclusivo y `/api/hola`, `VERSION`, textos sin jerga en la
-  instalada, ffmpeg sin ventana, y `lanzador.pyw`. Falta la etapa 2 (el
-  armado con Inno Setup) y la 3 (la guía).
+  instalada, ffmpeg sin ventana, y `lanzador.pyw`. Falta la etapa 3 (la
+  guía).
 - **Instalador, etapa 2: el armado.** Hecho (2026-10-02):
   `herramientas\empaquetar.ps1` → `dist\Armonica-<versión>-instalador.exe`
   con Python 3.14.6 embebido, ruedas fijadas con SHA-256, ffmpeg LGPL de
@@ -111,8 +111,8 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
   muere, y un doble clic rápido abre una sola app. Falta: la prueba en
   un usuario limpio (`empaquetado\PROBAR.md`) y la etapa 3 (la guía).
   Abierto: Smart App Control bloquea el ffmpeg sin firma (la conversión
-  de audios no anda en esas máquinas): decidir entre un ffmpeg con
-  reputación/firma o firmar el instalador.
+  de audios no anda en esas máquinas): decidir entre firmar el `ffmpeg.exe`
+  (o todo el paquete) o usar un ffmpeg con reputación.
 
 ## Ideas nuevas, de más útil a más lejana
 

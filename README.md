@@ -682,11 +682,18 @@ JRSoftware.InnoSetup -e`) y conexión la primera vez. Inno Setup es gratis
 para uso no comercial (lo dice el banner de su compilador), y darle la app al
 profe sin cobrarle entra ahí.
 
-    powershell -ExecutionPolicy Bypass -File herramientas\empaquetar.ps1          arma, prueba y compila
-    powershell -ExecutionPolicy Bypass -File herramientas\empaquetar.ps1 fijar    después de cambiar empaquetado\requisitos.in
+```powershell
+# Arma, prueba y compila el instalador
+powershell -ExecutionPolicy Bypass -File herramientas\empaquetar.ps1
+
+# Fija las ruedas con su SHA-256, después de cambiar empaquetado\requisitos.in
+powershell -ExecutionPolicy Bypass -File herramientas\empaquetar.ps1 fijar
+```
 
 Se llama con `-ExecutionPolicy Bypass` porque la política de PowerShell que
 trae Windows no deja correr un `.ps1` suelto (`.\herramientas\empaquetar.ps1`).
+Después de `fijar`, commiteá `empaquetado\requisitos.txt`: el armado lo lee de
+lo commiteado, no de la carpeta.
 
 Toma el código commiteado, no la carpeta: lo que tengas sin commitear (tu
 `config.py`, por ejemplo) no entra, y lo avisa. Corre los tests sobre esa
