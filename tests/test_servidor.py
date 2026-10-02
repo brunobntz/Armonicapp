@@ -20,8 +20,8 @@ from http.server import ThreadingHTTPServer
 import pytest
 
 import config
-from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan,
-                      segmentacion, servidor)
+from armonica import (ajustes, audio, clases, coach, exportacion, frases, mapeo,
+                      microfono, plan, segmentacion, servidor)
 from herramientas import generar_wav
 
 
@@ -30,13 +30,15 @@ from herramientas import generar_wav
 # =============================================================================
 
 @pytest.fixture
-def servidor_andando():
+def servidor_andando(tmp_path, monkeypatch):
     """
     Levanta el servidor en un puerto que elige el sistema, y lo apaga al final.
 
     El puerto 0 significa "el que esté libre": así dos tests en paralelo no
-    chocan, y tampoco molestamos si tenés la app abierta en el 8000.
+    chocan, y tampoco molestamos si tenés la app abierta en el 8000. Lo que
+    se elige en Ajustes va a un ajustes.json temporal, nunca al del repo.
     """
+    monkeypatch.setattr(ajustes, "ARCHIVO", str(tmp_path / "ajustes.json"))
     servidor.Manejador.estado = servidor.EstadoCompartido("C", 12, "blues_mayor")
     servidor.Manejador.hilo_audio = None
     servidor.Manejador.detener = None
@@ -1006,6 +1008,45 @@ def test_no_se_puede_cambiar_la_configuracion_mientras_graba(servidor_andando):
 
     assert respuesta["ok"] is False
     assert servidor.Manejador.estado.tonalidad == "C"
+
+
+def test_lo_que_se_elige_en_ajustes_queda_guardado(servidor_andando, tmp_path, monkeypatch):
+    """
+    Armónica, posición, escala y micrófono van a ajustes.json. El micrófono
+    por NOMBRE: el número cambia al enchufar otro aparato.
+    """
+    monkeypatch.setattr(microfono, "listar_dispositivos",
+                        lambda: [(3, "Micrófono (USB Audio) ", 1)])
+    respuesta = mandar(servidor_andando, "/api/configuracion", {
+        "tonalidad": "A", "posicion": 2, "escala": "blues_mayor", "dispositivo": 3})
+    assert respuesta["ok"] is True
+    assert ajustes.cargar(str(tmp_path / "ajustes.json")) == {
+        "tonalidad": "A", "posicion": 2, "escala": "blues_mayor",
+        "microfono": "Micrófono (USB Audio)"}
+
+
+def test_el_microfono_guardado_se_busca_por_nombre():
+    lista = lambda: [(7, "Micrófono (USB Audio)", 1)]  # noqa: E731
+    assert servidor.microfono_guardado({}, lista) == (config.DISPOSITIVO_ENTRADA, "")
+    assert servidor.microfono_guardado({"microfono": ""}, lista) == (None, "")
+    assert servidor.microfono_guardado({"microfono": "Micrófono (USB Audio)"}, lista) == (7, "")
+    numero, aviso = servidor.microfono_guardado({"microfono": "Cámara HD"}, lista)
+    assert numero is None
+    assert "Cámara HD" in aviso and "no está conectado" in aviso
+
+
+def test_el_nombre_del_microfono_para_guardarlo():
+    lista = lambda: [(7, " Micrófono (USB Audio) ", 1)]  # noqa: E731
+    assert servidor.nombre_del_microfono(None, lista) == ""
+    assert servidor.nombre_del_microfono(7, lista) == "Micrófono (USB Audio)"
+    assert servidor.nombre_del_microfono(9, lista) is None
+
+
+def test_la_lista_de_microfonos_trae_el_aviso(servidor_andando, monkeypatch):
+    monkeypatch.setattr(microfono, "listar_dispositivos", lambda: [])
+    servidor.Manejador.estado.aviso_microfono = "El micrófono que elegiste no está conectado"
+    assert traer_json(servidor_andando, "/api/dispositivos")["aviso"] == \
+        "El micrófono que elegiste no está conectado"
 
 
 def test_se_puede_elegir_el_microfono(servidor_andando):

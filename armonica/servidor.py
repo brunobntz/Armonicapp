@@ -52,7 +52,7 @@ import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from armonica import canciones, canciones_ajustes, compas_uno, imagenes, sobre_la_base
+from armonica import ajustes, canciones, canciones_ajustes, compas_uno, imagenes, sobre_la_base
 from armonica import (audio, clases, coach, exportacion, frases, mapeo, plan, posiciones,
                       prioridades, resumen as modulo_resumen, ritmo,
                       segmentacion, tablas, teoria, tono, transcripcion)
@@ -108,6 +108,10 @@ class EstadoCompartido:
         # nunca es el que queres: en esta maquina el predeterminado era la
         # camara web, a un metro de distancia, y no se movia nada en pantalla.
         self.dispositivo = config.DISPOSITIVO_ENTRADA
+
+        # Si el micrófono guardado en Ajustes no está conectado al arrancar,
+        # se usa el de Windows y esto lo dice en Ajustes.
+        self.aviso_microfono = ""
 
         # En que modo esta escuchando. Cambia SOLO lo que pasa al terminar:
         #   "sesion"     -> guarda la sesion en sesiones/
@@ -571,6 +575,49 @@ def _una_vuelta_de_microfono(estado, detener, tabla, microfono):
                 captura.olvidar_lo_grabado()
                 if len(mediciones) > ventanas_en_pantalla * 2:
                     del mediciones[:-ventanas_en_pantalla]
+
+
+def microfono_guardado(guardados, listar=None):
+    """
+    El número del micrófono guardado en ajustes.json y, si no está
+    conectado, el aviso para Ajustes. Sin nada guardado manda config.py.
+    """
+    if "microfono" not in guardados:
+        return config.DISPOSITIVO_ENTRADA, ""
+    nombre = guardados["microfono"]
+    if not nombre:
+        return None, ""
+    if listar is None:
+        from armonica import microfono
+        listar = microfono.listar_dispositivos
+    try:
+        entradas = listar()
+    except Exception:      # noqa: BLE001
+        return None, "No pude ver la lista de micrófonos; uso el de Windows."
+    numero = ajustes.resolver_microfono(nombre, entradas)
+    if numero is None:
+        return None, f"El micrófono que elegiste ({nombre}) no está conectado; uso el de Windows."
+    return numero, ""
+
+
+def nombre_del_microfono(numero, listar=None):
+    """
+    El nombre del micrófono número `numero`, para guardarlo: "" si es el de
+    Windows, None si no aparece en la lista (entonces no se guarda nada).
+    """
+    if numero is None:
+        return ""
+    if listar is None:
+        from armonica import microfono
+        listar = microfono.listar_dispositivos
+    try:
+        entradas = listar()
+    except Exception:      # noqa: BLE001
+        return None
+    for otro, nombre, _canales in entradas:
+        if otro == numero:
+            return nombre.strip()
+    return None
 
 
 def encender_microfono(clase):
@@ -2049,6 +2096,7 @@ class Manejador(SimpleHTTPRequestHandler):
             "ok": True,
             "dispositivos": salida,
             "elegido": type(self).estado.dispositivo,
+            "aviso": type(self).estado.aviso_microfono,
         }
 
     def _cambiar_configuracion(self, peticion):
@@ -2102,6 +2150,16 @@ class Manejador(SimpleHTTPRequestHandler):
         if clase.audio_automatico:
             apagar_microfono(clase)
             encender_microfono(clase)
+
+        # Y queda guardado para la proxima vez que se abra la app.
+        cambios = {"tonalidad": estado.tonalidad, "posicion": estado.posicion,
+                   "escala": estado.escala}
+        if "dispositivo" in peticion:
+            nombre = nombre_del_microfono(estado.dispositivo)
+            if nombre is not None:
+                cambios["microfono"] = nombre
+            estado.aviso_microfono = ""
+        ajustes.guardar(cambios)
 
         return {"ok": True, "inicio": self._datos_iniciales()}
 
@@ -2620,10 +2678,22 @@ class Manejador(SimpleHTTPRequestHandler):
             pass
 
 
-def arrancar(tonalidad="C", posicion=None, escala=None, puerto=8000,
+def arrancar(tonalidad=None, posicion=None, escala=None, puerto=8000,
              abrir_navegador=True):
-    """Levanta el servidor y bloquea hasta que lo cortes con Ctrl+C."""
+    """
+    Levanta el servidor y bloquea hasta que lo cortes con Ctrl+C.
+
+    tonalidad, posicion y escala en None quieren decir "no vinieron": manda
+    lo guardado en Ajustes (ajustes.json) y, si no hay nada, la fabrica.
+    """
+    guardados = ajustes.cargar()
+    ajustes.aplicar_a_config(guardados)
+    valores = ajustes.valores_de_arranque(guardados, tonalidad, posicion, escala)
+    tonalidad, posicion, escala = valores["tonalidad"], valores["posicion"], valores["escala"]
+
     Manejador.estado = EstadoCompartido(tonalidad, posicion, escala)
+    Manejador.estado.dispositivo, Manejador.estado.aviso_microfono = \
+        microfono_guardado(guardados)
 
     servidor = ThreadingHTTPServer(("127.0.0.1", puerto), Manejador)
     direccion = f"http://127.0.0.1:{puerto}"

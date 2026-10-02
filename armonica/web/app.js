@@ -2050,6 +2050,8 @@ async function cargarAjustes() {
   if (!datos.ok) {
     document.getElementById("estado-microfono").textContent =
       datos.motivo || "no pude leer la lista de micr\u00f3fonos";
+  } else if (datos.aviso) {
+    document.getElementById("estado-microfono").textContent = datos.aviso;
   }
 }
 

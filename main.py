@@ -1382,6 +1382,20 @@ def crear_parser():
     return parser
 
 
+def _explicitos_para_la_web(argv):
+    """
+    La armónica, posición y escala que se escribieron en la línea de
+    comandos, y solo esas: lo que no se escribió queda en None para que
+    mande lo guardado en Ajustes. Si no, el "C" por defecto de --tonalidad
+    pisaría siempre la armónica elegida en pantalla.
+    """
+    parser = crear_parser()
+    parser.set_defaults(tonalidad=None, posicion=None, escala=None)
+    escritos = parser.parse_args(argv)
+    return {"tonalidad": escritos.tonalidad, "posicion": escritos.posicion,
+            "escala": escritos.escala}
+
+
 def main():
     preparar_consola()
     argumentos = crear_parser().parse_args()
@@ -1400,8 +1414,8 @@ def main():
 
     if argumentos.web:
         from armonica import servidor
-        return servidor.arrancar(argumentos.tonalidad, argumentos.posicion,
-                                 argumentos.escala, argumentos.puerto)
+        return servidor.arrancar(puerto=argumentos.puerto,
+                                 **_explicitos_para_la_web(sys.argv[1:]))
 
     if argumentos.calibrar:
         return _calibrar()
