@@ -1049,6 +1049,31 @@ def test_la_lista_de_microfonos_trae_el_aviso(servidor_andando, monkeypatch):
         "El micrófono que elegiste no está conectado"
 
 
+def test_cambiar_otra_cosa_no_pisa_el_microfono_guardado(servidor_andando, tmp_path, monkeypatch):
+    """
+    La pantalla manda los cuatro campos en cada cambio, "dispositivo"
+    incluido. Si el micrófono guardado no estaba conectado al arrancar (la
+    app usa el de Windows), cambiar solo la armónica no puede borrar el
+    nombre guardado ni el aviso: cuando enchufen el micrófono tiene que
+    volver a ser el elegido.
+    """
+    archivo = str(tmp_path / "ajustes.json")
+    ajustes.guardar({"microfono": "Micrófono (USB Audio)"}, archivo)
+    monkeypatch.setattr(microfono, "listar_dispositivos", lambda: [])
+    estado = servidor.Manejador.estado
+    estado.dispositivo = None
+    estado.aviso_microfono = "no está conectado"
+
+    respuesta = mandar(servidor_andando, "/api/configuracion", {
+        "tonalidad": "A", "posicion": 12, "escala": "blues_mayor", "dispositivo": None})
+
+    assert respuesta["ok"] is True
+    guardado = ajustes.cargar(archivo)
+    assert guardado["microfono"] == "Micrófono (USB Audio)"
+    assert guardado["tonalidad"] == "A"
+    assert estado.aviso_microfono == "no está conectado"
+
+
 def test_se_puede_elegir_el_microfono(servidor_andando):
     respuesta = mandar(servidor_andando, "/api/configuracion", {"dispositivo": 3})
 

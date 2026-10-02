@@ -2139,6 +2139,9 @@ class Manejador(SimpleHTTPRequestHandler):
                 return {"ok": False, "motivo": f"no conozco la escala {escala!r}"}
             estado.escala = escala
 
+        # La pantalla manda "dispositivo" en cada cambio, aunque no lo hayas
+        # tocado: por eso se recuerda cual era, para guardar solo si cambio.
+        dispositivo_anterior = estado.dispositivo
         if "dispositivo" in peticion:
             valor = peticion["dispositivo"]
             estado.dispositivo = None if valor in ("", None) else int(valor)
@@ -2154,7 +2157,10 @@ class Manejador(SimpleHTTPRequestHandler):
         # Y queda guardado para la proxima vez que se abra la app.
         cambios = {"tonalidad": estado.tonalidad, "posicion": estado.posicion,
                    "escala": estado.escala}
-        if "dispositivo" in peticion:
+        # El microfono solo si lo elegiste de verdad: si estaba desconectado al
+        # arrancar, cambiar la armonica no puede borrar el nombre guardado ni
+        # el aviso, para que cuando lo enchufes vuelva a ser el elegido.
+        if estado.dispositivo != dispositivo_anterior:
             nombre = nombre_del_microfono(estado.dispositivo)
             if nombre is not None:
                 cambios["microfono"] = nombre
