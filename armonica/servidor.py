@@ -49,6 +49,7 @@ import tempfile
 import threading
 import time
 import urllib.parse
+import urllib.request
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
@@ -79,6 +80,9 @@ ESPERA_ENTRE_INTENTOS = 0.5
 
 # Cuánto escucha "Medir el ruido". Lo mismo que --calibrar.
 SEGUNDOS_DE_RUIDO = 3.0
+
+# Cuánto se espera sin ninguna página abierta antes de soltar el micrófono.
+SEGUNDOS_SIN_PAGINA = 60.0
 
 # Si lo medido como silencio da un umbral más alto que esto, sonó algo
 # mientras medía (o la habitación es muy ruidosa): 0,05 ya obliga a tocar
@@ -682,6 +686,64 @@ def apagar_microfono(clase):
     clase.estado.escuchando = False
 
 
+def que_hacer_con_el_microfono(conectados, sin_nadie_desde, ahora, prendido,
+                               apagado_por_vigia, espera=SEGUNDOS_SIN_PAGINA):
+    """
+    La decisión del vigía, sin efectos: "apagar", "prender" o None.
+
+    Solo prende lo que él apagó. Si el micrófono se cayó por un error, el
+    hilo de audio ya reintentó y se rindió: insistir cada segundo no arregla
+    nada y llena el registro.
+    """
+    if conectados > 0:
+        return "prender" if apagado_por_vigia and not prendido else None
+    if prendido and sin_nadie_desde is not None and ahora - sin_nadie_desde >= espera:
+        return "apagar"
+    return None
+
+
+def _pedir_parar(puerto):
+    """Aprieta Parar como lo haría la página: la grabación queda pendiente."""
+    pedido = urllib.request.Request(f"http://127.0.0.1:{puerto}/api/terminar",
+                                    data=b"{}", method="POST",
+                                    headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(pedido, timeout=10):
+            pass
+    except OSError as error:
+        print(f"  No pude cortar la grabación: {error}")
+
+
+def un_paso_del_vigia(clase, puerto, memoria, ahora):
+    """Una mirada del vigía. `memoria` guarda desde cuándo no hay nadie."""
+    conectados = clase.conectados
+    if conectados > 0:
+        memoria["sin_nadie_desde"] = None
+    elif memoria.get("sin_nadie_desde") is None:
+        memoria["sin_nadie_desde"] = ahora
+    prendido = clase.hilo_audio is not None and clase.hilo_audio.is_alive()
+    accion = que_hacer_con_el_microfono(conectados, memoria["sin_nadie_desde"], ahora,
+                                        prendido, memoria.get("apagado_por_vigia", False))
+    if accion == "apagar":
+        if clase.estado.grabando:
+            _pedir_parar(puerto)
+        apagar_microfono(clase)
+        memoria["apagado_por_vigia"] = True
+        print("  Ninguna página abierta hace un minuto: apagué el micrófono.")
+    elif accion == "prender":
+        encender_microfono(clase)
+        memoria["apagado_por_vigia"] = False
+    return accion
+
+
+def vigilar_el_microfono(clase, puerto, cada=1.0):
+    """El vigía: mira cada `cada` segundos. Corre en un hilo daemon."""
+    memoria = {"sin_nadie_desde": time.monotonic(), "apagado_por_vigia": False}
+    while True:
+        time.sleep(cada)
+        un_paso_del_vigia(clase, puerto, memoria, time.monotonic())
+
+
 # =============================================================================
 # El histórico
 # =============================================================================
@@ -1115,6 +1177,12 @@ class Manejador(SimpleHTTPRequestHandler):
     # Si es la versión instalada (la abre el lanzador): la pantalla usa los
     # textos para el profe, sin carpetas ni comandos.
     empaquetada = False
+
+    # Cuántas páginas están conectadas a /api/vivo. Con pythonw no hay
+    # ventana que cerrar: si se cierra la pestaña, la app sigue y el
+    # micrófono quedaría tomado. El vigía mira esto para soltarlo.
+    conectados = 0
+    candado_conexiones = threading.Lock()
 
     # Lo ultimo que tocaste practicando: (muestras, frecuencia_muestreo). Vive
     # en memoria para poder escucharlo al lado de la referencia. Es UNO solo:
@@ -2741,24 +2809,29 @@ class Manejador(SimpleHTTPRequestHandler):
         quince veces por segundo. Cada mensaje es la palabra "data:", el JSON, y
         dos saltos de línea: ese es todo el protocolo de server-sent events.
         """
-        import time
-
+        clase = type(self)
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self.end_headers()
 
+        with clase.candado_conexiones:
+            clase.conectados += 1
         try:
             while True:
-                datos = json.dumps(type(self).estado.como_diccionario(),
-                                   ensure_ascii=False)
+                datos = json.dumps(clase.estado.como_diccionario(), ensure_ascii=False)
                 self.wfile.write(f"data: {datos}\n\n".encode("utf-8"))
                 self.wfile.flush()
                 time.sleep(1.0 / REFRESCOS_POR_SEGUNDO)
-        except (BrokenPipeError, ConnectionResetError):
-            # El navegador cerró la pestaña. Es normal, no es un error.
+        except ConnectionError:
+            # El navegador cerró la pestaña. Es normal, no es un error. En
+            # Windows llega como ConnectionAbortedError, que el except de
+            # antes (BrokenPipe y ConnectionReset) no agarraba.
             pass
+        finally:
+            with clase.candado_conexiones:
+                clase.conectados -= 1
 
 
 class PuertoOcupado(OSError):
@@ -2835,9 +2908,12 @@ def arrancar(tonalidad=None, posicion=None, escala=None, puerto=8000,
     print("  Ctrl+C para apagarlo.")
     print()
 
-    # El microfono se prende solo: podes tocar y ver sin apretar nada.
+    # El microfono se prende solo: podes tocar y ver sin apretar nada. Y se
+    # apaga solo si un minuto no hay ninguna pagina mirando.
     Manejador.audio_automatico = True
     encender_microfono(Manejador)
+    threading.Thread(target=vigilar_el_microfono,
+                     args=(Manejador, servidor.server_address[1]), daemon=True).start()
 
     if abrir_navegador:
         threading.Timer(0.7, lambda: webbrowser.open(direccion)).start()

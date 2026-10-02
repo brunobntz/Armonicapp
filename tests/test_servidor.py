@@ -15,6 +15,7 @@ import socket
 import tempfile
 import threading
 import time
+import types
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -50,6 +51,7 @@ def servidor_andando(tmp_path, monkeypatch):
     servidor.Manejador.ultimo_intento = None
     servidor.Manejador.ultima_comparacion = None
     servidor.Manejador.empaquetada = False
+    servidor.Manejador.conectados = 0
 
     instancia = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Manejador)
     puerto = instancia.server_address[1]
@@ -3048,3 +3050,66 @@ def test_si_no_llega_audio_no_se_inventa_un_umbral(servidor_andando, monkeypatch
     respuesta = mandar(servidor_andando, "/api/medir-ruido")
     assert respuesta["ok"] is False
     assert "audio" in respuesta["motivo"]
+
+
+# =============================================================================
+# El micrófono se apaga solo
+# =============================================================================
+
+def test_las_paginas_conectadas_se_cuentan(servidor_andando):
+    respuesta = urllib.request.urlopen(servidor_andando + "/api/vivo", timeout=5)
+    try:
+        assert respuesta.readline().startswith(b"data:")
+        assert servidor.Manejador.conectados == 1
+    finally:
+        respuesta.close()
+    limite = time.monotonic() + 3
+    while servidor.Manejador.conectados and time.monotonic() < limite:
+        time.sleep(0.05)
+    assert servidor.Manejador.conectados == 0
+
+
+@pytest.mark.parametrize("conectados, desde, ahora, prendido, por_vigia, esperado", [
+    (1, None, 100.0, True, False, None),        # hay una página: nada
+    (0, 0.0, 30.0, True, False, None),          # sin página hace poco: espera
+    (0, 0.0, 60.0, True, False, "apagar"),      # un minuto sin página: apaga
+    (0, 0.0, 90.0, False, True, None),          # ya apagado: nada
+    (1, None, 91.0, False, True, "prender"),    # vuelve una página: prende
+    (1, None, 91.0, False, False, None),        # apagado por un error: no insiste
+])
+def test_que_hacer_con_el_microfono(conectados, desde, ahora, prendido, por_vigia, esperado):
+    assert servidor.que_hacer_con_el_microfono(
+        conectados, desde, ahora, prendido, por_vigia, espera=60.0) == esperado
+
+
+class HiloFalso:
+    def __init__(self, vivo):
+        self.vivo = vivo
+
+    def is_alive(self):
+        return self.vivo
+
+
+def test_el_vigia_corta_la_grabacion_y_apaga(monkeypatch):
+    """
+    Con la pestaña cerrada y grabando, nadie puede apretar Parar: el vigía lo
+    aprieta (la grabación queda pendiente, como siempre) y suelta el
+    micrófono. Cuando vuelve una página, lo prende.
+    """
+    llamadas = []
+    monkeypatch.setattr(servidor, "_pedir_parar", lambda puerto: llamadas.append(("parar", puerto)))
+    monkeypatch.setattr(servidor, "apagar_microfono", lambda clase: llamadas.append("apagar"))
+    monkeypatch.setattr(servidor, "encender_microfono", lambda clase: llamadas.append("prender"))
+    clase = types.SimpleNamespace(conectados=0, hilo_audio=HiloFalso(True),
+                                  estado=types.SimpleNamespace(grabando=True))
+    memoria = {"sin_nadie_desde": 0.0, "apagado_por_vigia": False}
+
+    assert servidor.un_paso_del_vigia(clase, 8000, memoria, 30.0) is None
+    assert servidor.un_paso_del_vigia(clase, 8000, memoria, 61.0) == "apagar"
+    assert llamadas == [("parar", 8000), "apagar"]
+
+    clase.conectados = 1
+    clase.hilo_audio = HiloFalso(False)
+    assert servidor.un_paso_del_vigia(clase, 8000, memoria, 62.0) == "prender"
+    assert llamadas[-1] == "prender"
+    assert memoria["apagado_por_vigia"] is False
