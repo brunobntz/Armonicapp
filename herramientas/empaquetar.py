@@ -264,3 +264,48 @@ def buscar_iscc(entorno=None):
 
 def nombre_del_instalador(version):
     return f"Armonica-{version}-instalador.exe"
+
+
+def _pip(*argumentos):
+    """pip del .venv: el mismo Python 3.14 que el embebido."""
+    subprocess.run([sys.executable, "-m", "pip", *argumentos], check=True)
+
+
+def fijar():
+    """
+    Baja las ruedas de requisitos.in para Windows y Python 3.14, con sus
+    dependencias, y escribe requisitos.txt con el SHA-256 de cada una. Si pip
+    trae algo que no está en requisitos.in, corta: hay que fijarlo a mano.
+    """
+    requisitos_in = EMPAQUETADO / "requisitos.in"
+    fijados = leer_requisitos_in(requisitos_in.read_text(encoding="utf-8"))
+    with tempfile.TemporaryDirectory(prefix="armonica-ruedas-") as temporal:
+        _pip("download", "-r", str(requisitos_in), "-d", temporal, *OPCIONES_DE_RUEDAS)
+        ruedas = sorted(Path(temporal).glob("*.whl"))
+        texto = requisitos_con_hash(ruedas, fijados)
+        if RUEDAS.exists():
+            shutil.rmtree(RUEDAS)
+        RUEDAS.mkdir(parents=True)
+        for rueda in ruedas:
+            shutil.copy2(rueda, RUEDAS / rueda.name)
+    destino = EMPAQUETADO / "requisitos.txt"
+    destino.write_text(texto, encoding="utf-8")
+    print(f"  Fijadas {len(fijados)} ruedas en {destino.relative_to(RAIZ)}. Commitealo.")
+    return destino
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Arma el instalador de Windows de Armónica.")
+    parser.add_argument("paso", nargs="?", default="todo",
+                        choices=["fijar", "armar", "humo", "instalador", "todo"])
+    parser.add_argument("--programa", default=None,
+                        help="la carpeta del programa para `humo` (por defecto, la armada)")
+    argumentos = parser.parse_args(argv)
+    if argumentos.paso == "fijar":
+        fijar()
+        return 0
+    raise SystemExit(f"El paso {argumentos.paso} todavía no está.")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
