@@ -103,6 +103,9 @@ class CoachNoDisponible(Exception):
 
     Si lo levantó _http_json ante un error HTTP, lleva además `codigo` (el
     número que contestó el servicio) y `detalle` (el cuerpo de esa respuesta).
+    Si lo levantó porque no pudo conectarse (sin red, o se acabó el tiempo),
+    lleva `sin_conexion = True`: su texto trae el detalle técnico del error
+    del sistema, que sirve para el registro pero no para mostrarle a nadie.
     """
 
 
@@ -515,6 +518,11 @@ def _pedir_por_http(conf, url, cuerpo, cabeceras):
         return _http_json(url, cuerpo, cabeceras,
                           segundos=SEGUNDOS_DE_ESPERA[conf["proveedor"]]) or {}
     except CoachNoDisponible as error:
+        if getattr(error, "sin_conexion", False):
+            # El texto crudo ("getaddrinfo failed", "Errno 11001"...) va al
+            # registro; a la pantalla, una frase que entienda cualquiera.
+            print(f"  El coach ({NOMBRES[conf['proveedor']]}) no pudo conectarse: {error}")
+            raise CoachNoDisponible("No hay conexión con el servicio. ¿Estás sin internet?")
         if getattr(error, "codigo", None):
             print(f"  El coach ({NOMBRES[conf['proveedor']]}) contestó {error.codigo}: "
                   f"{(getattr(error, 'detalle', '') or '')[:300]}")
@@ -673,6 +681,10 @@ def _http_json(url, cuerpo, cabeceras, segundos):
             falla.detalle = ""
         raise falla
     except (urllib.error.URLError, TimeoutError, OSError) as error:
-        raise CoachNoDisponible(f"No hay conexión con el servicio ({error}).")
+        # Se marca aparte, como al HTTPError: quien llama no busca la palabra
+        # "conexión" en el texto para saber que fue esto.
+        falla = CoachNoDisponible(f"No hay conexión con el servicio ({error}).")
+        falla.sin_conexion = True
+        raise falla
     except ValueError:
         raise CoachNoDisponible("El servicio contestó algo que no es JSON.")

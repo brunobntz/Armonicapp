@@ -221,7 +221,8 @@ def test_sin_clave_claude_no_intenta_conectarse(sin_entorno):
 @pytest.fixture
 def http_falso(monkeypatch):
     """Reemplaza _http_json: guarda el pedido y contesta lo que se le diga."""
-    registro = {"pedidos": [], "respuesta": None, "error": None, "codigo": None, "detalle": ""}
+    registro = {"pedidos": [], "respuesta": None, "error": None, "codigo": None, "detalle": "",
+                "sin_conexion": False}
 
     def falso(url, cuerpo, cabeceras, segundos):
         registro["pedidos"].append({"url": url, "cuerpo": cuerpo,
@@ -231,6 +232,8 @@ def http_falso(monkeypatch):
             if registro["codigo"]:
                 falla.codigo = registro["codigo"]
                 falla.detalle = registro["detalle"]
+            if registro["sin_conexion"]:
+                falla.sin_conexion = True
             raise falla
         return registro["respuesta"]
 
@@ -421,12 +424,34 @@ def test_un_400_que_no_es_la_clave_no_culpa_a_la_clave(sin_entorno, tmp_path, ht
     assert "(400)" in str(error.value)
 
 
-def test_sin_conexion_lo_dice(sin_entorno, tmp_path, http_falso):
-    ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-prueba\n")
-    http_falso["error"] = "No hay conexión con el servicio (sin red)."
+@pytest.mark.parametrize("proveedor, clave", [
+    ("claude", "sk-ant-prueba"), ("openai", "sk-prueba"), ("gemini", "AQ.prueba")])
+def test_sin_conexion_lo_dice_sin_jerga(sin_entorno, tmp_path, http_falso, capsys,
+                                        proveedor, clave):
+    ruta = env_con(tmp_path, f"LLM_PROVEEDOR={proveedor}\nLLM_CLAVE={clave}\n")
+    # Lo mismo que levanta _http_json cuando no hay red: el texto trae el
+    # error crudo del sistema, que no es para mostrarle al profe.
+    http_falso["error"] = ("No hay conexión con el servicio "
+                           "(<urlopen error [Errno 11001] getaddrinfo failed>).")
+    http_falso["sin_conexion"] = True
     with pytest.raises(coach.CoachNoDisponible) as error:
         coach._pedir("s", "u", ruta)
-    assert "conexión" in str(error.value)
+    assert str(error.value) == "No hay conexión con el servicio. ¿Estás sin internet?"
+    assert "Errno" not in str(error.value) and "getaddrinfo" not in str(error.value)
+    # El texto crudo no se pierde: queda en el registro.
+    assert "Errno 11001" in capsys.readouterr().out
+
+
+def test_http_json_marca_cuando_no_pudo_conectarse(monkeypatch):
+    def falla(pedido, timeout):
+        raise urllib.error.URLError("sin red")
+
+    monkeypatch.setattr(coach.urllib.request, "urlopen", falla)
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._http_json("https://ejemplo.invalid/x", {"a": 1}, {}, segundos=1)
+    assert error.value.sin_conexion is True
+    assert getattr(error.value, "codigo", None) is None
+    assert "sin red" in str(error.value)
 
 
 def test_claude_que_no_quiere_contestar_se_dice(sin_entorno, tmp_path, http_falso):
