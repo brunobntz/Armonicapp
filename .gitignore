@@ -33,4 +33,6 @@ registro.txt
 empaquetado/_descargas/
 empaquetado/_armado/
 empaquetado/ejemplos/
+# Capturas en bruto para la guía (pueden mostrar rutas o datos personales)
+empaquetado/capturas/
 dist/
