@@ -45,6 +45,7 @@ import json
 import mimetypes
 import os
 import socket
+import sys
 import tempfile
 import threading
 import time
@@ -3022,6 +3023,18 @@ class ServidorExclusivo(ThreadingHTTPServer):
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         super().server_bind()
+
+    def handle_error(self, request, client_address):
+        """
+        Una conexión cortada no es un error: el navegador corta cada vez que
+        se cierra una pestaña o se cancela un pedido. socketserver la
+        escribiría como un traceback, y en la instalada eso va a
+        registro.txt y tapa los errores de verdad. Las demás, como siempre.
+        """
+        tipo = sys.exc_info()[0]
+        if tipo is not None and issubclass(tipo, ConnectionError):
+            return
+        super().handle_error(request, client_address)
 
 
 def enlazar(puertos):

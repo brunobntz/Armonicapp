@@ -3353,3 +3353,28 @@ def test_un_pedido_ajeno_con_cuerpo_recibe_un_403_limpio(servidor_andando, tmp_p
                            {"Origin": "http://evil.example"}, cuerpo)
         assert codigo == 403
     assert ajustes.cargar(str(tmp_path / "ajustes.json")) == {}
+
+
+def test_un_corte_del_navegador_no_llena_el_registro(capsys):
+    """
+    El navegador corta conexiones todo el tiempo: cierra una pestaña, cancela
+    un pedido. socketserver lo escribía como un traceback en registro.txt, y
+    en la instalada eso tapaba los errores de verdad.
+    """
+    instancia = servidor.ServidorExclusivo(("127.0.0.1", 0), servidor.Manejador)
+    try:
+        for corte in (ConnectionAbortedError(10053, "anulada"), ConnectionResetError(),
+                      BrokenPipeError()):
+            try:
+                raise corte
+            except ConnectionError:
+                instancia.handle_error(None, ("127.0.0.1", 50000))
+        assert capsys.readouterr().err == ""
+
+        try:
+            raise ValueError("esto sí es un error")
+        except ValueError:
+            instancia.handle_error(None, ("127.0.0.1", 50000))
+        assert "ValueError" in capsys.readouterr().err
+    finally:
+        instancia.server_close()
