@@ -708,7 +708,7 @@ pero en esa máquina no se convierten los audios que no son `.wav`. Las fotos
 HEIC usan pi-heif, que solo lee: pillow-heif trae el codificador x265, que es
 GPL. Los ejemplos para el profe van en `empaquetado\ejemplos\` (no se
 commitean) y se copian a su `Documentos\Armonica` solo si no tiene ya ese
-archivo. Antes de mandar una versión, la prueba en un usuario limpio está en
+archivo. Antes de mandar una versión, cómo probar el instalador está en
 `empaquetado\PROBAR.md`.
 
 El programa se instala por usuario en `%LOCALAPPDATA%\Programs\Armonica`, y
