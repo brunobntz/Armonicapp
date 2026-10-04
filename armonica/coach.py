@@ -12,20 +12,25 @@ Es OPCIONAL. Sin configurar, la app anda exactamente igual que antes y en
 Ajustes dice cómo activarlo. La configuración va en un archivo .env que git
 ignora: la clave es tuya y se queda en tu máquina.
 
-TRES PROVEEDORES, UNA SOLA FORMA DE HABLARLES
+CUATRO PROVEEDORES, UNA SOLA FORMA DE HABLARLES
 
-    claude   la API de Claude, con el SDK oficial. Es el de por defecto.
-             Pide una clave y `pip install anthropic`. Cuesta centavos.
+    claude   la API de Claude (Anthropic). Es el de por defecto. Pide una
+             clave. Cuesta centavos.
     ollama   un modelo LOCAL, corriendo en tu propia máquina con Ollama.
              No pide clave ni paquete ni internet. Pide una placa de video
              decente para que conteste en segundos y no en minutos.
     openai   la API de ChatGPT, para quien ya tiene una clave de ahí.
-             Sin paquete: se le habla por HTTP con la biblioteca estándar.
+    gemini   la API de Gemini (Google). La clave de Google AI Studio es
+             gratis, con un tope por día.
+
+A los cuatro se les habla por HTTP con la biblioteca estándar, sin
+paquetes: la versión instalada no los trae, y sumarlos agregaría
+bibliotecas compiladas sin firma que Windows puede bloquear.
 
 Los prompts, las rutas y la pantalla no saben cuál está puesto. Solo lo sabe
-_pedir(), que reparte. Agregar un cuarto proveedor es agregar una función.
+_pedir(), que reparte. Agregar otro proveedor es agregar una función.
 
-El audio nunca sale de tu máquina, con ninguno de los tres. Al coach le
+El audio nunca sale de tu máquina, con ninguno de los cuatro. Al coach le
 llegan números y texto.
 """
 
@@ -34,39 +39,71 @@ import os
 import urllib.error
 import urllib.request
 
-PROVEEDORES = ("claude", "ollama", "openai")
+PROVEEDORES = ("claude", "ollama", "openai", "gemini")
 PROVEEDOR_POR_DEFECTO = "claude"
 
-# El modelo de cada proveedor si no se elige otro con LLM_MODELO.
+# Los que piden clave (Ollama no: corre en la máquina).
+PROVEEDORES_CON_CLAVE = ("claude", "openai", "gemini")
+
+# Cómo se llama cada uno en pantalla.
+NOMBRES = {"claude": "Claude", "ollama": "Ollama", "openai": "ChatGPT", "gemini": "Gemini"}
+
+# El modelo de cada proveedor si no se elige otro con LLM_MODELO. Vigentes
+# al 2026-10-04: la versión instalada no se actualiza sola, así que si uno
+# se retira, el coach dice que hace falta una versión nueva de la app.
 #
 # Para Ollama va un modelo de 7 mil millones de parámetros: entra entero en
 # una placa de 8 GB y contesta en pocos segundos. Qwen 2.5 habla bien
 # castellano; llama3.1:8b es la alternativa. Uno más grande (14B) ya no
-# entra en 8 GB y pasa a contestar en minutos.
+# entra en 8 GB y pasa a contestar en minutos. De ChatGPT y Gemini, los
+# más baratos: alcanzan para explicar números ya medidos.
 MODELOS_POR_DEFECTO = {
-    "claude": "claude-opus-5",
+    "claude": "claude-opus-5-5",
     "ollama": "qwen2.5:7b",
-    "openai": "gpt-4o-mini",
+    "openai": "gpt-6-luna",
+    "gemini": "gemini-3.5-flash-lite",
 }
 
 URLS_POR_DEFECTO = {
+    "claude": "https://api.anthropic.com/v1",
     "ollama": "http://localhost:11434",
     "openai": "https://api.openai.com/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta",
 }
 
 # Las respuestas son cortas a propósito: dos o tres párrafos que se leen con
-# la armónica en la mano. Este tope es un seguro, no un objetivo.
+# la armónica en la mano. Este tope es un seguro, no un objetivo. Es el de
+# Ollama, que no piensa antes de contestar.
 MAXIMO_DE_TOKENS = 1500
+
+# Los modelos de Claude, ChatGPT y Gemini piensan antes de contestar, y lo
+# que piensan cuenta dentro del tope: con 1500 una respuesta podría cortarse
+# antes de empezar. Este deja lugar para las dos cosas; la respuesta sigue
+# siendo corta porque así lo pide SISTEMA.
+MAXIMO_DE_TOKENS_CON_PENSAMIENTO = 8000
+
+# La versión de la API de mensajes de Claude: va en cada pedido.
+VERSION_DE_LA_API_DE_CLAUDE = "2023-06-01"
 
 # Un modelo local puede tardar: la primera respuesta carga el modelo en la
 # placa (diez o veinte segundos) y sin placa cada respuesta es lenta.
-SEGUNDOS_DE_ESPERA = {"claude": 60, "ollama": 240, "openai": 60}
+SEGUNDOS_DE_ESPERA = {"claude": 90, "ollama": 240, "openai": 90, "gemini": 90}
 
 ARCHIVO_ENV = ".env"
 
+# Si los motivos que hablan de la clave mandan a Ajustes (la versión
+# instalada, que no tiene .env) o al .env (Bruno). Lo pone
+# servidor.arrancar().
+CLAVE_EN_AJUSTES = False
+
 
 class CoachNoDisponible(Exception):
-    """El coach no puede contestar: sin clave, sin paquete, o sin red."""
+    """
+    El coach no puede contestar: sin clave, sin red, o el servicio dijo que no.
+
+    Si lo levantó _http_json ante un error HTTP, lleva además `codigo` (el
+    número que contestó el servicio) y `detalle` (el cuerpo de esa respuesta).
+    """
 
 
 # =============================================================================
@@ -128,6 +165,21 @@ def configuracion(ruta_env=None):
     }
 
 
+def _motivo_de_la_clave(cual, proveedor="claude"):
+    """
+    Qué decir cuando falta la clave ("falta") o no es válida ("invalida").
+    A Bruno lo manda al .env; al profe, a Ajustes.
+    """
+    if CLAVE_EN_AJUSTES:
+        return {"falta": "Falta la clave. Pegala en Ajustes, en El coach.",
+                "invalida": "La clave no es válida. Revisala en Ajustes, en El coach."}[cual]
+    if cual == "falta":
+        if proveedor == "claude":
+            return "Falta la clave. Copiá .env.ejemplo a .env y poné la tuya en LLM_CLAVE."
+        return f"Falta la clave de {NOMBRES[proveedor]}. Ponela en LLM_CLAVE en el .env."
+    return f"La clave de {NOMBRES[proveedor]} no es válida. Revisá LLM_CLAVE en el .env."
+
+
 def estado(ruta_env=None):
     """
     Si el coach puede contestar, y si no, por qué. Para la solapa Ajustes.
@@ -144,20 +196,10 @@ def estado(ruta_env=None):
                     motivo=f"No conozco el proveedor {conf['proveedor']!r}. "
                            f"En el .env, LLM_PROVEEDOR puede ser: {', '.join(PROVEEDORES)}.")
 
-    if conf["proveedor"] == "claude":
+    if conf["proveedor"] in PROVEEDORES_CON_CLAVE:
         if not conf["clave"]:
             return dict(base, disponible=False,
-                        motivo="Falta la clave. Copiá .env.ejemplo a .env y poné la tuya en LLM_CLAVE.")
-        try:
-            import anthropic  # noqa: F401  — solo para saber si está
-        except ImportError:
-            return dict(base, disponible=False, motivo="Falta el paquete: pip install anthropic")
-        return dict(base, disponible=True, motivo="")
-
-    if conf["proveedor"] == "openai":
-        if not conf["clave"]:
-            return dict(base, disponible=False,
-                        motivo="Falta la clave de OpenAI. Ponela en LLM_CLAVE en el .env.")
+                        motivo=_motivo_de_la_clave("falta", conf["proveedor"]))
         return dict(base, disponible=True, motivo="")
 
     # ollama: sin clave ni paquete, pero el servidor tiene que estar andando.
@@ -434,46 +476,74 @@ def _pedir(sistema, usuario, ruta_env=None):
         return _pedir_a_ollama(conf, sistema, usuario)
     if proveedor == "openai":
         return _pedir_a_openai(conf, sistema, usuario)
+    if proveedor == "gemini":
+        return _pedir_a_gemini(conf, sistema, usuario)
     raise CoachNoDisponible(estado(ruta_env)["motivo"])
 
 
+def _motivo_del_error(error, conf):
+    """
+    El motivo de un error HTTP de Claude, ChatGPT o Gemini, o None si no hay
+    uno mejor que "El servicio contestó con un error (N)".
+    """
+    codigo = getattr(error, "codigo", None)
+    detalle = getattr(error, "detalle", "") or ""
+    # Gemini contesta 400, y no 401, a una clave que no es válida: se
+    # reconoce por el motivo que viene en el cuerpo.
+    if codigo == 401 or (codigo == 400 and "API_KEY_INVALID" in detalle):
+        return _motivo_de_la_clave("invalida", conf["proveedor"])
+    if codigo == 402:
+        return "La cuenta de esa clave no tiene crédito."
+    if codigo == 403:
+        return "Esa clave no tiene permiso para usar el modelo."
+    if codigo == 404:
+        if CLAVE_EN_AJUSTES:
+            return f"No existe el modelo {conf['modelo']!r}: hace falta una versión nueva de la app."
+        return f"No existe el modelo {conf['modelo']!r}. Revisá LLM_MODELO en el .env."
+    if codigo in (429, 529):
+        return "El servicio está saturado, o la clave llegó a su tope de uso. Probá en un rato."
+    return None
+
+
+def _pedir_por_http(conf, url, cuerpo, cabeceras):
+    """
+    _http_json para un proveedor con clave, con los errores ya traducidos.
+    Lo que contestó el servicio queda en el registro: en la instalada es lo
+    único que Bruno puede mirar si el coach del profe no anda.
+    """
+    try:
+        return _http_json(url, cuerpo, cabeceras,
+                          segundos=SEGUNDOS_DE_ESPERA[conf["proveedor"]]) or {}
+    except CoachNoDisponible as error:
+        if getattr(error, "codigo", None):
+            print(f"  El coach ({NOMBRES[conf['proveedor']]}) contestó {error.codigo}: "
+                  f"{(getattr(error, 'detalle', '') or '')[:300]}")
+        motivo = _motivo_del_error(error, conf)
+        if motivo:
+            raise CoachNoDisponible(motivo)
+        raise
+
+
 def _pedir_a_claude(conf, sistema, usuario):
-    """La API de Claude, con el SDK oficial."""
+    """La API de Claude, por HTTP."""
     if not conf["clave"]:
-        raise CoachNoDisponible(
-            "Falta la clave. Copiá .env.ejemplo a .env y poné la tuya en LLM_CLAVE.")
-    try:
-        import anthropic
-    except ImportError:
-        raise CoachNoDisponible("Falta el paquete: pip install anthropic")
-
-    cliente = anthropic.Anthropic(api_key=conf["clave"],
-                                  timeout=float(SEGUNDOS_DE_ESPERA["claude"]), max_retries=1)
-    try:
-        respuesta = cliente.messages.create(
-            model=conf["modelo"],
-            max_tokens=MAXIMO_DE_TOKENS,
-            system=sistema,
-            # Poco esfuerzo alcanza: no hay nada que deducir, solo explicar
-            # números que ya están. Y es más barato y más rápido.
-            output_config={"effort": "low"},
-            messages=[{"role": "user", "content": usuario}],
-        )
-    except anthropic.AuthenticationError:
-        raise CoachNoDisponible("La clave no es válida. Revisá LLM_CLAVE en el .env.")
-    except anthropic.NotFoundError:
-        raise CoachNoDisponible(f"No existe el modelo {conf['modelo']!r}. Revisá LLM_MODELO en el .env.")
-    except anthropic.RateLimitError:
-        raise CoachNoDisponible("El servicio está saturado. Probá en un minuto.")
-    except anthropic.APIStatusError as error:
-        raise CoachNoDisponible(f"El servicio contestó con un error ({error.status_code}).")
-    except anthropic.APIConnectionError:
-        raise CoachNoDisponible("No hay conexión con el servicio. ¿Estás sin internet?")
-
-    if respuesta.stop_reason == "refusal":
+        raise CoachNoDisponible(_motivo_de_la_clave("falta", "claude"))
+    cuerpo = {
+        "model": conf["modelo"],
+        "max_tokens": MAXIMO_DE_TOKENS_CON_PENSAMIENTO,
+        "system": sistema,
+        # Poco esfuerzo alcanza: no hay nada que deducir, solo explicar
+        # números que ya están. Y es más barato y más rápido.
+        "output_config": {"effort": "low"},
+        "messages": [{"role": "user", "content": usuario}],
+    }
+    cabeceras = {"x-api-key": conf["clave"], "anthropic-version": VERSION_DE_LA_API_DE_CLAUDE}
+    respuesta = _pedir_por_http(conf, conf["url"] + "/messages", cuerpo, cabeceras)
+    if respuesta.get("stop_reason") == "refusal":
         raise CoachNoDisponible("El modelo no quiso contestar esto.")
-
-    texto = "".join(bloque.text for bloque in respuesta.content if bloque.type == "text")
+    # El contenido es una lista de bloques: lo que pensó (vacío) y el texto.
+    texto = "".join(bloque.get("text", "") for bloque in respuesta.get("content") or []
+                    if isinstance(bloque, dict) and bloque.get("type") == "text")
     return _texto_o_error(texto)
 
 
@@ -510,30 +580,61 @@ def _pedir_a_openai(conf, sistema, usuario):
     """
     La API de ChatGPT (o cualquiera compatible: LM Studio, etc., cambiando
     LLM_URL). Por HTTP con la biblioteca estándar, sin paquete.
+
+    Los modelos de ahora piensan antes de contestar: el tope va en
+    max_completion_tokens (max_tokens lo rechazan) e incluye lo que piensan.
     """
     if not conf["clave"]:
-        raise CoachNoDisponible("Falta la clave de OpenAI. Ponela en LLM_CLAVE en el .env.")
+        raise CoachNoDisponible(_motivo_de_la_clave("falta", "openai"))
     cuerpo = {
         "model": conf["modelo"],
-        "max_tokens": MAXIMO_DE_TOKENS,
+        "max_completion_tokens": MAXIMO_DE_TOKENS_CON_PENSAMIENTO,
+        # Poco esfuerzo alcanza, como con Claude: solo explica números.
+        "reasoning_effort": "low",
         "messages": [{"role": "system", "content": sistema},
                      {"role": "user", "content": usuario}],
     }
-    cabeceras = {"Authorization": "Bearer " + conf["clave"]}
-    try:
-        respuesta = _http_json(conf["url"] + "/chat/completions", cuerpo, cabeceras,
-                               segundos=SEGUNDOS_DE_ESPERA["openai"])
-    except CoachNoDisponible as error:
-        texto = str(error)
-        if "401" in texto:
-            raise CoachNoDisponible("La clave de OpenAI no es válida. Revisá LLM_CLAVE en el .env.")
-        if "404" in texto:
-            raise CoachNoDisponible(f"No existe el modelo {conf['modelo']!r}. Revisá LLM_MODELO en el .env.")
-        if "429" in texto:
-            raise CoachNoDisponible("El servicio está saturado o sin crédito. Probá en un minuto.")
-        raise
-    opciones = (respuesta or {}).get("choices") or [{}]
+    respuesta = _pedir_por_http(conf, conf["url"] + "/chat/completions", cuerpo,
+                                {"Authorization": "Bearer " + conf["clave"]})
+    opciones = respuesta.get("choices") or [{}]
     return _texto_o_error(((opciones[0].get("message") or {}).get("content") or ""))
+
+
+def _pedir_a_gemini(conf, sistema, usuario):
+    """
+    La API de Gemini (Google), por su forma propia: generateContent con la
+    clave en x-goog-api-key. No por su versión compatible con OpenAI: ahí
+    la clave va en Authorization: Bearer, que puede rechazar las claves
+    nuevas de Google (empiezan con "AQ."). Así andan las nuevas y las
+    viejas ("AIza").
+    """
+    if not conf["clave"]:
+        raise CoachNoDisponible(_motivo_de_la_clave("falta", "gemini"))
+    cuerpo = {
+        "system_instruction": {"parts": [{"text": sistema}]},
+        "contents": [{"role": "user", "parts": [{"text": usuario}]}],
+        "generationConfig": {
+            # Incluye lo que el modelo piensa antes de contestar.
+            "maxOutputTokens": MAXIMO_DE_TOKENS_CON_PENSAMIENTO,
+            # Poco, como con los otros. Es el campo de los modelos Gemini 3;
+            # uno 2.5 puesto en LLM_MODELO lo rechazaría.
+            "thinkingConfig": {"thinkingLevel": "low"},
+        },
+    }
+    url = f"{conf['url']}/models/{conf['modelo']}:generateContent"
+    respuesta = _pedir_por_http(conf, url, cuerpo, {"x-goog-api-key": conf["clave"]})
+    candidatos = respuesta.get("candidates") or []
+    if not candidatos:
+        if (respuesta.get("promptFeedback") or {}).get("blockReason"):
+            raise CoachNoDisponible("El modelo no quiso contestar esto.")
+        raise CoachNoDisponible("El modelo devolvió una respuesta vacía.")
+    if candidatos[0].get("finishReason") == "SAFETY":
+        raise CoachNoDisponible("El modelo no quiso contestar esto.")
+    partes = (candidatos[0].get("content") or {}).get("parts") or []
+    # Las partes marcadas "thought" son lo que pensó: no van.
+    texto = "".join(parte.get("text", "") for parte in partes
+                    if isinstance(parte, dict) and not parte.get("thought"))
+    return _texto_o_error(texto)
 
 
 def _texto_o_error(texto):
@@ -547,10 +648,10 @@ def _http_json(url, cuerpo, cabeceras, segundos):
     """
     Un pedido HTTP con JSON de ida y de vuelta. GET si `cuerpo` es None.
 
-    Es la única función que toca la red para Ollama y OpenAI; los tests la
-    reemplazan. Traduce cada fallo a un CoachNoDisponible con el código o
-    la palabra "conexión", que las funciones de arriba usan para dar un
-    motivo entendible.
+    Es la única función que toca la red para Claude, Ollama, OpenAI y
+    Gemini; los tests la reemplazan. Traduce cada fallo a un
+    CoachNoDisponible con el código o la palabra "conexión", que las
+    funciones de arriba usan para dar un motivo entendible.
     """
     datos = None if cuerpo is None else json.dumps(cuerpo).encode("utf-8")
     pedido = urllib.request.Request(url, data=datos, method="GET" if datos is None else "POST")
@@ -561,7 +662,16 @@ def _http_json(url, cuerpo, cabeceras, segundos):
         with urllib.request.urlopen(pedido, timeout=segundos) as respuesta:
             return json.loads(respuesta.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
-        raise CoachNoDisponible(f"El servicio contestó con un error ({error.code}).")
+        # El código y el cuerpo van aparte: quien llama elige el motivo sin
+        # buscar números en el texto, y Gemini dice en el cuerpo si lo que
+        # falló es la clave.
+        falla = CoachNoDisponible(f"El servicio contestó con un error ({error.code}).")
+        falla.codigo = error.code
+        try:
+            falla.detalle = error.read().decode("utf-8", "replace")[:2000]
+        except (OSError, AttributeError, ValueError):
+            falla.detalle = ""
+        raise falla
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         raise CoachNoDisponible(f"No hay conexión con el servicio ({error}).")
     except ValueError:

@@ -398,8 +398,8 @@ frase del profe para tener presente. Se guarda con fecha en
 cuando querés. Y cuando después el coach explica una práctica, ve el plan
 como contexto: puede decir "el bend del 2 es justo lo de la última clase".
 **Lo que hay que saber:** para armar el plan, el texto de las clases se le
-manda al modelo. Con Ollama se queda en tu máquina; con Claude o ChatGPT,
-sale. La pantalla lo dice al lado del botón, porque para apuntes de un
+manda al modelo. Con Ollama se queda en tu máquina; con Claude, ChatGPT o
+Gemini, sale. La pantalla lo dice al lado del botón, porque para apuntes de un
 tercero esa decisión es tuya. **Canciones** lee una carpeta por canción de `material/canciones/` (o de
 `CARPETA_CANCIONES` en el `.env`), con lo que te manden: la base de
 Band-in-a-Box, los audios y la tablatura en foto. De la base muestra la
@@ -548,22 +548,25 @@ algo no está medido lo dice. Aparece como un botón al pie de la devolución de
 una práctica y como una pregunta libre al pie de Teoría.
 
 Es opcional y está apagado por defecto. Se activa copiando `.env.ejemplo`
-a `.env` (git lo ignora: la clave es tuya) y eligiendo ahí uno de tres
+a `.env` (git lo ignora: la clave es tuya) y eligiendo ahí uno de cuatro
 proveedores:
 
 | Proveedor | Qué pide | Qué cuesta |
 |---|---|---|
-| **Claude** (por defecto) | una clave de console.anthropic.com y `pip install anthropic` | centavos por devolución |
+| **Claude** (por defecto) | una clave de console.anthropic.com | centavos por devolución |
 | **Ollama** (modelo local) | instalar [Ollama](https://ollama.com) y bajar un modelo: `ollama pull qwen2.5:7b` | nada, ni internet |
-| **ChatGPT** | una clave de OpenAI | según su tarifa |
+| **ChatGPT** | una clave de platform.openai.com (no alcanza con la suscripción a ChatGPT) | según su tarifa |
+| **Gemini** | una clave de aistudio.google.com | gratis con un tope por día |
 
 Con Ollama, una placa de video de 8 GB contesta en segundos; sin placa, en
-minutos. `LLM_MODELO` cambia el modelo de cualquiera de los tres y
+minutos. `LLM_MODELO` cambia el modelo de cualquiera de los cuatro y
 `LLM_URL` la dirección (sirve para LM Studio o cualquier servidor compatible
 con la API de OpenAI). El audio nunca sale de tu máquina con ninguno: al
-coach le llegan números y texto. Los tres se hablan desde `armonica/coach.py`
-y nada más sabe cuál está puesto; agregar un cuarto es agregar una función.
-Los tests nunca tocan la red: la llamada se reemplaza por una falsa.
+coach le llegan números y texto. Los cuatro se hablan desde `armonica/coach.py`
+y nada más sabe cuál está puesto; agregar otro es agregar una función. A
+Claude, ChatGPT y Gemini se les habla por HTTP con la biblioteca estándar,
+sin instalar nada. Los tests nunca tocan la red: la llamada se reemplaza por
+una falsa.
 
 **El micrófono queda encendido todo el tiempo.** Abrís la app y podés tocar y
 ver lo que sale sin apretar nada: el medidor, el diagrama y la tablatura

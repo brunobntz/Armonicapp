@@ -86,14 +86,9 @@ copy .env.ejemplo .env
 
 Y en el `.env` elegís UNA de estas dos opciones.
 
-**Claude (con clave, cuesta centavos por devolución):**
-
-```powershell
-pip install anthropic
-```
-
-y en el `.env` dejá `LLM_PROVEEDOR=claude` y pegá tu clave de
-https://console.anthropic.com/ en `LLM_CLAVE`.
+**Claude (con clave, cuesta centavos por devolución):** en el `.env` dejá
+`LLM_PROVEEDOR=claude` y pegá tu clave de https://console.anthropic.com/ en
+`LLM_CLAVE`. No hace falta instalar nada más.
 
 **Ollama (local, gratis, sin internet).** Con una placa de video de 8 GB
 entra entero un modelo de 7 mil millones de parámetros y contesta en pocos

@@ -7,6 +7,9 @@ pedimos y guarda lo que recibió: así se verifica qué le mandamos, que es lo
 único que está en nuestras manos.
 """
 
+import io
+import urllib.error
+
 import pytest
 
 from armonica import coach
@@ -41,7 +44,7 @@ def test_de_fabrica_es_claude_sin_clave(sin_entorno):
     conf = coach.configuracion(sin_entorno)
     assert conf["proveedor"] == "claude"
     assert conf["clave"] == ""
-    assert conf["modelo"] == "claude-opus-5"
+    assert conf["modelo"] == "claude-opus-5-5"
 
 
 def test_sin_clave_el_estado_dice_como_activarlo(sin_entorno):
@@ -62,14 +65,18 @@ def test_cada_proveedor_tiene_su_modelo_y_su_direccion_por_defecto(sin_entorno, 
     assert ollama["url"] == "http://localhost:11434"
 
     openai = coach.configuracion(env_con(tmp_path, "LLM_PROVEEDOR=openai\nLLM_CLAVE=sk-x\n"))
-    assert openai["modelo"] == "gpt-4o-mini"
+    assert openai["modelo"] == "gpt-6-luna"
     assert openai["url"] == "https://api.openai.com/v1"
+
+    gemini = coach.configuracion(env_con(tmp_path, "LLM_PROVEEDOR=gemini\nLLM_CLAVE=AQ.x\n"))
+    assert gemini["modelo"] == "gemini-3.5-flash-lite"
+    assert gemini["url"] == "https://generativelanguage.googleapis.com/v1beta"
 
 
 def test_un_proveedor_desconocido_se_explica(sin_entorno, tmp_path):
-    estado = coach.estado(env_con(tmp_path, "LLM_PROVEEDOR=gemini\n"))
+    estado = coach.estado(env_con(tmp_path, "LLM_PROVEEDOR=mistral\n"))
     assert estado["disponible"] is False
-    assert "gemini" in estado["motivo"] and "ollama" in estado["motivo"]
+    assert "mistral" in estado["motivo"] and "ollama" in estado["motivo"]
 
 
 # =============================================================================
@@ -214,13 +221,17 @@ def test_sin_clave_claude_no_intenta_conectarse(sin_entorno):
 @pytest.fixture
 def http_falso(monkeypatch):
     """Reemplaza _http_json: guarda el pedido y contesta lo que se le diga."""
-    registro = {"pedidos": [], "respuesta": None, "error": None}
+    registro = {"pedidos": [], "respuesta": None, "error": None, "codigo": None, "detalle": ""}
 
     def falso(url, cuerpo, cabeceras, segundos):
         registro["pedidos"].append({"url": url, "cuerpo": cuerpo,
                                     "cabeceras": cabeceras, "segundos": segundos})
         if registro["error"]:
-            raise coach.CoachNoDisponible(registro["error"])
+            falla = coach.CoachNoDisponible(registro["error"])
+            if registro["codigo"]:
+                falla.codigo = registro["codigo"]
+                falla.detalle = registro["detalle"]
+            raise falla
         return registro["respuesta"]
 
     monkeypatch.setattr(coach, "_http_json", falso)
@@ -284,6 +295,11 @@ def test_openai_manda_la_clave_en_la_cabecera(sin_entorno, tmp_path, http_falso)
     assert pedido["url"] == "https://api.openai.com/v1/chat/completions"
     assert pedido["cabeceras"]["Authorization"] == "Bearer sk-prueba"
     assert pedido["cuerpo"]["model"] == "gpt-x"
+    # Los modelos de OpenAI que piensan rechazan max_tokens: el tope va en
+    # max_completion_tokens, e incluye lo que piensan.
+    assert "max_tokens" not in pedido["cuerpo"]
+    assert pedido["cuerpo"]["max_completion_tokens"] >= 4000
+    assert pedido["cuerpo"]["reasoning_effort"] == "low"
 
 
 def test_openai_sin_clave_no_toca_la_red(sin_entorno, tmp_path, http_falso):
@@ -298,6 +314,170 @@ def test_una_respuesta_vacia_es_un_error_y_no_un_texto_vacio(sin_entorno, tmp_pa
     http_falso["respuesta"] = {"message": {"content": "   "}}
     with pytest.raises(coach.CoachNoDisponible):
         coach._pedir("s", "u", ruta)
+
+
+# =============================================================================
+# Claude y Gemini: por HTTP, sin paquetes. Y los errores, traducidos.
+# =============================================================================
+
+def test_claude_manda_el_pedido_por_http_con_la_clave_en_la_cabecera(sin_entorno, tmp_path,
+                                                                      http_falso):
+    ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-prueba\n")
+    http_falso["respuesta"] = {"stop_reason": "end_turn", "content": [
+        {"type": "thinking", "thinking": ""},
+        {"type": "text", "text": "  El bend te queda corto.  "}]}
+
+    texto = coach._pedir("el sistema", "el usuario", ruta)
+
+    assert texto == "El bend te queda corto."
+    pedido = http_falso["pedidos"][0]
+    assert pedido["url"] == "https://api.anthropic.com/v1/messages"
+    assert pedido["cabeceras"]["x-api-key"] == "sk-ant-prueba"
+    assert pedido["cabeceras"]["anthropic-version"] == "2023-06-01"
+    assert pedido["cuerpo"]["model"] == "claude-opus-5-5"
+    assert pedido["cuerpo"]["system"] == "el sistema"
+    assert pedido["cuerpo"]["messages"] == [{"role": "user", "content": "el usuario"}]
+    # Opus 5.5 siempre piensa, y lo que piensa entra en max_tokens: un tope
+    # chico cortaría la respuesta. Y apagar el pensamiento o mandar
+    # temperature es un error 400 en ese modelo.
+    assert pedido["cuerpo"]["max_tokens"] >= 4000
+    assert "thinking" not in pedido["cuerpo"]
+    assert "temperature" not in pedido["cuerpo"]
+
+
+def test_gemini_manda_el_pedido_por_su_forma_propia(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=gemini\nLLM_CLAVE=AQ.Ab-prueba\n")
+    http_falso["respuesta"] = {"candidates": [{"finishReason": "STOP", "content": {"parts": [
+        {"text": "lo que pensó", "thought": True},
+        {"text": "  Practicá el cambio despacio.  "}]}}]}
+
+    texto = coach._pedir("el sistema", "el usuario", ruta)
+
+    assert texto == "Practicá el cambio despacio."
+    pedido = http_falso["pedidos"][0]
+    assert pedido["url"] == ("https://generativelanguage.googleapis.com/v1beta/models/"
+                             "gemini-3.5-flash-lite:generateContent")
+    # x-goog-api-key y no Authorization: Bearer, que rechaza las claves AQ.
+    assert pedido["cabeceras"] == {"x-goog-api-key": "AQ.Ab-prueba"}
+    assert pedido["cuerpo"]["system_instruction"] == {"parts": [{"text": "el sistema"}]}
+    assert pedido["cuerpo"]["contents"] == [{"role": "user", "parts": [{"text": "el usuario"}]}]
+    configuracion = pedido["cuerpo"]["generationConfig"]
+    assert configuracion["maxOutputTokens"] >= 4000
+    assert configuracion["thinkingConfig"] == {"thinkingLevel": "low"}
+
+
+@pytest.mark.parametrize("respuesta", [
+    {"candidates": [{"finishReason": "SAFETY", "content": {"parts": []}}]},
+    {"promptFeedback": {"blockReason": "SAFETY"}},
+])
+def test_gemini_que_no_quiere_contestar_se_dice(sin_entorno, tmp_path, http_falso, respuesta):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=gemini\nLLM_CLAVE=AIza-prueba\n")
+    http_falso["respuesta"] = respuesta
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert "no quiso" in str(error.value)
+
+
+@pytest.mark.parametrize("codigo, palabras", [
+    (401, "no es válida"), (402, "crédito"), (403, "permiso"),
+    (404, "No existe el modelo"), (429, "saturado"), (529, "saturado")])
+def test_claude_traduce_cada_error_a_un_motivo(sin_entorno, tmp_path, http_falso,
+                                               codigo, palabras):
+    ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-prueba\n")
+    http_falso["error"] = f"El servicio contestó con un error ({codigo})."
+    http_falso["codigo"] = codigo
+
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert palabras in str(error.value)
+
+
+def test_openai_con_la_clave_mala_lo_dice(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=openai\nLLM_CLAVE=sk-vieja\n")
+    http_falso["error"] = "El servicio contestó con un error (401)."
+    http_falso["codigo"] = 401
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert "no es válida" in str(error.value)
+
+
+def test_gemini_contesta_400_a_una_clave_mala(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=gemini\nLLM_CLAVE=AIza-vieja\n")
+    http_falso["error"] = "El servicio contestó con un error (400)."
+    http_falso["codigo"] = 400
+    http_falso["detalle"] = '{"error": {"status": "INVALID_ARGUMENT", "details": [{"reason": "API_KEY_INVALID"}]}}'
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert "no es válida" in str(error.value)
+
+
+def test_un_400_que_no_es_la_clave_no_culpa_a_la_clave(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=gemini\nLLM_CLAVE=AIza-buena\n")
+    http_falso["error"] = "El servicio contestó con un error (400)."
+    http_falso["codigo"] = 400
+    http_falso["detalle"] = '{"error": {"status": "INVALID_ARGUMENT", "message": "otra cosa"}}'
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert "(400)" in str(error.value)
+
+
+def test_sin_conexion_lo_dice(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-prueba\n")
+    http_falso["error"] = "No hay conexión con el servicio (sin red)."
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert "conexión" in str(error.value)
+
+
+def test_claude_que_no_quiere_contestar_se_dice(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-prueba\n")
+    http_falso["respuesta"] = {"stop_reason": "refusal", "content": []}
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert "no quiso" in str(error.value)
+
+
+@pytest.mark.parametrize("proveedor, clave", [
+    ("claude", "sk-ant-prueba"), ("openai", "sk-prueba"), ("gemini", "AQ.prueba")])
+def test_con_clave_cada_proveedor_esta_disponible_sin_ningun_paquete(sin_entorno, tmp_path,
+                                                                     proveedor, clave):
+    estado = coach.estado(env_con(tmp_path, f"LLM_PROVEEDOR={proveedor}\nLLM_CLAVE={clave}\n"))
+    assert estado["disponible"] is True
+
+
+def test_sin_clave_gemini_lo_dice(sin_entorno, tmp_path):
+    estado = coach.estado(env_con(tmp_path, "LLM_PROVEEDOR=gemini\n"))
+    assert estado["disponible"] is False
+    assert "Gemini" in estado["motivo"]
+
+
+def test_en_la_instalada_los_motivos_mandan_a_ajustes(sin_entorno, tmp_path, http_falso,
+                                                      monkeypatch):
+    monkeypatch.setattr(coach, "CLAVE_EN_AJUSTES", True)
+
+    motivo = coach.estado(sin_entorno)["motivo"]
+    assert "Ajustes" in motivo and ".env" not in motivo
+
+    con_clave = env_con(tmp_path, "LLM_CLAVE=sk-ant-vieja_123\n")
+    for codigo in (401, 404):
+        http_falso["error"] = f"El servicio contestó con un error ({codigo})."
+        http_falso["codigo"] = codigo
+        with pytest.raises(coach.CoachNoDisponible) as error:
+            coach._pedir("s", "u", con_clave)
+        assert ".env" not in str(error.value)
+        assert "LLM_" not in str(error.value)
+
+
+def test_el_error_http_lleva_su_codigo_y_su_detalle(monkeypatch):
+    def falla(pedido, timeout):
+        raise urllib.error.HTTPError(pedido.full_url, 400, "Bad Request", {},
+                                     io.BytesIO(b'{"error": {"reason": "API_KEY_INVALID"}}'))
+
+    monkeypatch.setattr(coach.urllib.request, "urlopen", falla)
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._http_json("https://ejemplo.invalid/x", {"a": 1}, {}, segundos=1)
+    assert error.value.codigo == 400
+    assert "API_KEY_INVALID" in error.value.detalle
 
 
 def test_el_prompt_de_la_base_lleva_el_cifrado_y_los_hechos():

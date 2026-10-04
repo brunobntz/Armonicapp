@@ -55,3 +55,14 @@ def preferencia_fija(monkeypatch):
     propósito, y eso está bien porque es lo que está midiendo.
     """
     monkeypatch.setattr(config, "PREFERENCIA_AMBIGUEDAD", "aspirado")
+
+
+@pytest.fixture(autouse=True)
+def coach_como_en_la_maquina_de_bruno(monkeypatch):
+    """
+    Los motivos del coach hablan del .env, como en la máquina de Bruno. La
+    versión instalada los cambia por "Ajustes" (servidor.arrancar); el test
+    que pruebe eso lo prende a mano, y acá vuelve a apagarse.
+    """
+    from armonica import coach
+    monkeypatch.setattr(coach, "CLAVE_EN_AJUSTES", False)

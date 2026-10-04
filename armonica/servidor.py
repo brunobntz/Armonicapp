@@ -3069,6 +3069,8 @@ def arrancar(tonalidad=None, posicion=None, escala=None, puerto=8000,
     Manejador.estado.dispositivo, Manejador.estado.aviso_microfono = \
         microfono_guardado(guardados)
     Manejador.empaquetada = empaquetada
+    # En la instalada no hay .env: los motivos del coach mandan a Ajustes.
+    coach.CLAVE_EN_AJUSTES = empaquetada
 
     servidor = enlazar(puertos or [puerto])
     Manejador.servidor_http = servidor
