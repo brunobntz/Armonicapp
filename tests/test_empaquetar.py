@@ -193,6 +193,28 @@ def test_el_nombre_del_instalador():
     assert empaquetar.nombre_del_instalador("0.1.0") == "Armonica-0.1.0-instalador.exe"
 
 
+def test_buscar_edge(tmp_path):
+    edge = tmp_path / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+    edge.parent.mkdir(parents=True)
+    edge.write_bytes(b"")
+    assert empaquetar.buscar_edge({"ProgramFiles(x86)": str(tmp_path)}) == edge
+    assert empaquetar.buscar_edge({"EDGE": str(edge)}) == edge
+    assert empaquetar.buscar_edge({"ProgramFiles(x86)": str(tmp_path / "nada")}) is None
+
+
+def test_la_orden_que_imprime_la_guia(tmp_path):
+    html = tmp_path / "web" / "guia.html"
+    orden = empaquetar.orden_del_pdf(Path("C:/Edge/msedge.exe"), html, tmp_path / "g.pdf",
+                                     tmp_path / "perfil")
+    assert orden[0].endswith("msedge.exe")
+    assert "--headless" in orden
+    assert f"--print-to-pdf={tmp_path / 'g.pdf'}" in orden
+    # Un perfil aparte: así no se engancha al Edge que Bruno tenga abierto.
+    assert f"--user-data-dir={tmp_path / 'perfil'}" in orden
+    assert "--no-pdf-header-footer" in orden
+    assert orden[-1] == html.resolve().as_uri()
+
+
 def entradas_de_la_seccion(texto, seccion):
     """Las líneas de una sección del .iss, sin comentarios ni vacías."""
     lineas, adentro = [], False
@@ -234,3 +256,10 @@ def test_el_desinstalador_borra_la_clave_del_coach():
     borrar = entradas_de_la_seccion(texto, "UninstallDelete")
     assert 'Type: files; Name: "{localappdata}\\Armonica\\coach.env"' in borrar
     assert 'Type: dirifempty; Name: "{localappdata}\\Armonica"' in borrar
+
+
+def test_la_guia_esta_en_el_menu_inicio():
+    texto = ISS.read_text(encoding="utf-8-sig")
+    assert "{group}\\Guía de Armónica" in destinos_de_los_iconos(texto)
+    guia = [linea for linea in entradas_de_la_seccion(texto, "Icons") if "Guía de Armónica" in linea]
+    assert 'Filename: "{app}\\Guia de Armonica.pdf"' in guia[0]

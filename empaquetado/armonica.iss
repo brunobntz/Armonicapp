@@ -62,6 +62,7 @@ Type: filesandordirs; Name: "{app}\python"
 
 [Icons]
 Name: "{group}\Armónica"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; IconFilename: "{app}\Armonica.ico"
+Name: "{group}\Guía de Armónica"; Filename: "{app}\Guia de Armonica.pdf"
 ; El escritorio sin preguntar: con la pregunta se puede destildar, y después
 ; no hay cómo encontrarla. El aviso de "Cerrar la app" manda a este ícono.
 Name: "{autodesktop}\Armónica"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; IconFilename: "{app}\Armonica.ico"

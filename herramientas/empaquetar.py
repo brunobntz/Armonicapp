@@ -9,10 +9,12 @@ Python del .venv). Los pasos, en orden; cualquiera que falle corta todo:
                  SHA-256 de cada una. Se commitea.
     armar        toma el código commiteado (git archive HEAD), corre los
                  tests en esa copia, baja lo que falte verificando los
-                 SHA-256 y arma el programa en empaquetado/_armado/Armonica.
+                 SHA-256, arma el programa en empaquetado/_armado/Armonica
+                 e imprime la guía a PDF con Edge.
     humo         abre ese programa como lo abre el acceso directo, con los
                  datos en una carpeta temporal y sin navegador, y lo cierra.
-    instalador   compila empaquetado/armonica.iss con Inno Setup a dist/.
+    instalador   compila empaquetado/armonica.iss con Inno Setup a dist/
+                 y deja al lado la guía en PDF.
 
 Sin argumentos hace armar, humo e instalador.
 
@@ -274,6 +276,54 @@ def nombre_del_instalador(version):
     return f"Armonica-{version}-instalador.exe"
 
 
+# La guía en PDF: va al programa (Inicio → Guía de Armónica) y a dist\, para
+# mandársela al profe junto con el instalador.
+NOMBRE_DEL_PDF = "Guia de Armonica.pdf"
+
+
+def buscar_edge(entorno=None):
+    """Microsoft Edge, que viene con Windows: imprime la guía a PDF sin ventana."""
+    entorno = os.environ if entorno is None else entorno
+    candidatos = []
+    if entorno.get("EDGE"):
+        candidatos.append(Path(entorno["EDGE"]))
+    for variable in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
+        if entorno.get(variable):
+            candidatos.append(Path(entorno[variable]) / "Microsoft" / "Edge" / "Application"
+                              / "msedge.exe")
+    return next((candidato for candidato in candidatos if candidato.is_file()), None)
+
+
+def orden_del_pdf(edge, html, pdf, perfil):
+    """
+    La línea de Edge que imprime `html` a `pdf`. Sin ventana, sin el
+    encabezado y el pie que agrega el navegador, y con un perfil aparte:
+    con el de Bruno se engancharía a su Edge abierto.
+    """
+    return [str(edge), "--headless", "--disable-gpu", "--no-first-run",
+            "--no-default-browser-check", f"--user-data-dir={perfil}",
+            "--no-pdf-header-footer", f"--print-to-pdf={pdf}",
+            Path(html).resolve().as_uri()]
+
+
+def generar_pdf(html, pdf, edge=None):
+    """Imprime la guía a PDF con Edge. Si no queda un PDF, corta el armado."""
+    edge = edge or buscar_edge()
+    if edge is None:
+        raise SystemExit("No encuentro Microsoft Edge (msedge.exe) para imprimir la guía.")
+    pdf = Path(pdf)
+    if pdf.exists():
+        pdf.unlink()
+    # ignore_cleanup_errors: Edge deja procesos que tardan en soltar el perfil.
+    with tempfile.TemporaryDirectory(prefix="armonica-edge-", ignore_cleanup_errors=True) as perfil:
+        subprocess.run(orden_del_pdf(edge, html, pdf, perfil), check=True, timeout=120,
+                       capture_output=True)
+    if not pdf.is_file() or pdf.read_bytes()[:5] != b"%PDF-":
+        raise SystemExit(f"Edge no dejó la guía en PDF en {pdf}.")
+    print(f"  Guía en PDF: {pdf.name}")
+    return pdf
+
+
 def _pip(*argumentos):
     """pip del .venv: el mismo Python 3.14 que el embebido."""
     subprocess.run([sys.executable, "-m", "pip", *argumentos], check=True)
@@ -378,6 +428,7 @@ def armar():
         for paquete in copiar_licencias(site_packages, licencias):
             print(f"  Aviso: {paquete} no trae archivo de licencia en su .dist-info.")
         (licencias / "LEEME.txt").write_text(texto_leeme_licencias(descargas), encoding="utf-8")
+        generar_pdf(ARMADO / "app" / "armonica" / "web" / "guia.html", ARMADO / NOMBRE_DEL_PDF)
 
         version = (codigo / "VERSION").read_text(encoding="utf-8").strip()
     print(f"  Armado {version} en {ARMADO.relative_to(RAIZ)}.")
@@ -442,6 +493,8 @@ def humo(programa=None, espera=30.0):
     if lanzador.buscar_instancia() is not None:
         raise SystemExit("Hay una Armónica abierta (puertos 8000 a 8010): cerrala antes de la prueba.")
     version = (programa / "app" / "VERSION").read_text(encoding="utf-8").strip()
+    if not (programa / NOMBRE_DEL_PDF).is_file():
+        raise SystemExit(f"Al programa le falta {NOMBRE_DEL_PDF}.")
 
     with tempfile.TemporaryDirectory(prefix="armonica-humo-") as temporal:
         # Con el PATH mínimo (la carpeta de ffmpeg del paquete y System32), no
@@ -503,6 +556,7 @@ def instalador(programa=None):
     salida = DIST / nombre_del_instalador(version)
     if not salida.is_file():
         raise SystemExit(f"Inno Setup terminó pero no está {salida}.")
+    shutil.copyfile(programa / NOMBRE_DEL_PDF, DIST / NOMBRE_DEL_PDF)
     print(f"  Listo: {salida}")
     return salida
 
