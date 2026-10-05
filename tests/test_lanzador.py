@@ -70,6 +70,39 @@ def test_el_entorno_apunta_a_la_carpeta_de_datos(tmp_path, monkeypatch):
     assert entorno["PATH"] == os.path.join(str(programa), "ffmpeg") + os.pathsep + "C:\\otro"
 
 
+def test_con_armonica_datos_la_clave_del_coach_va_a_esa_carpeta(tmp_path, monkeypatch):
+    """
+    La prueba de humo, las capturas y las pruebas a mano arrancan con
+    ARMONICA_DATOS para no tocar Documentos. La clave que se pega en Ajustes
+    tampoco puede ir a la %LOCALAPPDATA%\\Armonica de verdad: es la de quien
+    usa la computadora.
+    """
+    from armonica import coach
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(coach, "ARCHIVO_CLAVE", None)
+    datos = tmp_path / "datos"
+    datos.mkdir()
+    entorno = {"PATH": "C:\\otro", "ARMONICA_DATOS": str(datos)}
+
+    lanzador.preparar_entorno(str(datos), str(tmp_path / "programa"), entorno)
+
+    assert coach.ruta_de_la_clave() == os.path.join(str(datos), "coach.env")
+    coach.guardar_clave("sk-ant-de_prueba_123")
+    assert (datos / "coach.env").is_file()
+
+
+def test_sin_armonica_datos_la_clave_del_coach_sigue_en_localappdata(tmp_path, monkeypatch):
+    from armonica import coach
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(coach, "ARCHIVO_CLAVE", None)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+
+    lanzador.preparar_entorno(str(tmp_path), str(tmp_path / "programa"), {"PATH": "C:\\otro"})
+
+    assert coach.ARCHIVO_CLAVE is None
+    assert coach.ruta_de_la_clave() == os.path.join(str(tmp_path / "local"), "Armonica", "coach.env")
+
+
 def test_sin_ffmpeg_al_lado_el_path_no_cambia(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     entorno = {"PATH": "C:\\otro"}

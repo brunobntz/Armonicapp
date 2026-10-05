@@ -104,6 +104,8 @@ CLAVE_EN_AJUSTES = False
 # %LOCALAPPDATA%\Armonica, que es de esta computadora, y no a Documentos,
 # que puede estar subida a OneDrive. None quiere decir esa ruta; los tests
 # la cambian por una temporal (conftest.py) y así nunca tocan la de verdad.
+# Y el lanzador la pone en la carpeta de datos cuando se lo arranca con
+# ARMONICA_DATOS (pruebas, prueba de humo, capturas).
 ARCHIVO_CLAVE = None
 
 # Una clave: letras, números, guiones, guiones bajos y puntos. Nada de

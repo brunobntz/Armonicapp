@@ -15,7 +15,8 @@ alguien sin terminal:
    PATH.
 4. Una sola app: si ya hay una abierta, solo se abre el navegador.
 
-Para probarlo desde el repo, sin tocar Documentos:
+Para probarlo desde el repo, sin tocar Documentos (ni la clave del coach, que
+también va a esa carpeta, a coach.env, y no a %LOCALAPPDATA%\\Armonica):
 
     set ARMONICA_DATOS=C:\\ruta\\de\\prueba
     .venv\\Scripts\\pythonw.exe lanzador.pyw
@@ -131,6 +132,17 @@ def preparar_entorno(raiz, carpeta_programa, entorno=None):
     os.chdir(raiz)
     entorno["CARPETA_CANCIONES"] = os.path.join(raiz, "canciones")
     entorno["CARPETA_CLASES"] = os.path.join(raiz, "apuntes")
+    if entorno.get("ARMONICA_DATOS"):
+        # Quien arranca con ARMONICA_DATOS (las pruebas, la prueba de humo
+        # del armado, las capturas de la guía) lo hace justamente para no
+        # tocar lo de verdad. La clave del coach vive aparte, en
+        # %LOCALAPPDATA%\Armonica, y sin esto una clave de prueba pisaría la
+        # de quien usa la computadora: va a la carpeta de datos de prueba.
+        # Se importa acá, como el servidor en main(): el lanzador no carga
+        # nada de la app hasta que hace falta, y el caso común (sin
+        # ARMONICA_DATOS) no paga el import.
+        from armonica import coach
+        coach.ARCHIVO_CLAVE = os.path.join(raiz, "coach.env")
     ffmpeg = os.path.join(carpeta_programa, "ffmpeg")
     if os.path.isdir(ffmpeg):
         entorno["PATH"] = ffmpeg + os.pathsep + entorno.get("PATH", "")
