@@ -189,6 +189,21 @@ nav { display: flex; gap: 2px; border-bottom: 1px solid var(--borde); }
   background: var(--cobre);
 }
 
+/* La Guía, al final de la barra: se ve como una solapa más, pero es un
+ * enlace que abre otra pestaña. Si fuera una solapa sin panel,
+ * configurarSolapas() escondería todos al tocarla. */
+.enlace-guia {
+  background: transparent;
+  border: 0;
+  color: var(--tenue);
+  padding: 10px 14px 12px;
+  cursor: pointer;
+  font: 500 14px var(--cuerpo);
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+.enlace-guia:hover { color: var(--texto); }
+
 .panel { max-width: 940px; margin: 0 auto; padding: 26px 28px 60px; }
 section { margin-bottom: 30px; }
 

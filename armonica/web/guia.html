@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guía de Armónica</title>
+<link rel="stylesheet" href="estilo.css">
+<link rel="icon" type="image/png" href="icono.png">
+<style>
+  /* La guía de uso, para el profe. Los colores y la letra son los de la
+   * app (estilo.css), en una sola columna angosta: se lee de corrido, no de
+   * reojo como la app, así que la letra es más grande y el renglón más
+   * corto. */
+  body.guia { font-size: 17px; line-height: 1.6; }
+  .guia main { max-width: 46em; margin: 0 auto; padding: 36px 24px 80px; counter-reset: capitulo; }
+
+  .guia h1 { font-size: 40px; margin-bottom: 10px; }
+  .guia .abrir { font-size: 19px; margin: 0 0 14px; }
+  .guia p { margin: 0 0 14px; }
+  .guia ul, .guia ol { margin: 0 0 16px; padding-left: 24px; }
+  .guia li { margin-bottom: 8px; }
+  .guia strong { font-weight: 600; color: var(--texto); }
+  .guia a { color: var(--cobre); text-decoration-color: rgba(224, 164, 88, 0.4); }
+
+  /* El índice: un enlace por capítulo, en dos columnas. El nav de
+   * estilo.css es la barra de solapas (flex, con línea abajo): acá no. */
+  .guia nav.indice {
+    display: block;
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    background: var(--panel);
+    padding: 16px 22px 8px;
+    margin: 26px 0 10px;
+  }
+  .guia .indice-titulo {
+    margin: 0 0 8px;
+    color: var(--tenue);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .guia .indice ol { columns: 2; column-gap: 32px; }
+  .guia .indice li { break-inside: avoid; margin-bottom: 6px; }
+  .guia .indice a { color: var(--texto); text-decoration: none; }
+  .guia .indice a:hover { color: var(--cobre); }
+  @media (max-width: 560px) { .guia .indice ol { columns: 1; } }
+
+  /* Cada capítulo con su número, el mismo que tiene en el índice. */
+  .guia .capitulo {
+    counter-increment: capitulo;
+    border-top: 1px solid var(--borde);
+    margin: 44px 0 0;
+    padding-top: 30px;
+    scroll-margin-top: 12px;
+  }
+  .guia .capitulo > h2 { font-size: 30px; margin-bottom: 6px; }
+  .guia .capitulo > h2::before {
+    content: counter(capitulo);
+    display: block;
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: var(--cobre);
+    margin-bottom: 2px;
+  }
+  .guia h3 {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 21px;
+    margin: 28px 0 8px;
+  }
+  .guia .para-que { color: var(--tenue); font-size: 19px; margin-bottom: 20px; }
+  .guia .aviso { font-size: 16px; color: var(--texto); margin: 16px 0 18px; }
+
+  .guia figure { margin: 22px 0 26px; }
+  .guia figure img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+  }
+  .guia figcaption { color: var(--tenue); font-size: 14px; margin-top: 8px; }
+
+  /* El PDF del instalador sale de esta página, impresa con Edge. Al
+   * imprimir no va el fondo oscuro, y la letra clara quedaría casi
+   * invisible: va tinta oscura sobre blanco. El índice de enlaces no sirve
+   * en papel; cada capítulo arranca en hoja nueva (el primero sigue al
+   * título, para no dejar una hoja casi vacía) y una figura no se corta. */
+  @media print {
+    @page { margin: 16mm 15mm; }
+    :root {
+      --texto: var(--tinta);
+      --tenue: #5b544c;
+      --borde: #d6cfc4;
+      --cobre: var(--cobre-oscuro);
+    }
+    html, body.guia { background: #fff; color: var(--texto); }
+    body.guia { font-size: 11.5pt; }
+    body.guia::before { display: none; }
+    .guia main { max-width: none; padding: 0; }
+    .guia nav.indice { display: none; }
+    .guia .capitulo { break-before: page; border-top: 0; margin: 0; padding-top: 0; }
+    .guia main > .capitulo:first-of-type { break-before: auto; margin-top: 28px; }
+    .guia h2, .guia h3 { break-after: avoid; }
+    .guia figure, .guia li, .guia .aviso { break-inside: avoid; }
+    .guia .aviso { background: none; }
+    .guia code { background: #f2eee8; }
+    .guia a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body class="guia">
+<main>
+  <h1>Guía de Armónica</h1>
+  <p class="abrir">Para abrir la app: el ícono <strong>Armónica</strong> del escritorio.</p>
+  <p>Esta guía cuenta para qué sirve cada parte de la app y cómo se usa. Lo que
+    está en <strong>negrita</strong> es lo que ves escrito en la pantalla: un
+    botón, una solapa o un título. La guía también está adentro de la app: es
+    el enlace <strong>Guía</strong> de arriba, al lado de <strong>Ajustes</strong>.</p>
+
+  <nav class="indice" aria-label="Capítulos">
+    <p class="indice-titulo">En esta guía</p>
+    <ol>
+      <li><a href="#instalar">Instalar</a></li>
+      <li><a href="#primeros-pasos">La primera vez</a></li>
+      <li><a href="#en-vivo">En vivo</a></li>
+      <li><a href="#frases">Frases</a></li>
+      <li><a href="#canciones">Canciones</a></li>
+      <li><a href="#aprendizaje">Aprendizaje</a></li>
+      <li><a href="#teoria">Teoría</a></li>
+      <li><a href="#historial">Historial</a></li>
+      <li><a href="#coach">El coach</a></li>
+      <li><a href="#cerrar">Cerrar la app</a></li>
+      <li><a href="#si-algo-no-anda">Si algo no anda</a></li>
+      <li><a href="#version-nueva">Una versión nueva</a></li>
+    </ol>
+  </nav>
+
+  <section class="capitulo" id="instalar">
+    <h2>Instalar</h2>
+    <p class="para-que">Cómo poner la app en tu computadora. Se hace una sola vez.</p>
+    <p>Bruno te pasa el instalador en un pendrive o por Google Drive. Es un solo
+      archivo, y su nombre termina en «instalador».</p>
+
+    <h3>Si te lo pasa en un pendrive</h3>
+    <p>Enchufá el pendrive, abrilo y hacé doble clic en el instalador.</p>
+
+    <h3>Si te lo pasa por Drive</h3>
+    <p>Abrí el enlace que te mandó y descargá el archivo. Google avisa «No se
+      puede analizar el archivo en busca de virus». Lo dice con los archivos
+      grandes, que no alcanza a revisar: no quiere decir que tenga algo malo.
+      Tocá <strong>Descargar de todos modos</strong>.</p>
+    <figure>
+      <img src="guia/instalar-drive.png" alt="El aviso de Google Drive: no se puede analizar el archivo en busca de virus, con el botón Descargar de todos modos.">
+      <figcaption>El aviso de Google Drive. Se sigue con <strong>Descargar de todos modos</strong>.</figcaption>
+    </figure>
+    <p>Cuando termine de bajar, abrí el archivo. Queda en la carpeta
+      <code>Descargas</code>.</p>
+
+    <h3>Los avisos de Windows</h3>
+    <p>Al abrirlo, Windows puede mostrar un cartel azul que dice «Windows
+      protegió su PC». Sale con los programas que no son de una empresa
+      conocida. Tocá <strong>Más información</strong> y después
+      <strong>Ejecutar de todas formas</strong>.</p>
+    <p class="aviso">Si en cambio el cartel dice «Control Inteligente de
+      Aplicaciones bloqueó una aplicación…», no hay ningún botón para seguir.
+      No cambies nada en la configuración de Windows: pedile a Bruno el
+      instalador en un pendrive.</p>
+    <figure>
+      <img src="guia/instalar-bloqueo.png" alt="El cartel de Windows que dice que el Control Inteligente de Aplicaciones bloqueó una aplicación, sin botón para seguir.">
+      <figcaption>El cartel del Control Inteligente de Aplicaciones: desde acá no se puede seguir. Hace falta el instalador en un pendrive.</figcaption>
+    </figure>
+
+    <h3>El instalador</h3>
+    <p>Se instala solo para tu usuario de Windows, sin pedir permisos de
+      administrador. Seguí sus pasos hasta el final. En la última pantalla
+      queda tildado <strong>Abrir Armónica</strong>: si lo dejás así, la app se
+      abre apenas termina.</p>
+
+    <h3>Qué queda instalado</h3>
+    <ul>
+      <li>El ícono <strong>Armónica</strong> en el escritorio.</li>
+      <li>En el menú Inicio, <strong>Armónica</strong> y <strong>Guía de Armónica</strong>,
+        que abre esta guía.</li>
+      <li>En la carpeta <code>Documentos\Armonica</code>, el ícono
+        <strong>Abrir Armónica</strong>.</li>
+    </ul>
+    <p><strong>Armónica</strong> y <strong>Abrir Armónica</strong> hacen lo mismo:
+      abren la app.</p>
+    <p>Todo lo que guarda la app va a <code>Documentos\Armonica</code>: tus
+      frases, tus sesiones, tus canciones y los apuntes de las clases, cada cosa
+      en su carpeta.</p>
+  </section>
+
+  <section class="capitulo" id="primeros-pasos">
+    <h2>La primera vez</h2>
+    <p class="para-que">Dejar el micrófono listo, para que la app te escuche bien.</p>
+    <p>La primera vez que abrís la app, arriba de todo aparece la tarjeta
+      <strong>Primeros pasos</strong>. Son cuatro, y cada uno tiene un botón que
+      te lleva a donde se hace:</p>
+    <ol>
+      <li><strong>Elegí el micrófono.</strong> Con <strong>Ir a Ajustes</strong>
+        elegís el que tenés cerca de la boca.</li>
+      <li><strong>Sacá las mejoras de audio de Windows.</strong> Están pensadas
+        para la voz y se comen la armónica. <strong>Abrir la configuración de
+        sonido</strong> abre la de Windows: entrá a tu micrófono y apagá
+        «Mejoras de audio».</li>
+      <li><strong>Medí el ruido.</strong> Tocá <strong>Medir el ruido</strong> y
+        quedate tres segundos en silencio.</li>
+      <li><strong>Tocá.</strong> Con <strong>Ir a En vivo</strong>, tocá una nota
+        cualquiera: la barra se tiene que mover y tiene que aparecer el
+        agujero.</li>
+    </ol>
+    <p>Cuando termines, tocá <strong>Listo</strong>. La tarjeta no vuelve a
+      aparecer sola, pero la podés ver cuando quieras: <strong>Ajustes</strong> →
+      <strong>Ver los primeros pasos</strong>.</p>
+    <p class="aviso">Si la barra no se mueve con nada, puede ser que Windows
+      esté bloqueando el micrófono. En la tarjeta, tocá <strong>Abrir los
+      permisos del micrófono</strong> y prendé «Permitir que las aplicaciones de
+      escritorio accedan al micrófono».</p>
+    <figure>
+      <img src="guia/primeros-pasos.png" alt="La tarjeta Primeros pasos, con los cuatro pasos, sus botones y el botón Listo.">
+      <figcaption>La tarjeta <strong>Primeros pasos</strong>, arriba de todo la primera vez.</figcaption>
+    </figure>
+
+    <h3>El micrófono, en Ajustes</h3>
+    <p>En <strong>Ajustes</strong>, la parte <strong>El micrófono</strong> tiene
+      la lista de las entradas de sonido de la computadora. Windows siempre tiene
+      varias, y la que viene elegida rara vez es la buena (a veces es la de la
+      cámara). Elegí una y soplá: la barra de abajo se tiene que mover. Si no se
+      mueve, probá con otra.</p>
+    <p><strong>Medir el ruido</strong> son tres segundos en silencio. La app
+      escucha la habitación y pone una rayita en la barra, justo por encima del
+      ruido. Lo que pasa la rayita es armónica; lo de abajo, ruido. Si cambiás
+      de lugar o de micrófono, volvé a medirlo.</p>
+    <figure>
+      <img src="guia/ajustes-microfono.png" alt="Ajustes, la parte El micrófono: la lista de micrófonos, la barra de nivel y el botón Medir el ruido.">
+      <figcaption><strong>Ajustes</strong> → <strong>El micrófono</strong>: la lista, la barra y <strong>Medir el ruido</strong>.</figcaption>
+    </figure>
+
+    <h3>Con qué estás tocando</h3>
+    <p>También en <strong>Ajustes</strong>, en <strong>Con qué estás
+      tocando</strong>, le decís a la app qué armónica tenés en la mano
+      (<strong>armónica en</strong>), en qué <strong>posición</strong> tocás y qué
+      <strong>escala</strong> querés ver marcada. La app trabaja con armónicas en
+      C, G, D y A. Lo que elegís se ve arriba de todo, al lado del nombre de la
+      app.</p>
+  </section>
+
+  <section class="capitulo" id="en-vivo">
+    <h2>En vivo</h2>
+    <p class="para-que">Ver lo que tocás mientras lo tocás: qué agujero, qué nota y si está afinada.</p>
+    <p>Mientras la app está abierta, te escucha. No hace falta apretar nada para
+      ver lo que tocás: grabar es solo para guardarlo.</p>
+
+    <h3>Qué muestra</h3>
+    <ul>
+      <li>La barra, arriba a la derecha: se mueve con el sonido que entra. Es lo
+        primero que hay que mirar si no anda nada. Si no se mueve al soplar, el
+        problema es el micrófono y no cómo tocás. Abajo dice cómo está entrando:
+        si va todo bien, dice «Entrando bien».</li>
+      <li>La nota que suena, grande, y al lado una regla con un punto. Si el
+        punto cae en la franja verde del medio, la nota está afinada; hacia la
+        izquierda está baja, y hacia la derecha, alta. Los números de la regla
+        son cents, centésimos de semitono.</li>
+      <li><strong>La armónica</strong>: el dibujo del instrumento, con los
+        agujeros del 1 al 10 de izquierda a derecha. Arriba lo soplado, abajo lo
+        aspirado, y los bends apilados hacia afuera. Se ilumina lo que estás
+        tocando. El punto verde marca la escala que elegiste en Ajustes, y el aro
+        lavanda, la tónica. La línea lavanda es tu afinación entre una nota y la
+        de al lado: en un bend a medio hacer la vas a ver en el medio, y en verde
+        cuando llegaste.</li>
+      <li><strong>Lo que tocaste</strong>: la tablatura de lo que venís
+        tocando.</li>
+    </ul>
+    <figure>
+      <img src="guia/en-vivo.png" alt="La solapa En vivo: el botón Grabar esta sesión, la barra, la nota grande con su regla y el dibujo de la armónica con un agujero iluminado.">
+      <figcaption>La solapa <strong>En vivo</strong> mientras suena una nota.</figcaption>
+    </figure>
+
+    <h3>Grabar una sesión</h3>
+    <p>Para guardar lo que tocás, tocá <strong>Grabar esta sesión</strong>. El
+      botón se pone rojo y pasa a decir <strong>Terminar</strong>. Tocá, y cuando
+      termines, apretalo.</p>
+    <p>Aparece <strong>Esto es lo que grabaste</strong>: la tablatura, cuántas
+      notas y cuánto duró. Si querés, ponele un nombre y anotá qué estuviste
+      practicando. Si tocaste sobre una base, escribí su BPM en <strong>base
+      a</strong> y la app mide el ritmo; si no, dejalo vacío. Después elegí
+      <strong>Guardar</strong> o <strong>Descartar</strong>.</p>
+    <p>Al guardar, abajo de todo aparece el <strong>Resumen de la sesión</strong>:
+      cuántas notas tocaste y en cuánto tiempo, cuánto midió tu armónica, y lo
+      que la app encontró, cada cosa con qué hacer. Si diste el BPM, también el
+      <strong>Ritmo</strong>. Las sesiones guardadas se ven después en
+      <strong>Historial</strong>.</p>
+
+    <h3>Tocar sobre una base</h3>
+    <p>En <strong>Canciones</strong>, el botón <strong>Practicar sobre esta
+      base</strong> trae la base de esa canción a En vivo. Arriba aparece «Sobre
+      la base:» con el nombre de la canción, <strong>▶ Reproducir la
+      base</strong> y <strong>Quitar la base</strong>. Mientras suena, la app dice
+      en qué compás y sobre qué acorde estás, y marca en el dibujo de la armónica
+      dónde están sus notas guía.</p>
+    <p>Si grabás con la base puesta, la base arranca con un compás de conteo, y
+      el BPM ya lo sabe la app. En el resumen aparece <strong>Sobre la
+      base</strong>: cuántas de tus notas eran del acorde, y cuántas veces
+      aterrizaste en una nota guía en un cambio de acorde.</p>
+    <p class="aviso">Usá auriculares. Si la base entra por el micrófono, la app
+      no puede medir lo que tocás.</p>
+  </section>
+
+  <section class="capitulo" id="frases">
+    <h2>Frases</h2>
+    <p class="para-que">Guardar frases de referencia y practicarlas hasta que salgan igual.</p>
+    <p>Una frase de referencia es una grabación de una frase tocada como querés
+      que suene. Puede ser tuya o de otra persona. Es una grabación y no una
+      tablatura escrita, porque la tablatura no lleva el ritmo.</p>
+
+    <h3>Grabar o importar una frase</h3>
+    <p>Hay dos formas:</p>
+    <ul>
+      <li><strong>Grabar una frase</strong>: tocá la frase. Mientras grabás
+        aparece un cartel con un punto rojo, la barra y la tablatura que va
+        saliendo. Cuando termines, tocá <strong>Terminar</strong>.</li>
+      <li><strong>Importar un audio</strong>: elegí un archivo de audio de la
+        computadora, por ejemplo uno que te mandaron por WhatsApp. Antes, en
+        <strong>grabado con armónica en</strong>, elegí con qué armónica se
+        grabó (viene elegida la que tenés en Ajustes): la app no lo puede
+        adivinar, y con la armónica equivocada la tablatura sale mal sin
+        avisar.</li>
+    </ul>
+    <p>Si el audio tiene varios pedazos con armónica (una clase entera, por
+      ejemplo), la app los separa y dice cuántos encontró. Escuchá cada uno con
+      ▶ y elegí el que querés con <strong>Este</strong>, o guardalos todos con
+      <strong>Importar los … como frases</strong>: quedan en una lista con el
+      nombre del archivo. Con un audio largo puede tardar un minuto. No toques
+      nada hasta que aparezca el resultado.</p>
+
+    <h3>Esto es lo que salió</h3>
+    <p>Al terminar de grabar aparece <strong>Esto es lo que salió</strong> (al
+      importar, <strong>Esto es lo que se importó</strong>), con la tablatura,
+      cuántas notas y cuánto dura. Ponele un nombre, una descripción si querés,
+      y elegí en qué <strong>lista</strong> va: ninguna, una de las tuyas o una
+      nueva («nueva lista…»). Después, <strong>Guardar</strong> o
+      <strong>Descartar</strong>.</p>
+    <p>Si atrás de la armónica hay una base sonando, la app no las puede
+      separar: te avisa y te muestra lo que habría salido, para que decidas vos
+      si sirve.</p>
+
+    <h3>Tus frases</h3>
+    <p>En <strong>Tus frases</strong> está cada frase con su tablatura, su audio
+      para escuchar y sus botones:</p>
+    <ul>
+      <li><strong>Practicar</strong>: para tocarla contra la referencia (ver
+        abajo).</li>
+      <li><strong>Cómo viene</strong>: tus intentos con esa frase, en un gráfico
+        y una tabla.</li>
+      <li><strong>Corregir</strong>: si la app anotó mal alguna nota, la cambiás a
+        mano y tocás <strong>Guardar la corrección</strong>. <strong>Restaurar la
+        original</strong> vuelve a lo que había anotado la app.</li>
+      <li><strong>Renombrar</strong> y <strong>Borrar</strong>.</li>
+    </ul>
+    <p>Arriba están las listas: <strong>todas</strong>, cada una de tus listas y,
+      si hay, <strong>sin lista</strong>. Tocá una para ver solo esas.
+      <strong>+ nueva lista</strong> crea una. Con una lista elegida, el mismo
+      botón dice <strong>editar esta lista</strong>: sirve para cambiarle el
+      nombre o para borrarla (las frases quedan, sin lista). Para pasar frases a
+      una lista, marcá la casilla de cada una, elegí la lista en <strong>mandarlas
+      a</strong> y tocá <strong>Mover</strong>.</p>
+    <figure>
+      <img src="guia/frases.png" alt="La solapa Frases: los botones Grabar una frase e Importar un audio, y Tus frases con una frase, su tablatura y sus botones.">
+      <figcaption>La solapa <strong>Frases</strong>, con una frase guardada en <strong>Tus frases</strong>.</figcaption>
+    </figure>
+
+    <h3>Practicar una frase</h3>
+    <p>Tocá <strong>Practicar</strong> en la frase, tocala igual que la
+      referencia y, al terminar, tocá <strong>Terminar</strong>. Abajo aparece
+      <strong>Cómo te salió</strong>:</p>
+    <ul>
+      <li>tres números: <strong>notas</strong> (cuántas acertaste),
+        <strong>afinación</strong> y <strong>a tiempo</strong>;</li>
+      <li><strong>Qué hacer con esto</strong>: los consejos;</li>
+      <li><strong>Escuchalas seguidas</strong>: la referencia y tu intento, uno
+        abajo del otro;</li>
+      <li><strong>Nota por nota</strong>: cada nota, con cuánto te adelantaste o
+        te atrasaste y cuánto te desafinaste.</li>
+    </ul>
+    <p>Arriba dice qué intento es y cómo te fue en el anterior. Si tenés tu
+      intento grabado en un <code>.wav</code>, en vez de tocarlo en vivo usá
+      <strong>Con un .wav</strong>, en la tarjeta de la frase.</p>
+  </section>
+
+  <section class="capitulo" id="canciones">
+    <h2>Canciones</h2>
+    <p class="para-que">Tener cada canción con su base, sus audios y su tablatura, y practicar sobre la base.</p>
+    <p>La app viene sin canciones: las preparás vos. Cada canción es una carpeta
+      con su nombre, adentro de <code>Documentos\Armonica\canciones</code>. En la
+      solapa <strong>Canciones</strong>, <strong>Abrir la carpeta</strong> te la
+      abre. En la carpeta de cada canción va:</p>
+    <ul>
+      <li>la base de Band-in-a-Box, el archivo <code>.sgu</code> o
+        <code>.mgu</code>. De ahí la app saca el tono, el tempo, el compás y el
+        cifrado;</li>
+      <li>los audios: la base grabada, alguien tocando encima, una clase
+        (<code>.wav</code>, <code>.mp3</code>, <code>.m4a</code>,
+        <code>.mp4</code>…);</li>
+      <li>la tablatura en foto (<code>.jpg</code>, <code>.png</code> o las fotos
+        del iPhone).</li>
+    </ul>
+    <p>Con volver a la solapa alcanza: la canción aparece sola. La app solo lee
+      esa carpeta: nunca escribe ni borra nada ahí.</p>
+
+    <h3>Qué muestra de cada canción</h3>
+    <p>Cada canción es un bloque que se abre y se cierra tocando su nombre. Al
+      lado del nombre van el tono, el tempo y el compás; abajo, una línea con el
+      título, el estilo, cuántos compases tiene y dónde está el coro.</p>
+    <ul>
+      <li><strong>▶ Reproducir la base</strong> la hace sonar, y
+        <strong>■ Parar</strong> la corta. Con <strong>tempo</strong> la tocás más
+        lenta o más rápida, y <strong>repetir</strong> la vuelve a empezar cuando
+        termina. Si el archivo trae la melodía, la casilla
+        <strong>melodía</strong> la suma.</li>
+      <li>Sin un audio, la app toca la base ella misma a partir del cifrado:
+        acordes, bajo y un click. No suena a banda, pero se escuchan el acorde y
+        el pulso. Si en la carpeta hay audios, en <strong>sonido</strong> elegís
+        cuál es la base, y el cifrado la sigue desde el compás 1. Si el compás 1
+        no cae donde tiene que caer, poné a sonar el audio y tocá <strong>Marcar
+        ahora</strong> justo cuando arranca.</li>
+      <li><strong>Practicar sobre esta base</strong> te lleva a En vivo con la
+        base puesta (ver <a href="#en-vivo">En vivo</a>).</li>
+      <li>El cifrado, como en un atril: cuatro compases por renglón, con los
+        cambios de acorde marcados. Mientras suena la base, se ilumina el compás.
+        Si pasás el mouse por un acorde, dice sus notas y sus notas guía.</li>
+      <li>Abajo de cada compás hay una casilla, con un «+», para escribir dónde
+        querés aterrizar: el agujero, como <code>-4</code>, <code>5</code> o
+        <code>-3'</code> (con bend). Enter lo guarda, y la tecla Tab pasa al
+        compás siguiente. La app lo pinta según el acorde: las notas guía, en
+        cobre. La casilla <strong>mis notas</strong> muestra o esconde lo que
+        escribiste.</li>
+      <li><strong>Tablatura y apuntes en foto</strong>: las fotos de la carpeta.
+        <strong>Ver en otra ventana</strong> la abre en una ventana chica, para
+        tenerla al costado mientras tocás.</li>
+      <li><strong>Audios</strong>: cada audio se escucha ahí mismo.
+        <strong>Importar como frases</strong> lo lleva a <strong>Frases</strong>,
+        que busca los pedazos con armónica.</li>
+    </ul>
+    <figure>
+      <img src="guia/canciones.png" alt="La solapa Canciones con una canción abierta: el botón Reproducir la base, Practicar sobre esta base y el cifrado compás por compás.">
+      <figcaption>Una canción abierta en <strong>Canciones</strong>: la base y su cifrado.</figcaption>
+    </figure>
+
+    <section id="bandinabox">
+      <h3>Preparar una canción en Band-in-a-Box</h3>
+      <p>Estos son los pasos para guardar la base y su audio desde Band-in-a-Box.</p>
+    </section>
+  </section>
+
+  <section class="capitulo" id="aprendizaje">
+    <h2>Aprendizaje</h2>
+    <p class="para-que">Leer los resúmenes de las clases y buscar en ellos.</p>
+    <p>La solapa lee los resúmenes que dejes en
+      <code>Documentos\Armonica\apuntes</code>. En <strong>Ajustes</strong>, en
+      <strong>Los apuntes de las clases</strong>, <strong>Abrir la
+      carpeta</strong> te la abre. Sirven archivos de Word (<code>.docx</code>),
+      PDF (<code>.pdf</code>) y de texto (<code>.txt</code> y
+      <code>.md</code>).</p>
+    <p>Empezá el nombre de cada archivo con la fecha de la clase, año-mes-día:
+      por ejemplo, <code>2026-09-08.docx</code>. Así la app sabe de cuándo es y
+      las ordena.</p>
+    <p>Qué muestra:</p>
+    <ul>
+      <li>Arriba, un casillero para buscar en las clases: escribí una palabra
+        (bending, notas guía, tercera posición…) y aparecen las clases que la
+        nombran, con la fecha.</li>
+      <li><strong>Qué estamos viendo</strong>: lo principal de la última
+        clase.</li>
+      <li><strong>Qué tengo que practicar</strong>: lo que las últimas clases
+        dejaron para practicar. Cada cosa trae un botón que te lleva a la solapa
+        donde se practica. Es una orientación: la app la saca de las palabras del
+        resumen.</li>
+      <li><strong>Las clases</strong>: todas, con su fecha y su tema. Tocá una
+        para leerla entera.</li>
+    </ul>
+    <p>La app solo lee esa carpeta: nunca escribe ni cambia tus archivos.</p>
+  </section>
+
+  <section class="capitulo" id="teoria">
+    <h2>Teoría</h2>
+    <p class="para-que">Estudiar una posición: qué escala, dónde está en la armónica y qué notas buscar sobre cada acorde.</p>
+    <p>Arriba elegís <strong>armónica en</strong>, <strong>posición</strong> y
+      <strong>escala</strong>. Esto es para mirar: no cambia lo que tenés puesto
+      en Ajustes, así que podés estudiar una posición mientras tocás en otra.
+      Algunas posiciones dicen «solo calculada»: la app las saca de la cuenta,
+      sin una tabla escrita a mano para comparar.</p>
+    <p>Abajo, para lo que elegiste:</p>
+    <ul>
+      <li>el tono en que tocás y las notas de la escala, con la tónica
+        marcada;</li>
+      <li><strong>Dónde está en la armónica</strong>: el dibujo, con el punto
+        verde en las notas de la escala y el aro lavanda en la tónica. Dice
+        cuántas notas piden bend y si falta alguna;</li>
+      <li><strong>La corrida</strong>: la escala en orden, dos octavas desde la
+        tónica. Las que están punteadas piden bend;</li>
+      <li><strong>El blues de doce compases en esta posición</strong>, con los
+        cambios de acorde marcados: ahí es donde conviene aterrizar en una nota
+        guía, en el tiempo 1;</li>
+      <li><strong>Las notas guía: la 3ª y la 7ª de cada acorde</strong>, y en qué
+        agujero está cada una;</li>
+      <li><strong>Qué evitar</strong>: los agujeros que chocan con cada
+        acorde;</li>
+      <li><strong>En qué posición conviene esta escala</strong>: las posiciones,
+        de la más cómoda a la menos.</li>
+    </ul>
+
+    <h3>El círculo de quintas</h3>
+    <p>Al final está <strong>El círculo de quintas</strong>. Cada posición es un
+      paso de quinta desde la armónica, por eso la misma rueda sirve para todas.
+      Tiene dos modos:</p>
+    <ul>
+      <li><strong>Tono de la armónica</strong>: elegí la armónica en las teclas de
+        las notas, y la rueda dice en qué tono tocás en cada posición.</li>
+      <li><strong>Tono de la canción</strong>: elegí el tono de la canción, y la
+        rueda dice qué armónica pide cada posición. Las armónicas con las que
+        trabaja la app (C, G, D y A) llevan una ✓.</li>
+    </ul>
+    <p>Tocá un sector de la rueda y esa posición se abre arriba.</p>
+    <figure>
+      <img src="guia/teoria.png" alt="La solapa Teoría: la armónica, la posición y la escala elegidas, y el dibujo de la armónica con la escala marcada.">
+      <figcaption>La solapa <strong>Teoría</strong> con una posición elegida.</figcaption>
+    </figure>
+  </section>
+
+  <section class="capitulo" id="historial">
+    <h2>Historial</h2>
+    <p class="para-que">Ver cómo venís de una sesión a otra.</p>
+    <p>Acá están las sesiones que guardaste en <strong>En vivo</strong>, con
+      <strong>Grabar esta sesión</strong> y <strong>Guardar</strong>.</p>
+
+    <h3>Cómo vienen tus bends</h3>
+    <p>Un gráfico por cada bend, sesión por sesión. La franja verde es la zona
+      afinada: un punto verde está afinado, uno amarillo, cerca, y uno rojo,
+      lejos. Arriba de cada gráfico dice si venís mejorando, empeorando o sin
+      cambios.</p>
+    <p>Está medido contra tu propia armónica: si el instrumento está unos cents
+      alto, eso es de la armónica y no tuyo. Un bend aparece cuando está en dos
+      sesiones o más, y para hablar de una tendencia hacen falta tres.</p>
+
+    <h3>Las sesiones</h3>
+    <p>Una tabla con cada sesión guardada: la fecha, el nombre que le pusiste,
+      la armónica, la posición, cuántas notas, cuántos minutos y cuánto midió la
+      afinación de tu armónica.</p>
+    <figure>
+      <img src="guia/historial.png" alt="La solapa Historial: el gráfico de un bend con la franja verde, y la tabla de las sesiones.">
+      <figcaption>La solapa <strong>Historial</strong>: un bend sesión por sesión, y <strong>Las sesiones</strong>.</figcaption>
+    </figure>
+  </section>
+
+  <section class="capitulo" id="coach">
+    <h2>El coach</h2>
+    <p class="para-que">Un asistente que te explica en palabras lo que la app midió.</p>
+    <p>Por ejemplo, por qué una nota salió baja o cómo practicar un cambio de
+      acorde. El coach nunca mide nada: recibe los números que la app ya calculó
+      y los cuenta en palabras. Es opcional: sin él, la app anda entera.</p>
+    <p>Necesita internet y una clave de Claude, de ChatGPT o de Gemini, que son
+      asistentes de tres empresas distintas. La clave es un código largo que da
+      cada empresa: con ella, la app le puede hacer preguntas a ese
+      asistente.</p>
+
+    <h3>Qué clave usar</h3>
+    <ul>
+      <li>Si Bruno te da una, usá esa.</li>
+      <li>Si querés sacar la tuya, <strong>Gemini</strong>, de Google, es gratis,
+        con un tope de consultas por día. Se saca en
+        <code>aistudio.google.com</code>, con tu cuenta de Google. Ojo: en la
+        versión gratis, Google puede usar lo que le mandás para mejorar sus
+        productos.</li>
+      <li><strong>ChatGPT</strong>, de OpenAI (en <code>platform.openai.com</code>),
+        y <strong>Claude</strong>, de Anthropic (en
+        <code>console.anthropic.com</code>), se pagan por uso: unos centavos por
+        consulta. La suscripción a ChatGPT Plus o a Claude no trae la clave: la
+        clave es aparte.</li>
+    </ul>
+    <p>En esos sitios, la clave se llama «API key». Si no sabés cómo sacarla,
+      pedile una mano a Bruno.</p>
+
+    <h3>Dónde se pega</h3>
+    <p>En <strong>Ajustes</strong> → <strong>El coach</strong>: pegá la clave en
+      el casillero que dice «pegá la clave acá» y tocá <strong>Guardar y
+      probar</strong>. La app reconoce sola si es de Claude, de ChatGPT o de
+      Gemini, la guarda en esta computadora y la prueba. Se pega una sola
+      vez.</p>
+    <p>Lo que puede contestar:</p>
+    <ul>
+      <li>«Listo: es una clave de Gemini y anda. Ya podés usar el coach.» (con el
+        nombre que corresponda). Abajo dice <strong>Activo</strong>, con Gemini.
+        Ya está.</li>
+      <li>«Esa clave de Gemini no es válida, así que no la guardé. Fijate de
+        haberla copiado entera.» La empresa no la aceptó. Copiala de nuevo,
+        entera, y volvé a probar. Si había una clave de antes, sigue esa.</li>
+      <li>«No reconozco esa clave. Sirven las de Claude, ChatGPT o Gemini: pegala
+        de nuevo, entera y sin espacios.»</li>
+      <li>«Guardada, sin comprobar todavía. Cuando se pueda conectar, el coach va
+        a andar.» La clave quedó, pero no se pudo probar: puede ser que no haya
+        internet, que el servicio esté saturado o que la cuenta no tenga crédito.
+        Arriba dice por qué.</li>
+    </ul>
+    <figure>
+      <img src="guia/ajustes-coach.png" alt="Ajustes, la parte El coach: el casillero para pegar la clave y el botón Guardar y probar.">
+      <figcaption><strong>Ajustes</strong> → <strong>El coach</strong>: el casillero para pegar la clave y <strong>Guardar y probar</strong>.</figcaption>
+    </figure>
+
+    <h3>Qué sale de la computadora</h3>
+    <p>Para contestar, la app le manda al asistente números y texto: lo que
+      midió, tu pregunta y, en Canciones, el cifrado. El audio nunca sale de la
+      computadora. Todo eso va a la empresa de la clave: a Anthropic si es de
+      Claude, a OpenAI si es de ChatGPT y a Google si es de Gemini.</p>
+
+    <h3>Dónde aparece</h3>
+    <p>Con el coach activo aparecen sus botones:</p>
+    <ul>
+      <li>en <strong>Frases</strong>, al pie de <strong>Cómo te salió</strong>:
+        <strong>Que me lo explique el coach</strong>;</li>
+      <li>al pie de <strong>Teoría</strong>: <strong>Preguntale al
+        coach</strong>, para escribir una pregunta sobre lo que está en pantalla
+        y tocar <strong>Preguntar</strong>;</li>
+      <li>en <strong>Canciones</strong>, en cada canción: <strong>Que el coach
+        explique la base</strong>. Lo que dice queda guardado con la
+        canción.</li>
+    </ul>
+    <p>Mientras piensa, el botón dice «Pensando...». Puede tardar unos
+      segundos.</p>
+    <p>Sin internet, el coach contesta «No hay conexión con el servicio. ¿Estás
+      sin internet?». Si dice «El servicio está saturado, o la clave llegó a su
+      tope de uso. Probá en un rato.», probá más tarde: con Gemini gratis, puede
+      ser el tope del día.</p>
+
+    <h3>Borrar la clave</h3>
+    <p>En <strong>Ajustes</strong> → <strong>El coach</strong>, <strong>Borrar
+      la clave</strong>. Pregunta antes de borrarla. Después, el coach queda
+      apagado hasta que pegues otra.</p>
+  </section>
+
+  <section class="capitulo" id="cerrar">
+    <h2>Cerrar la app</h2>
+    <p class="para-que">Cómo se cierra del todo y cómo se vuelve a abrir.</p>
+    <p>La app se ve en el navegador, pero cerrar la pestaña no la cierra: sigue
+      abierta por detrás, y al minuto suelta el micrófono.</p>
+    <p>Para cerrarla del todo: <strong>Ajustes</strong> → <strong>Cerrar la
+      app</strong>. Te pregunta antes, y la página queda diciendo «La app está
+      cerrada». Mientras estás grabando no se cierra: primero pará la
+      grabación.</p>
+    <p>Para volver a abrirla, el ícono <strong>Armónica</strong> del escritorio.
+      Si la app ya estaba abierta (por ejemplo, porque cerraste la pestaña),
+      tocar el ícono no abre otra: solo vuelve a abrir la página.</p>
+  </section>
+
+  <section class="capitulo" id="si-algo-no-anda">
+    <h2>Si algo no anda</h2>
+    <p class="para-que">Qué hacer con los problemas más comunes.</p>
+
+    <h3>La barra no se mueve</h3>
+    <ol>
+      <li>En <strong>Ajustes</strong> → <strong>El micrófono</strong>, elegí otro
+        y soplá. Probá con todos los de la lista.</li>
+      <li>Apagá las «Mejoras de audio» de Windows: <strong>Ajustes</strong> →
+        <strong>Ver los primeros pasos</strong> → <strong>Abrir la configuración
+        de sonido</strong>, entrá a tu micrófono y apagalas.</li>
+      <li>Revisá los permisos del micrófono: en la misma tarjeta,
+        <strong>Abrir los permisos del micrófono</strong>, y prendé «Permitir que
+        las aplicaciones de escritorio accedan al micrófono».</li>
+    </ol>
+    <p>Si la barra se mueve pero la app no reconoce las notas, volvé a
+      <strong>Medir el ruido</strong>.</p>
+
+    <h3>Un audio no se convierte</h3>
+    <p>Si al importar un audio la app dice «Windows no lo dejó correr», Windows
+      bloqueó el convertidor de audio que trae la app. Probá con el audio en
+      <code>.wav</code>, que no necesita conversión (Bruno te puede ayudar a
+      pasarlo). Todo lo demás sigue andando: grabar, En vivo, las frases, las
+      fotos y los <code>.wav</code>.</p>
+
+    <h3>«Armónica ya se está abriendo pero todavía no contesta»</h3>
+    <p>Ese cartel sale si tocás el ícono mientras la app todavía está
+      arrancando. Esperá un momento y volvé a tocar el ícono.</p>
+
+    <h3>El coach dice que hace falta una versión nueva</h3>
+    <p>Las empresas cambian sus asistentes cada tanto, y la app no se actualiza
+      sola. Pedile a Bruno una versión nueva (ver <a href="#version-nueva">Una
+      versión nueva</a>).</p>
+
+    <h3>Cualquier otra cosa</h3>
+    <p>Mandale a Bruno el archivo <code>registro.txt</code>, que está en
+      <code>Documentos\Armonica</code>, y contale qué estabas haciendo. Ahí la app
+      anota lo que pasó. Lo mismo si al abrirla sale «La app no pudo
+      arrancar».</p>
+  </section>
+
+  <section class="capitulo" id="version-nueva">
+    <h2>Una versión nueva</h2>
+    <p class="para-que">Cómo poner la versión nueva que te pase Bruno, y cómo sacar la app.</p>
+    <p>Qué versión tenés lo dice <strong>Ajustes</strong>, en <strong>La
+      app</strong>.</p>
+
+    <h3>Instalar la nueva</h3>
+    <p>Se instala encima, igual que la primera vez, con los mismos avisos (ver
+      <a href="#instalar">Instalar</a>). Si la app está abierta, el instalador la
+      cierra solo. Si estás grabando, te pide que pares la grabación, cierres la
+      app desde Ajustes y vuelvas a abrir el instalador.</p>
+    <p>Tus frases, sesiones, canciones, apuntes y ajustes no se tocan, y la clave
+      del coach tampoco.</p>
+
+    <h3>Desinstalar</h3>
+    <p>En la <strong>Configuración</strong> de Windows → <strong>Aplicaciones</strong>,
+      buscá <strong>Armónica</strong> y elegí <strong>Desinstalar</strong>. La
+      carpeta <code>Documentos\Armonica</code> queda entera, con todo lo tuyo. La
+      clave del coach sí se borra: si volvés a instalar la app, la tenés que
+      pegar de nuevo.</p>
+  </section>
+</main>
+</body>
+</html>
