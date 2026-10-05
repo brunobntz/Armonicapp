@@ -3103,9 +3103,14 @@ function htmlDeLaExplicacion(cancion, datos) {
     if (e && e.texto) {
       html += '<button class="secundario chico" data-explicar-borrar="' + escapar(cancion.nombre) + '">Borrar</button>';
     }
+    // En la instalada no hay Ollama que comparar, y "modelo" y "máquina" son
+    // palabras de Bruno: al profe se le dice a quién se le manda.
     html += '<span class="ayuda">' + (datos.sale_de_la_maquina
-      ? "El cifrado se le manda al modelo: con " + escapar(nombreDelProveedor(datos.coach.proveedor)) +
-        " sale de tu máquina. Con Ollama, no."
+      ? (esLaInstalada()
+        ? "El cifrado se le manda a " + escapar(nombreDelProveedor(datos.coach.proveedor)) +
+          ": sale de esta computadora."
+        : "El cifrado se le manda al modelo: con " + escapar(nombreDelProveedor(datos.coach.proveedor)) +
+          " sale de tu máquina. Con Ollama, no.")
       : "El cifrado se le manda al modelo local: no sale de tu máquina.") + "</span>";
   } else if (!(e && e.texto) && !esLaInstalada()) {
     html += "<span class='ayuda'>Con el coach activo (mirá Ajustes), un botón acá le pide que " +
