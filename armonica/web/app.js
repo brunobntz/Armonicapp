@@ -2591,7 +2591,7 @@ function configurarCoachEnDevolucion() {
 }
 
 
-/* La pregunta libre al pie de Teoria. */
+/* La pregunta libre en Teoria (arriba del circulo de quintas). */
 function bloqueDelCoachEnTeoria() {
   if (!coachDisponible) return "";
   return '<section class="coach"><h2>Preguntale al coach</h2>' +
@@ -2658,16 +2658,20 @@ async function mostrarEstadoDelCoach() {
   const proveedor = datos.proveedor ? nombreDelProveedor(datos.proveedor) : "";
   donde.className = "ayuda";
   if (datos.disponible && esLaInstalada() && pruebaDelCoachFallida) {
-    donde.innerHTML = "<strong>Guardada, sin comprobar todavía.</strong> " +
-      "Cuando se pueda conectar, el coach va a andar.";
+    // Neutro a propósito: el motivo puede ser que no haya internet, pero
+    // también un servicio caído o una cuenta sin crédito, y en esos casos
+    // "va a andar" sería prometer de más. El motivo de verdad lo dice la
+    // línea de arriba (el resultado de Guardar y probar).
+    donde.innerHTML = "<strong>Guardada, sin comprobar todavía:</strong> " +
+      "arriba dice por qué no se pudo probar.";
   } else if (datos.disponible && esLaInstalada()) {
     donde.innerHTML = "<strong>Activo</strong>, con " + escapar(proveedor) + ". Vas a ver el " +
-      "botón del coach al pie de la devolución de una práctica, una pregunta libre al pie de " +
+      "botón del coach al pie de la devolución de una práctica, una pregunta libre en " +
       "Teoría y, en Canciones, un botón para que te explique la base.";
   } else if (datos.disponible) {
     donde.innerHTML = "<strong>Activo</strong>: " + escapar(proveedor) + ", modelo <code>" +
       escapar(datos.modelo) + "</code>. Vas a ver el botón del coach al pie de la " +
-      "devolución de una práctica, y una pregunta libre al pie de Teoría." +
+      "devolución de una práctica, y una pregunta libre en Teoría." +
       (datos.proveedor === "ollama"
         ? " Con un modelo local la primera respuesta tarda más: está cargando el modelo."
         : "");
