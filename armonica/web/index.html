@@ -436,15 +436,33 @@
     <p id="estado-clases" class="ayuda"></p>
   </section>
 
-  <section class="solo-desarrollo">
+  <section>
     <h2>El coach</h2>
-    <p class="ayuda">
+    <p class="ayuda solo-desarrollo">
       Un modelo de lenguaje que explica lo que la app midió: recibe los
       números ya calculados y los cuenta como lo haría un profe. Nunca mide
       nada, y el audio no sale de tu máquina. Es opcional: se activa con una
       clave tuya en un archivo <code>.env</code> (mirá <code>.env.ejemplo</code>)
       y reiniciando la app.
     </p>
+    <div class="solo-empaquetada">
+      <p class="ayuda">
+        Un asistente que explica en palabras lo que la app midió: por qué una
+        nota salió baja, cómo practicar un cambio de acorde. Nunca mide nada:
+        recibe los números que la app ya calculó. Necesita internet y una
+        clave de Claude, ChatGPT o Gemini, que se pega acá una sola vez y
+        queda guardada en esta computadora. Lo que le pregunta (números y
+        texto, nunca el audio) sale de la computadora hacia la empresa de esa
+        clave: Anthropic, OpenAI o Google.
+      </p>
+      <div class="controles">
+        <input id="coach-clave" type="password" autocomplete="off" spellcheck="false"
+               maxlength="300" placeholder="pegá la clave acá">
+        <button id="coach-guardar-clave" class="principal">Guardar y probar</button>
+        <button id="coach-borrar-clave" class="secundario" hidden>Borrar la clave</button>
+      </div>
+      <p id="coach-resultado-clave" class="ayuda"></p>
+    </div>
     <p id="estado-coach" class="ayuda"></p>
   </section>
 

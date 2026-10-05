@@ -104,3 +104,21 @@ def test_mi_plan_no_se_muestra_en_la_version_instalada():
     lector.feed(html)
     assert lector.encontrado, "no está el contenedor aprendizaje-plan"
     assert "solo-desarrollo" in lector.clases_en_la_cadena
+
+
+def test_la_clave_del_coach_se_pega_en_la_version_instalada():
+    """
+    El profe activa el coach pegando una clave en Ajustes: el campo y los
+    botones no pueden quedar adentro de algo solo para Bruno.
+    """
+    with open(INDEX, encoding="utf-8") as archivo:
+        html = archivo.read()
+    # El campo es un <input>, que ClasesDeUnElemento saltea (no tiene cierre):
+    # se lo busca como texto, y sus clases son las de los botones de al lado.
+    assert 'id="coach-clave"' in html
+    for id_ in ("coach-guardar-clave", "coach-borrar-clave",
+                "coach-resultado-clave", "estado-coach"):
+        lector = ClasesDeUnElemento(id_)
+        lector.feed(html)
+        assert lector.encontrado, f"no está #{id_}"
+        assert "solo-desarrollo" not in lector.clases_en_la_cadena, f"#{id_} no se ve en la instalada"

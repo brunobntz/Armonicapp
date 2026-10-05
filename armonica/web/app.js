@@ -32,6 +32,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   configurarAprendizaje();
   configurarDestinos();
   configurarLaApp();
+  configurarClaveDelCoach();
   configurarAbrir();
   configurarPrimerosPasos();
 
@@ -2647,21 +2648,74 @@ async function mostrarEstadoDelCoach() {
   const datos = await cargarEstadoDelCoach();
   const donde = document.getElementById("estado-coach");
   if (!donde) return;
-  const nombres = { claude: "Claude", ollama: "Ollama (local)", openai: "ChatGPT" };
-  const proveedor = nombres[datos.proveedor] || datos.proveedor || "";
-  if (datos.disponible) {
-    donde.className = "ayuda";
+  document.getElementById("coach-borrar-clave").hidden = !datos.clave_en_ajustes;
+  const proveedor = datos.proveedor ? nombreDelProveedor(datos.proveedor) : "";
+  donde.className = "ayuda";
+  if (datos.disponible && esLaInstalada()) {
+    donde.innerHTML = "<strong>Activo</strong>, con " + escapar(proveedor) + ". Vas a ver el " +
+      "botón del coach al pie de la devolución de una práctica, una pregunta libre al pie de " +
+      "Teoría y, en Canciones, un botón para que te explique la base.";
+  } else if (datos.disponible) {
     donde.innerHTML = "<strong>Activo</strong>: " + escapar(proveedor) + ", modelo <code>" +
       escapar(datos.modelo) + "</code>. Vas a ver el botón del coach al pie de la " +
       "devolución de una práctica, y una pregunta libre al pie de Teoría." +
       (datos.proveedor === "ollama"
         ? " Con un modelo local la primera respuesta tarda más: está cargando el modelo."
         : "");
+  } else if (esLaInstalada()) {
+    donde.innerHTML = "<strong>Apagado.</strong> " + escapar(datos.motivo);
   } else {
-    donde.className = "ayuda";
     donde.innerHTML = "<strong>Apagado</strong>" + (proveedor ? " (" + escapar(proveedor) + ")" : "") +
       ". " + escapar(datos.motivo);
   }
+}
+
+
+/* Ajustes → El coach, en la version instalada: pegar la clave, guardarla y
+ * probarla, o borrarla. La clave va al servidor y no vuelve: el campo se
+ * vacia siempre. */
+function configurarClaveDelCoach() {
+  const campo = document.getElementById("coach-clave");
+  const resultado = document.getElementById("coach-resultado-clave");
+
+  const guardar = async (clave) => {
+    resultado.textContent = clave ? "Guardando y probando\u2026" : "Borrando\u2026";
+    const respuesta = await pedir("/api/coach/clave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clave: clave }),
+    });
+    campo.value = "";
+    if (!respuesta.ok) {
+      resultado.textContent = respuesta.motivo || "No se pudo guardar la clave.";
+      return;
+    }
+    const de = respuesta.proveedor ? "de " + nombreDelProveedor(respuesta.proveedor) : "";
+    if (!clave) {
+      resultado.textContent = "Listo: la clave se borr\u00f3. El coach queda apagado.";
+    } else if (respuesta.probada) {
+      resultado.textContent = "Listo: es una clave " + de + " y anda. Ya pod\u00e9s usar el coach.";
+    } else {
+      resultado.textContent = "La clave " + de + " qued\u00f3 guardada, pero al probarla: " +
+        respuesta.motivo;
+    }
+    await mostrarEstadoDelCoach();
+  };
+
+  document.getElementById("coach-guardar-clave").addEventListener("click", () => {
+    const clave = campo.value.trim();
+    if (!clave) {
+      resultado.textContent = "Peg\u00e1 la clave en el casillero primero.";
+      return;
+    }
+    guardar(clave);
+  });
+  campo.addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") document.getElementById("coach-guardar-clave").click();
+  });
+  document.getElementById("coach-borrar-clave").addEventListener("click", () => {
+    if (confirm("\u00bfBorrar la clave? El coach queda apagado hasta que pegues otra.")) guardar("");
+  });
 }
 
 
@@ -4232,7 +4286,8 @@ function dibujarPlan(donde, datos) {
 
 
 function nombreDelProveedor(clave) {
-  return { claude: "Claude", ollama: "Ollama (local)", openai: "ChatGPT" }[clave] || clave || "el coach";
+  return { claude: "Claude", ollama: "Ollama (local)", openai: "ChatGPT", gemini: "Gemini" }[clave] ||
+    clave || "el coach";
 }
 
 
