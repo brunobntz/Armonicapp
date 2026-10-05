@@ -7,6 +7,7 @@ pedimos y guarda lo que recibió: así se verifica qué le mandamos, que es lo
 único que está en nuestras manos.
 """
 
+import http.client
 import io
 import os
 import urllib.error
@@ -548,6 +549,56 @@ def test_http_json_marca_cuando_no_pudo_conectarse(monkeypatch):
     assert "sin red" in str(error.value)
 
 
+@pytest.mark.parametrize("corte", [http.client.IncompleteRead(b""),
+                                   http.client.BadStatusLine("")])
+def test_http_json_trata_una_respuesta_cortada_como_falta_de_conexion(monkeypatch, corte):
+    """
+    IncompleteRead y BadStatusLine no son OSError: sin esto se iban sin
+    traducir, y el botón del coach quedaba colgado en "Pensando...".
+    """
+    def falla(pedido, timeout):
+        raise corte
+
+    monkeypatch.setattr(coach.urllib.request, "urlopen", falla)
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._http_json("https://ejemplo.invalid/x", {"a": 1}, {}, segundos=1)
+    assert error.value.sin_conexion is True
+    assert getattr(error.value, "codigo", None) is None
+
+
+@pytest.mark.parametrize("proveedor, clave", [
+    ("claude", "sk-ant-prueba"), ("openai", "sk-prueba"), ("gemini", "AQ.prueba")])
+@pytest.mark.parametrize("respuesta", [["no", "es", "un", "objeto"], [], "texto", 5, None])
+def test_una_respuesta_que_no_es_un_objeto_se_dice_en_vez_de_romper(
+        sin_entorno, tmp_path, http_falso, proveedor, clave, respuesta):
+    ruta = env_con(tmp_path, f"LLM_PROVEEDOR={proveedor}\nLLM_CLAVE={clave}\n")
+    http_falso["respuesta"] = respuesta
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert str(error.value) == "El servicio contestó algo que no se entiende. Probá en un rato."
+    assert not getattr(error.value, "clave_invalida", False)
+
+
+@pytest.mark.parametrize("proveedor, clave", [
+    ("claude", "sk-ant-prueba_secreta_123"), ("openai", "sk-prueba_secreta_123"),
+    ("gemini", "AQ.prueba_secreta_123")])
+def test_el_registro_no_deja_la_clave_si_el_servicio_la_repite(
+        sin_entorno, tmp_path, http_falso, capsys, proveedor, clave):
+    """
+    Lo que contestó el servicio queda en el registro, y algunos errores
+    repiten la clave que recibieron: ahí no puede quedar entera.
+    """
+    ruta = env_con(tmp_path, f"LLM_PROVEEDOR={proveedor}\nLLM_CLAVE={clave}\n")
+    http_falso["error"] = "El servicio contestó con un error (401)."
+    http_falso["codigo"] = 401
+    http_falso["detalle"] = f'{{"error": {{"message": "Incorrect API key provided: {clave}."}}}}'
+    with pytest.raises(coach.CoachNoDisponible):
+        coach._pedir("s", "u", ruta)
+    registro = capsys.readouterr().out
+    assert "contestó 401" in registro and "Incorrect API key provided" in registro
+    assert clave not in registro
+
+
 def test_claude_que_no_quiere_contestar_se_dice(sin_entorno, tmp_path, http_falso):
     ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-prueba\n")
     http_falso["respuesta"] = {"stop_reason": "refusal", "content": []}
@@ -694,6 +745,53 @@ def test_lo_que_no_es_una_clave_conocida_no_se_guarda(sin_entorno, mala):
     with pytest.raises(ValueError):
         coach.guardar_clave(mala)
     assert not os.path.exists(coach.ruta_de_la_clave())
+
+
+def _escribir_la_clave_guardada(contenido):
+    ruta = coach.ruta_de_la_clave()
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "wb") as archivo:
+        archivo.write(contenido)
+
+
+def test_un_archivo_de_clave_que_no_es_utf8_no_tira_abajo_el_coach(sin_entorno):
+    """
+    El archivo lo puede romper un corte de luz o alguien que lo abre con otro
+    programa: no puede ser que /api/coach y /api/canciones dejen de contestar.
+    """
+    _escribir_la_clave_guardada(b"LLM_PROVEEDOR=claude\nLLM_CLAVE=sk-ant-\xff\xfe\x80\n")
+
+    conf = coach.configuracion(sin_entorno)
+    estado = coach.estado(sin_entorno)
+
+    assert conf["clave"] == ""
+    assert estado["clave_en_ajustes"] is False
+    assert estado["disponible"] is False
+    assert coach.leer_clave_guardada() == {}
+
+
+def test_un_archivo_de_clave_que_no_se_puede_leer_es_como_no_tener_clave(sin_entorno, monkeypatch):
+    coach.guardar_clave("sk-ant-guardada_123")
+    leer = coach.leer_env
+
+    def sin_permiso(ruta=None):
+        if ruta == coach.ruta_de_la_clave():
+            raise PermissionError("denegado")
+        return leer(ruta)
+
+    monkeypatch.setattr(coach, "leer_env", sin_permiso)
+
+    assert coach.leer_clave_guardada() == {}
+    assert coach.configuracion(sin_entorno)["clave"] == ""
+    assert coach.estado(sin_entorno)["clave_en_ajustes"] is False
+
+
+def test_el_env_sigue_fallando_fuerte_si_no_se_puede_leer(tmp_path):
+    """Solo la clave guardada se tolera rota: un .env roto es de Bruno, y lo tiene que ver."""
+    ruta = tmp_path / ".env"
+    ruta.write_bytes(b"LLM_CLAVE=\xff\xfe\n")
+    with pytest.raises(UnicodeDecodeError):
+        coach.leer_env(str(ruta))
 
 
 def test_la_ruta_de_la_clave_esta_en_localappdata(monkeypatch):

@@ -36,6 +36,7 @@ El audio nunca sale de tu máquina, con ninguno de los cuatro. Al coach le
 llegan números y texto.
 """
 
+import http.client
 import json
 import os
 import re
@@ -172,6 +173,24 @@ def ruta_de_la_clave():
     return os.path.join(base, "Armonica", "coach.env")
 
 
+def leer_clave_guardada():
+    """
+    Lo que hay en el archivo de la clave pegada en Ajustes, o {} si no hay o
+    no se puede leer.
+
+    Es un archivo que la app escribe y que nadie más mira, pero un corte de
+    luz o un programa que lo abra y lo guarde distinto lo pueden dejar roto
+    (no UTF-8) o sin permiso. Con una excepción acá se caían /api/coach y
+    /api/canciones, y con ellas media app: un archivo roto es como no tener
+    clave, y pegar una nueva lo reemplaza. El .env no pasa por acá: es de
+    Bruno, y si está roto lo tiene que ver.
+    """
+    try:
+        return leer_env(ruta_de_la_clave())
+    except (OSError, UnicodeDecodeError):
+        return {}
+
+
 def proveedor_de_la_clave(clave):
     """De quién es una clave ("claude", "openai", "gemini"), o None."""
     for prefijo, proveedor in PREFIJOS_DE_CLAVE:
@@ -221,7 +240,7 @@ def configuracion(ruta_env=None):
     de las variables de entorno. La variable ANTHROPIC_API_KEY también sirve
     como clave: si ya la tenés puesta por otra cosa, no hace falta más.
     """
-    fuentes = (leer_env(ruta_env), leer_env(ruta_de_la_clave()))
+    fuentes = (leer_env(ruta_env), leer_clave_guardada())
 
     def valor(nombre, *alternativas):
         for fuente in fuentes:
@@ -268,7 +287,7 @@ def estado(ruta_env=None):
     """
     conf = configuracion(ruta_env)
     base = {"proveedor": conf["proveedor"], "modelo": conf["modelo"],
-            "clave_en_ajustes": bool(leer_env(ruta_de_la_clave()).get("LLM_CLAVE"))}
+            "clave_en_ajustes": bool(leer_clave_guardada().get("LLM_CLAVE"))}
 
     if conf["proveedor"] not in PROVEEDORES:
         return dict(base, disponible=False,
@@ -617,8 +636,8 @@ def _pedir_por_http(conf, url, cuerpo, cabeceras):
     único que Bruno puede mirar si el coach del profe no anda.
     """
     try:
-        return _http_json(url, cuerpo, cabeceras,
-                          segundos=SEGUNDOS_DE_ESPERA[conf["proveedor"]]) or {}
+        respuesta = _http_json(url, cuerpo, cabeceras,
+                               segundos=SEGUNDOS_DE_ESPERA[conf["proveedor"]])
     except CoachNoDisponible as error:
         if getattr(error, "sin_conexion", False):
             # El texto crudo ("getaddrinfo failed", "Errno 11001"...) va al
@@ -626,8 +645,14 @@ def _pedir_por_http(conf, url, cuerpo, cabeceras):
             print(f"  El coach ({NOMBRES[conf['proveedor']]}) no pudo conectarse: {error}")
             raise CoachNoDisponible("No hay conexión con el servicio. ¿Estás sin internet?")
         if getattr(error, "codigo", None):
+            detalle = getattr(error, "detalle", "") or ""
+            if conf["clave"]:
+                # Algunos errores repiten la clave que recibieron ("Incorrect
+                # API key provided: ..."): el registro la puede leer cualquiera
+                # a quien Bruno se lo pase, y no tiene que estar entera.
+                detalle = detalle.replace(conf["clave"], "…")
             print(f"  El coach ({NOMBRES[conf['proveedor']]}) contestó {error.codigo}: "
-                  f"{(getattr(error, 'detalle', '') or '')[:300]}")
+                  f"{detalle[:300]}")
         motivo = _motivo_del_error(error, conf)
         if motivo:
             traducido = CoachNoDisponible(motivo)
@@ -635,6 +660,11 @@ def _pedir_por_http(conf, url, cuerpo, cabeceras):
                 traducido.clave_invalida = True
             raise traducido
         raise
+    # Un JSON que no es un objeto (una lista, un texto, null) no tiene lo que
+    # se busca: se dice acá y no se deja romper más abajo con un error de Python.
+    if not isinstance(respuesta, dict):
+        raise CoachNoDisponible("El servicio contestó algo que no se entiende. Probá en un rato.")
+    return respuesta
 
 
 def _pedir_a_claude(conf, sistema, usuario):
@@ -787,9 +817,12 @@ def _http_json(url, cuerpo, cabeceras, segundos):
         except (OSError, AttributeError, ValueError):
             falla.detalle = ""
         raise falla
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
+    except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as error:
         # Se marca aparte, como al HTTPError: quien llama no busca la palabra
-        # "conexión" en el texto para saber que fue esto.
+        # "conexión" en el texto para saber que fue esto. HTTPException
+        # (IncompleteRead si la respuesta se corta, BadStatusLine si viene
+        # algo que no es HTTP) no es un OSError, pero para quien lo recibe es
+        # lo mismo: la conversación con el servicio se cortó.
         falla = CoachNoDisponible(f"No hay conexión con el servicio ({error}).")
         falla.sin_conexion = True
         raise falla

@@ -2581,7 +2581,7 @@ class Manejador(SimpleHTTPRequestHandler):
             return {"ok": False, "motivo": "Falta la clave."}
         # Hay que probar con la nueva ya guardada (es de donde la lee el
         # coach), así que la de antes se guarda aparte por si hay que volver.
-        anterior = coach.leer_env(coach.ruta_de_la_clave()).get("LLM_CLAVE", "")
+        anterior = coach.leer_clave_guardada().get("LLM_CLAVE", "")
         try:
             proveedor = coach.guardar_clave(clave)
         except ValueError as error:

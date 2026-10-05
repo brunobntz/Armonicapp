@@ -2391,6 +2391,29 @@ def test_pegar_de_nuevo_la_misma_clave_que_el_servicio_rechaza_no_la_deja_guarda
     assert traer_json(servidor_andando, "/api/coach")["clave_en_ajustes"] is False
 
 
+def test_un_archivo_de_clave_roto_no_tira_abajo_el_coach_ni_las_canciones(
+        servidor_andando, coach_sin_env, carpeta_de_canciones, monkeypatch):
+    ruta = coach.ruta_de_la_clave()
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "wb") as archivo:
+        archivo.write(b"LLM_CLAVE=sk-ant-\xff\xfe\x80\n")
+
+    datos_del_coach = traer_json(servidor_andando, "/api/coach")
+    datos_de_canciones = traer_json(servidor_andando, "/api/canciones")
+
+    assert datos_del_coach["disponible"] is False
+    assert datos_del_coach["clave_en_ajustes"] is False
+    assert datos_de_canciones["ok"] is True
+    # (La carpeta de canciones de la fixture es el mismo tmp_path donde conftest
+    # pone la clave: por eso la carpeta de la clave también figura como canción.)
+    assert "Georgia" in [c["nombre"] for c in datos_de_canciones["canciones"]]
+
+    # Y se puede pegar una clave nueva encima del archivo roto.
+    monkeypatch.setattr(coach, "_pedir", lambda sistema, usuario, ruta_env=None: "listo")
+    respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": "sk-ant-nueva_123456"})
+    assert respuesta["ok"] is True and respuesta["probada"] is True
+
+
 def test_una_clave_que_no_se_reconoce_no_se_guarda(servidor_andando, coach_sin_env):
     for mala in ("sk-ant con espacios", "desconocida-abcdefghij"):
         respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": mala})
