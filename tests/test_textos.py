@@ -94,9 +94,10 @@ class ClasesDeUnElemento(HTMLParser):
 
 def test_mi_plan_no_se_muestra_en_la_version_instalada():
     """
-    El plan lo arma el coach, y el coach no es para el profe: si no hay coach,
-    el bloque dice que hace falta configurar una clave en el .env. Todo el
-    contenedor donde se dibuja el plan queda adentro de un solo-desarrollo.
+    El plan lo arma el coach a partir de los apuntes, y es solo de Bruno: el
+    profe usa el coach (la clave se pega en Ajustes), pero no ve "Mi plan".
+    Sin coach, además, el bloque manda a configurar una clave en el .env. Todo
+    el contenedor donde se dibuja el plan queda adentro de un solo-desarrollo.
     """
     with open(INDEX, encoding="utf-8") as archivo:
         html = archivo.read()

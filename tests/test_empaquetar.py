@@ -262,4 +262,6 @@ def test_la_guia_esta_en_el_menu_inicio():
     texto = ISS.read_text(encoding="utf-8-sig")
     assert "{group}\\Guía de Armónica" in destinos_de_los_iconos(texto)
     guia = [linea for linea in entradas_de_la_seccion(texto, "Icons") if "Guía de Armónica" in linea]
-    assert 'Filename: "{app}\\Guia de Armonica.pdf"' in guia[0]
+    # El nombre sale del armado: si cambia allá, el ícono no se queda
+    # apuntando a un PDF que ya no existe.
+    assert f'Filename: "{{app}}\\{empaquetar.NOMBRE_DEL_PDF}"' in guia[0]
