@@ -2554,6 +2554,10 @@ function lineaDeFuente(texto, tono) {
 
 let coachDisponible = false;
 
+/* Lo que se dice cuando el pedido al coach ni llega a la app o vuelve algo
+ * que no se lee (la app se cerró, o falló por dentro). */
+const MOTIVO_SIN_RESPUESTA_DE_LA_APP = "No pude comunicarme con la app. Probá de nuevo.";
+
 /* La ultima clave que se pego en Ajustes quedo guardada pero no se pudo
  * probar (sin internet, servicio saturado...). El servidor no recuerda la
  * prueba: sin esto, Ajustes diria "Activo" sobre una clave que nadie vio
@@ -2583,10 +2587,18 @@ function configurarCoachEnDevolucion() {
     const salida = document.getElementById("coach-devolucion-texto");
     boton.disabled = true;
     boton.textContent = "Pensando...";
-    const respuesta = await pedir("/api/coach/devolucion", { method: "POST" });
-    mostrarRespuestaDelCoach(salida, respuesta);
-    boton.disabled = false;
-    boton.textContent = "Que me lo explique de nuevo";
+    // Pase lo que pase (la app cerrada, una respuesta que no se lee) el botón
+    // vuelve a andar: antes un pedido que fallaba lo dejaba en "Pensando..."
+    // para siempre.
+    try {
+      const respuesta = await pedir("/api/coach/devolucion", { method: "POST" });
+      mostrarRespuestaDelCoach(salida, respuesta);
+    } catch (error) {
+      mostrarRespuestaDelCoach(salida, { ok: false, motivo: MOTIVO_SIN_RESPUESTA_DE_LA_APP });
+    } finally {
+      boton.disabled = false;
+      boton.textContent = "Que me lo explique de nuevo";
+    }
   });
 }
 
@@ -2608,24 +2620,32 @@ function configurarCoachEnTeoria() {
   const boton = document.getElementById("coach-preguntar");
   if (!boton) return;
   const preguntar = async () => {
+    // Enter dos veces seguidas mandaba dos pedidos, y cada uno se cobra: el
+    // botón deshabilitado frena el clic, pero no la tecla.
+    if (boton.disabled) return;
     const salida = document.getElementById("coach-teoria-texto");
     const pregunta = document.getElementById("coach-pregunta").value.trim();
     if (!pregunta) return;
     boton.disabled = true;
     boton.textContent = "Pensando...";
-    const respuesta = await pedir("/api/coach/teoria", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pregunta: pregunta,
-        tonalidad: document.getElementById("teoria-tonalidad").value,
-        posicion: document.getElementById("teoria-posicion").value,
-        escala: document.getElementById("teoria-escala").value,
-      }),
-    });
-    mostrarRespuestaDelCoach(salida, respuesta);
-    boton.disabled = false;
-    boton.textContent = "Preguntar";
+    try {
+      const respuesta = await pedir("/api/coach/teoria", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pregunta: pregunta,
+          tonalidad: document.getElementById("teoria-tonalidad").value,
+          posicion: document.getElementById("teoria-posicion").value,
+          escala: document.getElementById("teoria-escala").value,
+        }),
+      });
+      mostrarRespuestaDelCoach(salida, respuesta);
+    } catch (error) {
+      mostrarRespuestaDelCoach(salida, { ok: false, motivo: MOTIVO_SIN_RESPUESTA_DE_LA_APP });
+    } finally {
+      boton.disabled = false;
+      boton.textContent = "Preguntar";
+    }
   };
   boton.addEventListener("click", preguntar);
   document.getElementById("coach-pregunta").addEventListener("keydown", (evento) => {
@@ -2723,7 +2743,7 @@ function configurarClaveDelCoach() {
       }
       await mostrarEstadoDelCoach();
     } catch (error) {
-      resultado.textContent = "No pude comunicarme con la app. Prob\u00e1 de nuevo.";
+      resultado.textContent = MOTIVO_SIN_RESPUESTA_DE_LA_APP;
     } finally {
       campo.value = "";
       controles.forEach((control) => { control.disabled = false; });
@@ -3145,10 +3165,17 @@ function textoDeLosHechos(h) {
 async function explicarBase(nombre, boton, borrar) {
   boton.disabled = true;
   if (!borrar) boton.textContent = "Pensando...";
-  const respuesta = await pedir("/api/canciones/explicar", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cancion: nombre, borrar: !!borrar }),
-  });
+  let respuesta;
+  try {
+    respuesta = await pedir("/api/canciones/explicar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cancion: nombre, borrar: !!borrar }),
+    });
+  } catch (error) {
+    // Como los otros botones del coach: un pedido que falla no lo deja
+    // colgado en "Pensando...".
+    respuesta = { ok: false, motivo: MOTIVO_SIN_RESPUESTA_DE_LA_APP };
+  }
   if (!respuesta.ok) {
     boton.disabled = false;
     boton.textContent = "Que el coach explique la base";
