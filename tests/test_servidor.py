@@ -2369,6 +2369,28 @@ def test_una_clave_que_el_servicio_rechaza_sin_otra_antes_no_deja_nada_guardado(
     assert traer_json(servidor_andando, "/api/coach")["clave_en_ajustes"] is False
 
 
+def test_pegar_de_nuevo_la_misma_clave_que_el_servicio_rechaza_no_la_deja_guardada(
+        servidor_andando, coach_sin_env, monkeypatch):
+    """
+    El camino al que la propia app manda al profe: una clave que andaba y se
+    revocó ("Revisala en Ajustes") y él pega la misma. Si "la de antes" es
+    justo esa, volver a ella sería dejar guardada una clave que se sabe mala
+    bajo un "no la guardé".
+    """
+    monkeypatch.setattr(coach, "_pedir", lambda sistema, usuario, ruta_env=None: "listo")
+    mandar(servidor_andando, "/api/coach/clave", {"clave": "sk-ant-revocada_123"})
+    _el_servicio_rechaza_la_clave(monkeypatch)
+
+    respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": "sk-ant-revocada_123"})
+
+    assert respuesta["ok"] is False
+    assert "no la guardé" in respuesta["motivo"]
+    assert respuesta["estado"]["clave_en_ajustes"] is False
+    assert respuesta["estado"]["disponible"] is False
+    assert not os.path.exists(coach.ruta_de_la_clave())
+    assert traer_json(servidor_andando, "/api/coach")["clave_en_ajustes"] is False
+
+
 def test_una_clave_que_no_se_reconoce_no_se_guarda(servidor_andando, coach_sin_env):
     for mala in ("sk-ant con espacios", "desconocida-abcdefghij"):
         respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": mala})

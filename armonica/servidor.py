@@ -2594,6 +2594,13 @@ class Manejador(SimpleHTTPRequestHandler):
             coach.probar()
         except coach.CoachNoDisponible as error:
             if getattr(error, "clave_invalida", False):
+                # Si la que se acaba de rechazar es la misma que ya estaba
+                # (una clave que se revocó y el profe la pega de nuevo, que
+                # es adonde lo manda la propia app), volver a "la de antes"
+                # sería dejar guardada una que se sabe mala: se vuelve a
+                # ninguna.
+                if anterior == clave.strip():
+                    anterior = ""
                 self._volver_a_la_clave_anterior(anterior)
                 return {"ok": False, "proveedor": proveedor,
                         "motivo": f"Esa clave de {coach.NOMBRES[proveedor]} no es válida, así "
