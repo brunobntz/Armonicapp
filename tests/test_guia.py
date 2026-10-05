@@ -77,3 +77,23 @@ def test_la_app_enlaza_la_guia_en_otra_pestana():
     assert len(guia) == 1
     assert guia[0].get("target") == "_blank"
     assert "solapa" not in (guia[0].get("class") or "").split()
+
+
+class Imagenes(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.fuentes = []
+
+    def handle_starttag(self, etiqueta, atributos):
+        if etiqueta == "img":
+            self.fuentes.append(dict(atributos).get("src"))
+
+
+def test_cada_imagen_de_la_guia_existe_y_no_es_enorme():
+    lector = Imagenes()
+    lector.feed(leer(GUIA))
+    assert lector.fuentes, "la guía no tiene imágenes"
+    for fuente in lector.fuentes:
+        ruta = os.path.join(RAIZ, "armonica", "web", *fuente.split("/"))
+        assert os.path.isfile(ruta), f"falta {fuente}"
+        assert os.path.getsize(ruta) < 400_000, f"{fuente} pesa demasiado"
