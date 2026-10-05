@@ -100,16 +100,21 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
   guardados en `ajustes.json` (micrófono por nombre), Medir el ruido,
   primeros pasos, Cerrar la app, micrófono que se suelta sin páginas,
   puerto exclusivo y `/api/hola`, `VERSION`, textos sin jerga en la
-  instalada, ffmpeg sin ventana, y `lanzador.pyw`. Falta la etapa 3 (la
-  guía).
+  instalada, ffmpeg sin ventana, y `lanzador.pyw`. La guía quedó para la
+  etapa 3.
 - **Instalador, etapa 2: el armado.** Hecho (2026-10-02):
   `herramientas\empaquetar.ps1` → `dist\Armonica-<versión>-instalador.exe`
   con Python 3.14.6 embebido, ruedas fijadas con SHA-256, ffmpeg LGPL de
   BtbN, pi-heif y licencias; prueba de humo; Inno Setup por usuario que
   cierra la app antes de instalar. Además: el servidor rechaza pedidos
   de otros sitios, `ajustes.json` se guarda atómico, el vigía no se
-  muere, y un doble clic rápido abre una sola app. Falta: la prueba del
-  instalador (`empaquetado\PROBAR.md`) y la etapa 3 (la guía).
+  muere, y un doble clic rápido abre una sola app. Probado con la 0.1.0
+  (2026-10-04): cerrar la app, el doble arranque, instalar encima,
+  desinstalar y volver a instalar, y el instalador bajado de Drive con el
+  Control inteligente de aplicaciones activado (Windows lo bloquea sin
+  "Ejecutar de todas formas"; con Propiedades → Desbloquear, o desde un
+  pendrive, corre: ver `empaquetado\PROBAR.md`). Falta: la prueba de la
+  0.2.0, los pasos de `PROBAR.md` que quedan, y la etapa 3 hecha abajo.
   Abierto: Smart App Control bloquea el ffmpeg sin firma (la conversión
   de audios no anda en esas máquinas): decidir entre firmar el `ffmpeg.exe`
   (o todo el paquete) o usar un ffmpeg con reputación. Es la misma decisión
@@ -128,6 +133,28 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
   bloquearse. Conviene seguir armando con el que está en
   `empaquetado\_descargas` (no borrar esa carpeta) y, si hay que fijar
   otro, probarlo antes con Smart App Control activado.
+- **Instalador, etapa 3: la guía y el coach del profe.** Hecho
+  (2026-10-04), versión 0.2.0. La guía (`armonica/web/guia.html`, doce
+  capítulos, con capturas en `armonica/web/guia/` y el de Band-in-a-Box
+  con las capturas de Bruno) tiene un enlace **Guía** en la barra de la
+  app; el armado la imprime a `Guia de Armonica.pdf` con Edge, la pone en
+  el programa y en `dist\`, y el instalador la deja en Inicio como "Guía
+  de Armónica". El coach ya es para el profe: en Ajustes → El coach pega
+  una clave de Claude, ChatGPT o Gemini (la app la reconoce por cómo
+  empieza), **Guardar y probar** la guarda en
+  `%LOCALAPPDATA%\Armonica\coach.env` y la prueba, y **Borrar la clave**
+  la saca; una clave que el servicio rechaza no se guarda y el
+  desinstalador borra el archivo. Los modelos por defecto
+  (`claude-opus-5-5`, `gpt-6-luna`, `gemini-3.5-flash-lite`) vencen: la
+  instalada no se actualiza sola, y cuando uno se retire el coach pide una
+  versión nueva de la app, así que hay que mirarlos antes de cada armado.
+  Además: ícono del escritorio siempre (sin preguntar) y "Abrir
+  Armónica" en `Documentos\Armonica`; y sin canciones de ejemplo en el
+  instalador (decisión de Bruno: el profe trae las suyas). Falta: armar la
+  0.2.0, instalarla encima de la 0.1.0 y probarla con Bruno
+  (`empaquetado\PROBAR.md`), y con sus claves reales mirar los textos que
+  hasta acá solo se probaron con respuestas inventadas: la cuenta sin
+  crédito (el 429 de OpenAI, el 400 de Claude) y el 503 de Gemini.
 
 ## Ideas nuevas, de más útil a más lejana
 

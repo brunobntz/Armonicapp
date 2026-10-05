@@ -545,7 +545,7 @@ números ya calculados —los tres de la devolución, los consejos, la nota por
 nota; o lo que está en pantalla en Teoría— y los cuenta como lo haría un
 profe que te escuchó una vez. Nunca mide nada, nunca inventa un número, y si
 algo no está medido lo dice. Aparece como un botón al pie de la devolución de
-una práctica y como una pregunta libre al pie de Teoría.
+una práctica y como una pregunta libre en Teoría.
 
 Es opcional y está apagado por defecto. Se activa copiando `.env.ejemplo`
 a `.env` (git lo ignora: la clave es tuya) y eligiendo ahí uno de cuatro
@@ -709,16 +709,44 @@ inteligente de aplicaciones de Windows (Smart App Control) bloquea el ffmpeg
 del paquete, la prueba de humo imprime un aviso y sigue: el programa anda,
 pero en esa máquina no se convierten los audios que no son `.wav`. Las fotos
 HEIC usan pi-heif, que solo lee: pillow-heif trae el codificador x265, que es
-GPL. Los ejemplos para el profe van en `empaquetado\ejemplos\` (no se
-commitean) y se copian a su `Documentos\Armonica` solo si no tiene ya ese
-archivo. Antes de mandar una versión, cómo probar el instalador está en
+GPL. El instalador no lleva canciones de ejemplo: el profe trae las suyas
+(si alguna vez hubiera ejemplos, irían en `empaquetado\ejemplos\`, que no
+se commitea, y se copiarían a su `Documentos\Armonica` solo si no tiene ya
+ese archivo). Antes de mandar una versión, cómo probar el instalador está en
 `empaquetado\PROBAR.md`.
 
 El programa se instala por usuario en `%LOCALAPPDATA%\Programs\Armonica`, y
 esa carpeta no se puede cambiar. Si la app está abierta, el instalador y el
 desinstalador la cierran solos (y se niegan si está grabando: hay que parar
-la grabación primero). El desinstalador solo borra esa carpeta del programa,
-nunca `Documentos\Armonica`.
+la grabación primero). El desinstalador solo borra esa carpeta del programa
+y la clave del coach (más abajo), nunca `Documentos\Armonica`.
+
+Deja accesos directos en tres lugares: **Armónica** en el escritorio (siempre,
+sin preguntar: con la pregunta se podía destildar y después no había cómo
+encontrarla), **Armónica** y **Guía de Armónica** en el menú Inicio, y
+**Abrir Armónica** en `Documentos\Armonica`, al lado de sus frases y canciones.
+
+**La guía.** Es `armonica/web/guia.html`: doce capítulos escritos para el
+profe, con capturas de la app (en `armonica/web/guia/`, sacadas con datos
+neutros) y un enlace **Guía** en la barra de la app que la abre en otra
+pestaña. Al armar, Edge (que viene con Windows) la imprime a
+`Guia de Armonica.pdf`. El PDF queda dentro del programa (es lo que abre
+Inicio → Guía de Armónica) y en `dist\`, al lado del instalador, para mandar
+los dos juntos. Si el armado no encuentra Edge o no sale un PDF, se corta.
+
+**El coach del profe.** En la versión instalada no hay `.env`: el coach se
+activa en Ajustes → El coach, pegando una clave de Claude, ChatGPT o Gemini.
+La app sabe de quién es por cómo empieza (`sk-ant-`, `sk-`, `AIza` o `AQ.`).
+**Guardar y probar** la guarda en `%LOCALAPPDATA%\Armonica\coach.env` (con
+`ARMONICA_DATOS` puesta, en `coach.env` dentro de esa carpeta), hace un pedido
+de prueba y dice de quién es y si anda; **Borrar la clave** la saca. La clave
+nunca vuelve a la pantalla, una que el servicio rechaza por inválida no se
+guarda (queda la de antes), y el desinstalador borra el archivo. Ollama y el
+`.env` son para quien corre la app desde el repo. Los modelos por defecto
+(`claude-opus-5-5`, `gpt-6-luna` y `gemini-3.5-flash-lite`, en
+`MODELOS_POR_DEFECTO` de `armonica/coach.py`) son los vigentes al 2026-10-04:
+la versión instalada no se actualiza sola, y cuando un proveedor retire uno,
+el coach dice que hace falta una versión nueva. Conviene revisarlos al armar.
 
 Para una versión nueva: cambiar `VERSION`, commitear y volver a armar. El
 profe instala encima; sus datos no se tocan.

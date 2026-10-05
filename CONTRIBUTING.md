@@ -63,7 +63,7 @@ los tuyos ni los de nadie.
 Es opcional y vive entero en `armonica/coach.py`. Dos reglas: el modelo
 recibe números que la app ya midió y solo los explica, nunca mide ni
 inventa; y los tests **nunca tocan la red** (se reemplazan `_pedir()` o
-`_http_json()` por funciones falsas, mirá `tests/test_coach.py`). Hay tres
-proveedores: Claude, Ollama (local) y OpenAI. Para agregar otro, sumá una
-función `_pedir_a_<nombre>()` y su entrada en `_pedir()`, con un test que
-verifique qué pedido arma.
+`_http_json()` por funciones falsas, mirá `tests/test_coach.py`). Hay cuatro
+proveedores: Claude, Ollama (local), OpenAI (ChatGPT) y Gemini. Para agregar
+otro, sumá una función `_pedir_a_<nombre>()` y su entrada en `_pedir()`, con
+un test que verifique qué pedido arma.
