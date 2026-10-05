@@ -8,12 +8,17 @@ Cómo correrlos:   .venv/Scripts/python.exe -m pytest tests/test_empaquetar.py -
 
 import hashlib
 import io
+import re
 import zipfile
 from pathlib import Path
 
 import pytest
 
 from herramientas import empaquetar
+
+
+RAIZ = Path(__file__).resolve().parent.parent
+ISS = RAIZ / "empaquetado" / "armonica.iss"
 
 
 def test_las_descargas_fijadas_se_leen():
@@ -186,3 +191,46 @@ def test_buscar_inno_setup(tmp_path):
 
 def test_el_nombre_del_instalador():
     assert empaquetar.nombre_del_instalador("0.1.0") == "Armonica-0.1.0-instalador.exe"
+
+
+def entradas_de_la_seccion(texto, seccion):
+    """Las líneas de una sección del .iss, sin comentarios ni vacías."""
+    lineas, adentro = [], False
+    for linea in texto.splitlines():
+        limpia = linea.strip()
+        if limpia.startswith("[") and limpia.endswith("]"):
+            adentro = limpia == f"[{seccion}]"
+            continue
+        if adentro and limpia and not limpia.startswith(";"):
+            lineas.append(limpia)
+    return lineas
+
+
+def destinos_de_los_iconos(texto):
+    return [re.match(r'Name: "([^"]+)"', linea).group(1)
+            for linea in entradas_de_la_seccion(texto, "Icons")]
+
+
+def test_los_iconos_para_abrir_la_app():
+    """
+    Escritorio sin preguntar (con la pregunta, Bruno lo destildó y después
+    no encontraba cómo abrirla), Inicio, y uno en Documentos\\Armonica, al
+    lado de sus frases y canciones.
+    """
+    texto = ISS.read_text(encoding="utf-8-sig")
+    assert "[Tasks]" not in texto
+    destinos = destinos_de_los_iconos(texto)
+    for destino in ("{group}\\Armónica", "{autodesktop}\\Armónica",
+                    "{userdocs}\\Armonica\\Abrir Armónica"):
+        assert destino in destinos
+    for linea in entradas_de_la_seccion(texto, "Icons"):
+        assert "Tasks:" not in linea
+        if "lanzador.pyw" in linea:
+            assert 'Filename: "{app}\\python\\pythonw.exe"' in linea
+
+
+def test_el_desinstalador_borra_la_clave_del_coach():
+    texto = ISS.read_text(encoding="utf-8-sig")
+    borrar = entradas_de_la_seccion(texto, "UninstallDelete")
+    assert 'Type: files; Name: "{localappdata}\\Armonica\\coach.env"' in borrar
+    assert 'Type: dirifempty; Name: "{localappdata}\\Armonica"' in borrar

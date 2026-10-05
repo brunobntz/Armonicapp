@@ -47,9 +47,6 @@ ArchitecturesInstallIn64BitMode=x64compatible
 [Languages]
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 
-[Tasks]
-Name: "escritorio"; Description: "Poner un ícono en el escritorio"
-
 [Files]
 Source: "{#Armado}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 ; Los ejemplos que eligió Bruno: solo si el profe no tiene ya un archivo con
@@ -65,7 +62,11 @@ Type: filesandordirs; Name: "{app}\python"
 
 [Icons]
 Name: "{group}\Armónica"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; IconFilename: "{app}\Armonica.ico"
-Name: "{autodesktop}\Armónica"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; IconFilename: "{app}\Armonica.ico"; Tasks: escritorio
+; El escritorio sin preguntar: con la pregunta se puede destildar, y después
+; no hay cómo encontrarla. El aviso de "Cerrar la app" manda a este ícono.
+Name: "{autodesktop}\Armónica"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; IconFilename: "{app}\Armonica.ico"
+; Y en Documentos\Armonica, al lado de sus frases y canciones.
+Name: "{userdocs}\Armonica\Abrir Armónica"; Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; IconFilename: "{app}\Armonica.ico"
 
 [Run]
 Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; WorkingDir: "{app}\app"; Description: "Abrir Armónica"; Flags: postinstall nowait skipifsilent
@@ -78,6 +79,10 @@ Filename: "{app}\python\pythonw.exe"; Parameters: """{app}\app\lanzador.pyw"""; 
 Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\python"
 Type: dirifempty; Name: "{app}"
+; La clave del coach que se pegó en Ajustes (armonica/coach.py): es de esta
+; computadora, y no tiene que quedar si se saca la app.
+Type: files; Name: "{localappdata}\Armonica\coach.env"
+Type: dirifempty; Name: "{localappdata}\Armonica"
 
 [Code]
 const
