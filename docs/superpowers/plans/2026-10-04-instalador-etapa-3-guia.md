@@ -55,7 +55,7 @@
 | `tests/test_coach.py`, `tests/test_servidor.py`, `tests/test_textos.py`, `tests/test_empaquetar.py`, `tests/test_guia.py` (nuevo) | Tests |
 | `.env.ejemplo`, `README.md`, `EMPEZAR_EN_OTRA_MAQUINA.md`, `empaquetado/PROBAR.md`, `PROXIMOS_PASOS.md`, `VERSION` | Documentación y versión 0.2.0 |
 
-Orden y dependencias: Tasks 1 a 7 son de código y no dependen de Bruno. Task 8 (capturas de la app) necesita la canción de ejemplo de Bruno en `empaquetado/ejemplos/canciones/<nombre>/` y cinco minutos de Bruno tocando; Task 9 necesita sus capturas de Band-in-a-Box en `empaquetado/capturas/bandinabox/` con `notas.txt`. Tasks 8 y 10 las hace el controlador (la sesión principal) con el navegador y con Bruno, no un subagente.
+Orden y dependencias: Tasks 1 a 7 son de código y no dependen de Bruno. Task 8 (capturas de la app) necesita la carpeta `material/canciones/Georgia On My Mind` de Bruno, usada solo en local (el instalador no lleva canciones: no va a `empaquetado/ejemplos`) y cinco minutos de Bruno tocando; Task 9 necesita sus capturas de Band-in-a-Box en `empaquetado/capturas/bandinabox/` con `notas.txt`. Tasks 8 y 10 las hace el controlador (la sesión principal) con el navegador y con Bruno, no un subagente.
 
 ---
 
@@ -1752,7 +1752,7 @@ git commit -m "El armado imprime la guía a PDF con Edge, la pone en el programa
 
 No es para un subagente: maneja el navegador (Playwright), mira cada imagen y necesita a Bruno tocando.
 
-**Necesita:** Tasks 1-7 hechas; la canción de ejemplo de Bruno en `empaquetado/ejemplos/canciones/<nombre>/` (`.sgu` y `.wav`); Bruno disponible cinco minutos.
+**Necesita:** Tasks 1-7 hechas; la carpeta `material/canciones/Georgia On My Mind` de Bruno, usada solo en local para las capturas (el instalador no lleva canciones: no se copia a `empaquetado/ejemplos` ni se commitea), sin mostrar en ninguna captura las fotos de tablatura que tiene; Bruno disponible cinco minutos.
 
 **Files:**
 - Create: `armonica/web/guia/instalar-drive.png`, `instalar-bloqueo.png`, `primeros-pasos.png`, `ajustes-microfono.png`, `en-vivo.png`, `frases.png`, `canciones.png`, `teoria.png`, `historial.png`, `ajustes-coach.png`
@@ -1787,11 +1787,11 @@ Run: `.venv/Scripts/python.exe -m pytest tests/test_guia.py -v` → FAIL "falta 
 
 - [ ] **Step 2: Datos neutros y la app**
 
-Carpeta de datos en el scratchpad (`$D`), con la canción de ejemplo copiada a `$D\canciones\<nombre>\`. Arrancar la instalada desde el worktree con `ARMONICA_DATOS=$D` y `ARMONICA_SIN_NAVEGADOR=1` (como en la Task 4, Step 6). Verificar `GET /api/hola`. Verificar de paso lo de la Task 4, Step 6, si el implementador no pudo.
+Carpeta de datos en el scratchpad (`$D`), con `material/canciones/Georgia On My Mind` de Bruno copiada a `$D\canciones\Georgia On My Mind\` (solo ahí: no a `empaquetado/ejemplos`). Arrancar la instalada desde el worktree con `ARMONICA_DATOS=$D` y `ARMONICA_SIN_NAVEGADOR=1` (como en la Task 4, Step 6). Verificar `GET /api/hola`. Verificar de paso lo de la Task 4, Step 6, si el implementador no pudo.
 
 - [ ] **Step 3: Sacar las capturas**
 
-Con Playwright: ventana de 1280×800, `http://127.0.0.1:<puerto>`. En orden: la tarjeta de primeros pasos (`primeros-pasos.png`); Ajustes, el micrófono elegido y el ruido medido (`ajustes-microfono.png`); Canciones con la canción de ejemplo abierta (`canciones.png`), y desde ahí importar su audio como frase; Frases con esa frase (`frases.png`); Teoría (`teoria.png`); Ajustes → El coach sin clave (`ajustes-coach.png`). Con Bruno tocando: En vivo con una nota marcada (`en-vivo.png`); grabar y guardar una sesión corta; Historial (`historial.png`). Cada captura se recorta a lo que importa con Pillow, ancho máximo 1100 px, `optimize=True`, a `armonica/web/guia/`.
+Con Playwright: ventana de 1280×800, `http://127.0.0.1:<puerto>`. En orden: la tarjeta de primeros pasos (`primeros-pasos.png`); Ajustes, el micrófono elegido y el ruido medido (`ajustes-microfono.png`); Canciones con la canción de ejemplo abierta, sin mostrar las fotos de tablatura (recortar la captura o dejar esa parte plegada) (`canciones.png`), y desde ahí importar su audio como frase; Frases con esa frase (`frases.png`); Teoría (`teoria.png`); Ajustes → El coach sin clave (`ajustes-coach.png`). Con Bruno tocando: En vivo con una nota marcada (`en-vivo.png`); grabar y guardar una sesión corta; Historial (`historial.png`). Cada captura se recorta a lo que importa con Pillow, ancho máximo 1100 px, `optimize=True`, a `armonica/web/guia/`.
 
 - [ ] **Step 4: Las del instalador**
 
@@ -1863,6 +1863,7 @@ Los Steps 1-3 los puede hacer un subagente; del 4 en adelante, el controlador co
 
 - En "Control inteligente de aplicaciones": lo que pasó el 2026-10-04 con el instalador bajado de Drive (bloqueado sin "Ejecutar de todas formas"; con Propiedades → **Desbloquear**, o desde un pendrive, corre), y que Drive antes avisa "No se puede analizar el archivo en busca de virus" → **Descargar de todos modos**.
 - En "La prueba", pasos nuevos o cambiados: el paso 3 suma que estén los tres íconos (escritorio, Inicio con "Armónica" y "Guía de Armónica", y "Abrir Armónica" en `Documentos\Armonica`); un paso para la guía (el enlace **Guía** de la barra abre la guía en otra pestaña; Inicio → Guía de Armónica abre el PDF); un paso para el coach (Ajustes → El coach: Bruno pega una clave de cada proveedor que tenga, **Guardar y probar** dice de quién es y que anda, aparece el botón del coach en una devolución y contesta bien; **Borrar la clave**); el paso 10 suma que desinstalar borra `%LOCALAPPDATA%\Armonica\coach.env`.
+- En el paso 5 de "La prueba" ("Grabar una sesión, guardar una frase, abrir una canción de ejemplo y…"): "abrir una canción de ejemplo" pasa a "copiar una canción a mano a `Documentos\Armonica\canciones` y abrirla". El instalador no lleva canciones.
 
 - [ ] **Step 3: `PROXIMOS_PASOS.md` y `README.md`, y commit**
 
@@ -1886,7 +1887,7 @@ Expected: tests sobre lo commiteado en verde, "Guía en PDF: Guia de Armonica.pd
 
 - [ ] **Step 5: Instalar encima de la 0.1.0 y probar (controlador y Bruno)**
 
-Con la Armónica del repo cerrada: instalar `dist\Armonica-0.2.0-instalador.exe` encima de la 0.1.0 que Bruno tiene instalada, con la app abierta. Verificar con el script de la prueba del 2026-10-04 (cerrar, doble arranque, instalar encima, desinstalar y volver a instalar) y además: los tres íconos, la guía (enlace y PDF), y que los datos de `Documentos\Armonica` siguen. Bruno pega sus claves en Ajustes y prueba el coach en una devolución con cada proveedor. Después, los pasos de `PROBAR.md` que quedan (el instalador bajado de Drive, con el Control inteligente activado: va bloqueado, se desbloquea o se usa el pendrive).
+Con la Armónica del repo cerrada: instalar `dist\Armonica-0.2.0-instalador.exe` encima de la 0.1.0 que Bruno tiene instalada, con la app abierta. Verificar con el script de la prueba del 2026-10-04 (cerrar, doble arranque, instalar encima, desinstalar y volver a instalar) y además: los tres íconos, la guía (enlace y PDF), y que los datos de `Documentos\Armonica` siguen. Bruno pega sus claves en Ajustes y prueba el coach en una devolución con cada proveedor. Con claves reales, además, se miran los textos que hasta acá se probaron solo con respuestas inventadas: una clave de OpenAI (y si se puede de Claude) sin crédito, para ver el cuerpo real del 429 (OpenAI) o del 400 (Claude) y confirmar que sale "La cuenta de esa clave no tiene crédito."; una 503 de Gemini si aparece (debe salir "El servicio tuvo un problema. Probá en un rato."); si Edge ofrece guardar la clave como contraseña al pegarla en Ajustes; y si `console.anthropic.com` sigue andando, porque la guía manda a ese sitio. Después, los pasos de `PROBAR.md` que quedan (el instalador bajado de Drive, con el Control inteligente activado: va bloqueado, se desbloquea o se usa el pendrive).
 
 - [ ] **Step 6: Push (solo si Bruno lo pide)**
 
