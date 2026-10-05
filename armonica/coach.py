@@ -586,10 +586,15 @@ def _motivo_del_error(error, conf):
     uno mejor que "El servicio contestó con un error (N)".
     """
     codigo = getattr(error, "codigo", None)
+    detalle = getattr(error, "detalle", "") or ""
+    # Primero lo del crédito: es de las primeras fallas de una cuenta paga
+    # recién abierta, y no viene siempre como 402. OpenAI sin crédito contesta
+    # 429 (el mismo número que "saturado") y Anthropic con poco crédito, 400:
+    # lo único que las distingue es la palabra del cuerpo.
+    if codigo == 402 or "insufficient_quota" in detalle or "credit balance" in detalle:
+        return "La cuenta de esa clave no tiene crédito."
     if _es_clave_invalida(error):
         return _motivo_de_la_clave("invalida", conf["proveedor"])
-    if codigo == 402:
-        return "La cuenta de esa clave no tiene crédito."
     if codigo == 403:
         return "Esa clave no tiene permiso para usar el modelo."
     if codigo == 404:
@@ -598,6 +603,10 @@ def _motivo_del_error(error, conf):
         return f"No existe el modelo {conf['modelo']!r}. Revisá LLM_MODELO en el .env."
     if codigo in (429, 529):
         return "El servicio está saturado, o la clave llegó a su tope de uso. Probá en un rato."
+    if codigo in (500, 502, 503, 504):
+        # Gemini contesta 503 cuando está sobrecargado, y pasa seguido: no es
+        # de la clave ni de la app, y a quien lee no le sirve el número.
+        return "El servicio tuvo un problema. Probá en un rato."
     return None
 
 
@@ -754,8 +763,10 @@ def _http_json(url, cuerpo, cabeceras, segundos):
 
     Es la única función que toca la red para Claude, Ollama, OpenAI y
     Gemini; los tests la reemplazan. Traduce cada fallo a un
-    CoachNoDisponible con el código o la palabra "conexión", que las
-    funciones de arriba usan para dar un motivo entendible.
+    CoachNoDisponible. Quienes llaman para un proveedor con clave
+    (_pedir_por_http) no leen el texto: usan los atributos `codigo` y
+    `detalle` (un error HTTP) o `sin_conexion` (no se pudo conectar). Solo
+    Ollama todavía mira el texto ("404", "conexión").
     """
     datos = None if cuerpo is None else json.dumps(cuerpo).encode("utf-8")
     pedido = urllib.request.Request(url, data=datos, method="GET" if datos is None else "POST")

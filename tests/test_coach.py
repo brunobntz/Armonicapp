@@ -396,6 +396,60 @@ def test_claude_traduce_cada_error_a_un_motivo(sin_entorno, tmp_path, http_falso
     assert palabras in str(error.value)
 
 
+@pytest.mark.parametrize("proveedor, clave, codigo, detalle", [
+    # OpenAI sin crédito contesta 429, igual que cuando está saturado: lo que
+    # cambia es la palabra del cuerpo.
+    ("openai", "sk-prueba", 429,
+     '{"error": {"type": "insufficient_quota", "code": "insufficient_quota"}}'),
+    # Anthropic con poco crédito contesta 400, no 402.
+    ("claude", "sk-ant-prueba", 400,
+     '{"error": {"type": "invalid_request_error", "message": '
+     '"Your credit balance is too low to access the Anthropic API."}}'),
+    ("claude", "sk-ant-prueba", 402, "")])
+def test_la_cuenta_sin_credito_se_dice_aunque_no_venga_como_402(
+        sin_entorno, tmp_path, http_falso, proveedor, clave, codigo, detalle):
+    """
+    Es de las primeras fallas de quien recién abre una cuenta paga: no tiene
+    que salir como "saturado" ni como un número.
+    """
+    ruta = env_con(tmp_path, f"LLM_PROVEEDOR={proveedor}\nLLM_CLAVE={clave}\n")
+    http_falso["error"] = f"El servicio contestó con un error ({codigo})."
+    http_falso["codigo"] = codigo
+    http_falso["detalle"] = detalle
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert str(error.value) == "La cuenta de esa clave no tiene crédito."
+    # La clave está bien: Ajustes no la tiene que descartar.
+    assert not getattr(error.value, "clave_invalida", False)
+
+
+@pytest.mark.parametrize("codigo", [500, 502, 503, 504])
+def test_un_problema_del_servicio_se_dice_sin_numeros(sin_entorno, tmp_path, http_falso, codigo):
+    """Gemini contesta 503 cuando está sobrecargado, y pasa seguido."""
+    ruta = env_con(tmp_path, "LLM_PROVEEDOR=gemini\nLLM_CLAVE=AQ.prueba_123\n")
+    http_falso["error"] = f"El servicio contestó con un error ({codigo})."
+    http_falso["codigo"] = codigo
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert str(error.value) == "El servicio tuvo un problema. Probá en un rato."
+    assert not getattr(error.value, "clave_invalida", False)
+
+
+def test_en_la_instalada_la_clave_mala_y_el_modelo_que_no_existe_se_dicen_con_su_texto(
+        sin_entorno, tmp_path, http_falso, monkeypatch):
+    """El texto que el profe lee, y que la guía cita: tiene que ser este."""
+    monkeypatch.setattr(coach, "CLAVE_EN_AJUSTES", True)
+    ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-vieja_123\n")
+
+    for codigo, texto in ((401, "La clave no es válida. Revisala en Ajustes, en El coach."),
+                          (404, "hace falta una versión nueva de la app")):
+        http_falso["error"] = f"El servicio contestó con un error ({codigo})."
+        http_falso["codigo"] = codigo
+        with pytest.raises(coach.CoachNoDisponible) as error:
+            coach._pedir("s", "u", ruta)
+        assert texto in str(error.value)
+
+
 def test_openai_con_la_clave_mala_lo_dice(sin_entorno, tmp_path, http_falso):
     ruta = env_con(tmp_path, "LLM_PROVEEDOR=openai\nLLM_CLAVE=sk-vieja\n")
     http_falso["error"] = "El servicio contestó con un error (401)."
