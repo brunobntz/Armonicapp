@@ -100,18 +100,21 @@ Windows.
    pestaña, con sus doce capítulos y las capturas. En el menú Inicio, **Guía
    de Armónica** abre el PDF: mirar que tenga todos los capítulos y que las
    capturas se vean.
-8. El coach, con internet. En Ajustes → El coach, pegar una clave de cada
-   proveedor que tengas (Claude, ChatGPT, Gemini) y tocar **Guardar y
-   probar**: dice de quién es y que anda, y el estado pasa a "Activo". El
-   casillero queda vacío: la clave no vuelve a la pantalla. Después de
-   practicar algo, en la devolución aparece el botón del coach y contesta
-   bien, en castellano y sin inventar números; en Teoría hay una pregunta
-   libre. Probar **Borrar la clave** (pide confirmación y el coach queda
-   apagado) y pegar una de nuevo, para que quede guardada para los pasos
-   que siguen; se guarda en `%LOCALAPPDATA%\Armonica\coach.env`.
+8. El coach, con internet. Se guarda una sola clave por vez: pegar otra
+   reemplaza la anterior. Así que, de a una, con cada proveedor que tengas
+   (Claude, ChatGPT, Gemini): en Ajustes → El coach, pegar la clave y tocar
+   **Guardar y probar**: dice de quién es y que anda, y el estado pasa a
+   "Activo". El casillero queda vacío: la clave no vuelve a la pantalla.
+   Después de practicar algo, en la devolución aparece el botón del coach y
+   contesta bien, en castellano y sin inventar números; en Teoría hay una
+   pregunta libre. Probar **Borrar la clave** (pide confirmación y el coach
+   queda apagado). Se guarda en `%LOCALAPPDATA%\Armonica\coach.env`.
 
    Con claves reales, además, se miran los textos que hasta ahora solo se
-   probaron con respuestas inventadas:
+   probaron con respuestas inventadas. Lo que contestó el servicio queda en
+   `Documentos\Armonica\registro.txt`, en una línea como
+   `El coach (ChatGPT) contestó 429: …` (cortada y con la clave tapada). Al
+   terminar, pegar de nuevo una clave que ande, para los pasos que siguen.
    - Una clave de OpenAI sin crédito (y una de Claude, si se puede): mirar
      el cuerpo real del error, un 429 en OpenAI y un 400 en Claude, y que
      Guardar y probar diga "La cuenta de esa clave no tiene crédito." (la

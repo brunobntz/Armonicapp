@@ -134,7 +134,7 @@ repo público en GitHub, 925 tests, todo lo listado en el README está hecho.
   `empaquetado\_descargas` (no borrar esa carpeta) y, si hay que fijar
   otro, probarlo antes con Smart App Control activado.
 - **Instalador, etapa 3: la guía y el coach del profe.** Hecho
-  (2026-10-04), versión 0.2.0. La guía (`armonica/web/guia.html`, doce
+  (2026-10-04 y 05), versión 0.2.0. La guía (`armonica/web/guia.html`, doce
   capítulos, con capturas en `armonica/web/guia/` y el de Band-in-a-Box
   con las capturas de Bruno) tiene un enlace **Guía** en la barra de la
   app; el armado la imprime a `Guia de Armonica.pdf` con Edge, la pone en
