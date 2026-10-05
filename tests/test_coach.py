@@ -8,6 +8,7 @@ pedimos y guarda lo que recibió: así se verifica qué le mandamos, que es lo
 """
 
 import io
+import os
 import urllib.error
 
 import pytest
@@ -532,3 +533,83 @@ def test_explicar_la_base_pasa_por_pedir(monkeypatch):
     assert coach.explicar_base("Blues", {"cifrado": [], "hechos": {}}, "C") == "Es un blues de doce."
     assert recibido["sistema"] == coach.SISTEMA
     assert "Blues" in recibido["usuario"]
+
+
+# =============================================================================
+# La clave que se pega en Ajustes (la versión instalada no tiene .env)
+# =============================================================================
+
+@pytest.mark.parametrize("clave, proveedor", [
+    ("sk-ant-api03-abcdefghij", "claude"),
+    ("sk-proj-abcdefghij", "openai"),
+    ("sk-abcdefghijklmnop", "openai"),
+    ("AIzaSyAbcdefghijklmnop", "gemini"),
+    ("AQ.Ab8RN6Kabcdefghij", "gemini"),
+    ("hola-abcdefghij", None),
+])
+def test_de_quien_es_cada_clave(clave, proveedor):
+    assert coach.proveedor_de_la_clave(clave) == proveedor
+
+
+@pytest.mark.parametrize("clave, proveedor, modelo", [
+    ("sk-ant-guardada_123", "claude", "claude-opus-5-5"),
+    ("sk-proj-guardada_123", "openai", "gpt-6-luna"),
+    ("AQ.Ab-guardada_123", "gemini", "gemini-3.5-flash-lite"),
+])
+def test_la_clave_guardada_se_usa_con_su_proveedor(sin_entorno, clave, proveedor, modelo):
+    assert coach.guardar_clave(clave) == proveedor
+
+    conf = coach.configuracion(sin_entorno)
+
+    assert conf["clave"] == clave
+    assert conf["proveedor"] == proveedor
+    assert conf["modelo"] == modelo
+    estado = coach.estado(sin_entorno)
+    assert estado["clave_en_ajustes"] is True and estado["disponible"] is True
+
+
+def test_el_env_le_gana_a_la_clave_guardada(sin_entorno, tmp_path):
+    coach.guardar_clave("sk-ant-guardada_123")
+    conf = coach.configuracion(env_con(tmp_path, "LLM_PROVEEDOR=ollama\n"))
+    assert conf["proveedor"] == "ollama"
+
+
+def test_la_clave_guardada_le_gana_al_entorno(sin_entorno, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "desde-el-entorno")
+    coach.guardar_clave("sk-ant-guardada_123")
+    assert coach.configuracion(sin_entorno)["clave"] == "sk-ant-guardada_123"
+
+
+def test_guardar_vacio_borra_la_clave(sin_entorno):
+    coach.guardar_clave("sk-ant-guardada_123")
+
+    assert coach.guardar_clave("  ") == ""
+
+    assert not os.path.exists(coach.ruta_de_la_clave())
+    assert coach.estado(sin_entorno)["clave_en_ajustes"] is False
+
+
+def test_guardar_es_atomico_y_no_deja_temporales(sin_entorno):
+    coach.guardar_clave("sk-ant-guardada_123")
+    assert os.listdir(os.path.dirname(coach.ruta_de_la_clave())) == ["coach.env"]
+
+
+@pytest.mark.parametrize("mala", [
+    "sk-ant con espacio", "sk-ant\nLLM_PROVEEDOR=ollama", "sk-" + "x" * 300, "sk-corta",
+    "sk-ant-ñandú12345", "desconocida-abcdefghij"])
+def test_lo_que_no_es_una_clave_conocida_no_se_guarda(sin_entorno, mala):
+    with pytest.raises(ValueError):
+        coach.guardar_clave(mala)
+    assert not os.path.exists(coach.ruta_de_la_clave())
+
+
+def test_la_ruta_de_la_clave_esta_en_localappdata(monkeypatch):
+    monkeypatch.setattr(coach, "ARCHIVO_CLAVE", None)
+    monkeypatch.setenv("LOCALAPPDATA", r"C:\Usuarios\alguien\AppData\Local")
+    assert coach.ruta_de_la_clave() == os.path.join(
+        r"C:\Usuarios\alguien\AppData\Local", "Armonica", "coach.env")
+
+
+def test_probar_hace_un_pedido_minimo(llamada_falsa):
+    assert coach.probar() == "Vamos por partes: el bend del 3 te queda corto."
+    assert llamada_falsa["usuario"]

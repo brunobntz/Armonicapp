@@ -58,11 +58,16 @@ def preferencia_fija(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def coach_como_en_la_maquina_de_bruno(monkeypatch):
+def coach_como_en_la_maquina_de_bruno(monkeypatch, tmp_path):
     """
     Los motivos del coach hablan del .env, como en la máquina de Bruno. La
     versión instalada los cambia por "Ajustes" (servidor.arrancar); el test
     que pruebe eso lo prende a mano, y acá vuelve a apagarse.
+
+    Y la clave que se pega en Ajustes vive en %LOCALAPPDATA%\\Armonica:
+    ningún test la lee ni la pisa. Cada uno tiene la suya, en una carpeta
+    temporal que empieza vacía.
     """
     from armonica import coach
     monkeypatch.setattr(coach, "CLAVE_EN_AJUSTES", False)
+    monkeypatch.setattr(coach, "ARCHIVO_CLAVE", str(tmp_path / "clave-del-coach" / "coach.env"))

@@ -2283,6 +2283,72 @@ def test_sin_clave_el_coach_se_declara_apagado(servidor_andando, monkeypatch, tm
     assert ".env" in datos["motivo"]
 
 
+@pytest.fixture
+def coach_sin_env(monkeypatch, tmp_path):
+    """El coach sin .env ni variables: solo lo que se pegue en Ajustes."""
+    monkeypatch.setattr(coach, "ARCHIVO_ENV", str(tmp_path / "no-existe.env"))
+    for nombre in ("LLM_PROVEEDOR", "LLM_CLAVE", "LLM_MODELO", "LLM_URL",
+                   "ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(nombre, raising=False)
+
+
+def test_la_clave_pegada_en_ajustes_se_guarda_y_se_prueba(servidor_andando, coach_sin_env,
+                                                          monkeypatch):
+    pedidos = []
+    monkeypatch.setattr(coach, "_pedir",
+                        lambda sistema, usuario, ruta_env=None: pedidos.append(usuario) or "listo")
+
+    respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": "AQ.Ab-prueba_123"})
+
+    assert respuesta["ok"] is True and respuesta["probada"] is True
+    assert respuesta["proveedor"] == "gemini"
+    assert respuesta["estado"]["disponible"] is True
+    assert respuesta["estado"]["clave_en_ajustes"] is True
+    assert respuesta["estado"]["proveedor"] == "gemini"
+    assert len(pedidos) == 1
+    # La clave no vuelve nunca al navegador.
+    assert "AQ.Ab-prueba_123" not in json.dumps(respuesta)
+    assert "AQ.Ab-prueba_123" not in json.dumps(traer_json(servidor_andando, "/api/coach"))
+
+
+def test_una_clave_que_no_anda_queda_guardada_y_dice_por_que(servidor_andando, coach_sin_env,
+                                                             monkeypatch):
+    def no_anda(sistema, usuario, ruta_env=None):
+        raise coach.CoachNoDisponible("No hay conexión con el servicio. ¿Estás sin internet?")
+
+    monkeypatch.setattr(coach, "_pedir", no_anda)
+
+    respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": "sk-ant-prueba_123"})
+
+    assert respuesta["ok"] is True and respuesta["probada"] is False
+    assert respuesta["proveedor"] == "claude"
+    assert "internet" in respuesta["motivo"]
+    assert respuesta["estado"]["clave_en_ajustes"] is True
+
+
+def test_una_clave_que_no_se_reconoce_no_se_guarda(servidor_andando, coach_sin_env):
+    for mala in ("sk-ant con espacios", "desconocida-abcdefghij"):
+        respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": mala})
+        assert respuesta["ok"] is False
+        assert respuesta["motivo"]
+    assert traer_json(servidor_andando, "/api/coach")["clave_en_ajustes"] is False
+
+
+def test_la_clave_se_borra_mandandola_vacia(servidor_andando, coach_sin_env, monkeypatch):
+    monkeypatch.setattr(coach, "_pedir", lambda sistema, usuario, ruta_env=None: "listo")
+    mandar(servidor_andando, "/api/coach/clave", {"clave": "sk-proj-prueba_123"})
+
+    respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": ""})
+
+    assert respuesta["ok"] is True and respuesta["probada"] is False
+    assert respuesta["estado"]["clave_en_ajustes"] is False
+    assert respuesta["estado"]["disponible"] is False
+
+
+def test_sin_clave_en_el_pedido_es_un_error(servidor_andando, coach_sin_env):
+    assert mandar(servidor_andando, "/api/coach/clave", {})["ok"] is False
+
+
 def test_el_coach_explica_la_ultima_practica(servidor_andando, carpeta_de_frases,
                                              monkeypatch):
     """

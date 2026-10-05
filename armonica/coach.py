@@ -10,7 +10,9 @@ mide nada, nunca inventa un número, y si no tiene datos lo dice.
 
 Es OPCIONAL. Sin configurar, la app anda exactamente igual que antes y en
 Ajustes dice cómo activarlo. La configuración va en un archivo .env que git
-ignora: la clave es tuya y se queda en tu máquina.
+ignora: la clave es tuya y se queda en tu máquina. La versión instalada no
+tiene .env: ahí la clave se pega en Ajustes, la app reconoce de qué
+proveedor es y la guarda en %LOCALAPPDATA%\\Armonica\\coach.env.
 
 CUATRO PROVEEDORES, UNA SOLA FORMA DE HABLARLES
 
@@ -36,6 +38,7 @@ llegan números y texto.
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 
@@ -96,6 +99,23 @@ ARCHIVO_ENV = ".env"
 # servidor.arrancar().
 CLAVE_EN_AJUSTES = False
 
+# La clave que se pega en Ajustes: la versión instalada no tiene .env. Va a
+# %LOCALAPPDATA%\Armonica, que es de esta computadora, y no a Documentos,
+# que puede estar subida a OneDrive. None quiere decir esa ruta; los tests
+# la cambian por una temporal (conftest.py) y así nunca tocan la de verdad.
+ARCHIVO_CLAVE = None
+
+# Una clave: letras, números, guiones, guiones bajos y puntos. Nada de
+# espacios ni saltos de línea: escrita en el archivo, un salto de línea
+# agregaría otra configuración.
+PATRON_DE_CLAVE = re.compile(r"[A-Za-z0-9_.\-]{10,300}")
+
+# De quién es una clave, por cómo empieza. El orden importa: las de Claude
+# también empiezan con "sk-". Las de Gemini son "AIza…" (las de antes) o
+# "AQ.…" (las que da Google AI Studio desde 2026).
+PREFIJOS_DE_CLAVE = (("sk-ant-", "claude"), ("sk-", "openai"),
+                     ("AIza", "gemini"), ("AQ.", "gemini"))
+
 
 class CoachNoDisponible(Exception):
     """
@@ -139,21 +159,71 @@ def leer_env(ruta=None):
     return valores
 
 
+def ruta_de_la_clave():
+    """Dónde está la clave que se pegó en Ajustes."""
+    if ARCHIVO_CLAVE:
+        return ARCHIVO_CLAVE
+    base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"),
+                                                          "AppData", "Local")
+    return os.path.join(base, "Armonica", "coach.env")
+
+
+def proveedor_de_la_clave(clave):
+    """De quién es una clave ("claude", "openai", "gemini"), o None."""
+    for prefijo, proveedor in PREFIJOS_DE_CLAVE:
+        if clave.startswith(prefijo):
+            return proveedor
+    return None
+
+
+def guardar_clave(clave):
+    """
+    Guarda la clave que se pegó en Ajustes, con su proveedor, o la borra si
+    viene vacía. Devuelve el proveedor ("" si se borró). Si no parece una
+    clave, o no es de ninguno de los tres, es un ValueError con un motivo
+    para mostrar, y no se toca nada.
+    """
+    clave = (clave or "").strip()
+    ruta = ruta_de_la_clave()
+    if not clave:
+        if os.path.exists(ruta):
+            os.remove(ruta)
+        return ""
+    proveedor = proveedor_de_la_clave(clave)
+    if not PATRON_DE_CLAVE.fullmatch(clave) or proveedor is None:
+        raise ValueError("No reconozco esa clave. Sirven las de Claude, ChatGPT o Gemini: "
+                         "pegala de nuevo, entera y sin espacios.")
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    # A un temporal y después se reemplaza, como ajustes.json: si algo corta
+    # el guardado, queda la clave de antes entera.
+    temporal = ruta + ".tmp"
+    try:
+        with open(temporal, "w", encoding="utf-8") as archivo:
+            archivo.write(f"LLM_PROVEEDOR={proveedor}\nLLM_CLAVE={clave}\n")
+        os.replace(temporal, ruta)
+    except BaseException:
+        if os.path.exists(temporal):
+            os.remove(temporal)
+        raise
+    return proveedor
+
+
 def configuracion(ruta_env=None):
     """
     Qué proveedor, con qué clave, qué modelo y en qué dirección.
 
-    Devuelve un diccionario {"proveedor", "clave", "modelo", "url"}. Lee el
-    .env primero y las variables de entorno después. La variable
-    ANTHROPIC_API_KEY también sirve como clave, porque es la que el SDK de
-    Claude lee solo: si ya la tenés puesta por otra cosa, no hace falta más.
+    Devuelve un diccionario {"proveedor", "clave", "modelo", "url"}. Cada
+    valor sale del .env; si no está, de la clave pegada en Ajustes; si no,
+    de las variables de entorno. La variable ANTHROPIC_API_KEY también sirve
+    como clave: si ya la tenés puesta por otra cosa, no hace falta más.
     """
-    env = leer_env(ruta_env)
+    fuentes = (leer_env(ruta_env), leer_env(ruta_de_la_clave()))
 
     def valor(nombre, *alternativas):
-        for candidato in (nombre,) + alternativas:
-            if env.get(candidato):
-                return env[candidato].strip()
+        for fuente in fuentes:
+            for candidato in (nombre,) + alternativas:
+                if fuente.get(candidato):
+                    return fuente[candidato].strip()
         for candidato in (nombre,) + alternativas:
             if os.environ.get(candidato):
                 return os.environ[candidato].strip()
@@ -187,12 +257,14 @@ def estado(ruta_env=None):
     """
     Si el coach puede contestar, y si no, por qué. Para la solapa Ajustes.
 
-    Devuelve {"disponible": bool, "motivo": str, "proveedor": str, "modelo": str}.
+    Devuelve {"disponible": bool, "motivo": str, "proveedor": str, "modelo": str,
+    "clave_en_ajustes": bool}; el último dice si hay una clave pegada en Ajustes.
     Con Ollama, además pregunta si el servidor local está corriendo: es lo
     primero que falla y lo que menos se ve.
     """
     conf = configuracion(ruta_env)
-    base = {"proveedor": conf["proveedor"], "modelo": conf["modelo"]}
+    base = {"proveedor": conf["proveedor"], "modelo": conf["modelo"],
+            "clave_en_ajustes": bool(leer_env(ruta_de_la_clave()).get("LLM_CLAVE"))}
 
     if conf["proveedor"] not in PROVEEDORES:
         return dict(base, disponible=False,
@@ -456,6 +528,15 @@ def preguntar_teoria(teoria, pregunta, ruta_env=None):
     if not (pregunta or "").strip():
         raise CoachNoDisponible("Escribí una pregunta primero.")
     return _pedir(SISTEMA, prompt_de_teoria(teoria, pregunta), ruta_env)
+
+
+def probar(ruta_env=None):
+    """
+    Un pedido mínimo para ver si la clave anda: Ajustes lo hace al guardarla.
+    Devuelve el texto, o levanta CoachNoDisponible con el motivo. Cuesta una
+    fracción de centavo.
+    """
+    return _pedir("Contestá solo con la palabra: listo.", "¿Me escuchás?", ruta_env)
 
 
 # =============================================================================

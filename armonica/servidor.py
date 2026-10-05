@@ -1449,6 +1449,8 @@ class Manejador(SimpleHTTPRequestHandler):
             return self._responder_json(self._coach_devolucion())
         if self.path == "/api/coach/teoria":
             return self._responder_json(self._coach_teoria(cuerpo))
+        if self.path == "/api/coach/clave":
+            return self._responder_json(self._guardar_clave_del_coach(cuerpo))
         if self.path == "/api/aprendizaje/plan":
             return self._responder_json(self._armar_plan())
         if self.path == "/api/aprendizaje/plan/borrar":
@@ -2563,6 +2565,31 @@ class Manejador(SimpleHTTPRequestHandler):
 
     def _estado_del_coach(self):
         return coach.estado()
+
+    def _guardar_clave_del_coach(self, peticion):
+        """
+        Ajustes → El coach: guarda la clave pegada (o la borra si viene
+        vacía) y, si quedó una, la prueba con un pedido mínimo. Si la prueba
+        falla la clave queda igual (puede ser que justo no haya internet) y
+        se dice por qué. La clave no vuelve nunca al navegador.
+        """
+        clave = (peticion or {}).get("clave")
+        if not isinstance(clave, str):
+            return {"ok": False, "motivo": "Falta la clave."}
+        try:
+            proveedor = coach.guardar_clave(clave)
+        except ValueError as error:
+            return {"ok": False, "motivo": str(error)}
+        except OSError as error:
+            return {"ok": False, "motivo": f"No pude guardar la clave ({error.strerror or error})."}
+        if not proveedor:
+            return {"ok": True, "probada": False, "estado": coach.estado()}
+        try:
+            coach.probar()
+        except coach.CoachNoDisponible as error:
+            return {"ok": True, "probada": False, "proveedor": proveedor,
+                    "motivo": str(error), "estado": coach.estado()}
+        return {"ok": True, "probada": True, "proveedor": proveedor, "estado": coach.estado()}
 
     def _coach_devolucion(self):
         """Explica la ultima practica. Usa la comparacion que ya se midio."""
