@@ -2554,6 +2554,12 @@ function lineaDeFuente(texto, tono) {
 
 let coachDisponible = false;
 
+/* La ultima clave que se pego en Ajustes quedo guardada pero no se pudo
+ * probar (sin internet, servicio saturado...). El servidor no recuerda la
+ * prueba: sin esto, Ajustes diria "Activo" sobre una clave que nadie vio
+ * andar. */
+let pruebaDelCoachFallida = false;
+
 async function cargarEstadoDelCoach() {
   const datos = await pedir("/api/coach");
   coachDisponible = Boolean(datos.disponible);
@@ -2651,7 +2657,10 @@ async function mostrarEstadoDelCoach() {
   document.getElementById("coach-borrar-clave").hidden = !datos.clave_en_ajustes;
   const proveedor = datos.proveedor ? nombreDelProveedor(datos.proveedor) : "";
   donde.className = "ayuda";
-  if (datos.disponible && esLaInstalada()) {
+  if (datos.disponible && esLaInstalada() && pruebaDelCoachFallida) {
+    donde.innerHTML = "<strong>Guardada, sin comprobar todavía.</strong> " +
+      "Cuando se pueda conectar, el coach va a andar.";
+  } else if (datos.disponible && esLaInstalada()) {
     donde.innerHTML = "<strong>Activo</strong>, con " + escapar(proveedor) + ". Vas a ver el " +
       "botón del coach al pie de la devolución de una práctica, una pregunta libre al pie de " +
       "Teoría y, en Canciones, un botón para que te explique la base.";
@@ -2677,29 +2686,44 @@ async function mostrarEstadoDelCoach() {
 function configurarClaveDelCoach() {
   const campo = document.getElementById("coach-clave");
   const resultado = document.getElementById("coach-resultado-clave");
+  const controles = [campo, document.getElementById("coach-guardar-clave"),
+                     document.getElementById("coach-borrar-clave")];
 
   const guardar = async (clave) => {
+    // Mientras espera, nada se puede apretar: cada prueba es un pedido de
+    // verdad al proveedor, y Enter mantenido o un doble clic mandarian varios.
+    controles.forEach((control) => { control.disabled = true; });
     resultado.textContent = clave ? "Guardando y probando\u2026" : "Borrando\u2026";
-    const respuesta = await pedir("/api/coach/clave", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clave: clave }),
-    });
-    campo.value = "";
-    if (!respuesta.ok) {
-      resultado.textContent = respuesta.motivo || "No se pudo guardar la clave.";
-      return;
+    try {
+      const respuesta = await pedir("/api/coach/clave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clave: clave }),
+      });
+      if (!respuesta.ok) {
+        // Puede que el servidor haya vuelto a la clave de antes: se mira.
+        resultado.textContent = respuesta.motivo || "No se pudo guardar la clave.";
+      } else {
+        const de = respuesta.proveedor ? "de " + nombreDelProveedor(respuesta.proveedor) : "";
+        if (!clave) {
+          pruebaDelCoachFallida = false;
+          resultado.textContent = "Listo: la clave se borr\u00f3. El coach queda apagado.";
+        } else if (respuesta.probada) {
+          pruebaDelCoachFallida = false;
+          resultado.textContent = "Listo: es una clave " + de + " y anda. Ya pod\u00e9s usar el coach.";
+        } else {
+          pruebaDelCoachFallida = true;
+          resultado.textContent = "La clave " + de + " qued\u00f3 guardada, pero al probarla: " +
+            respuesta.motivo;
+        }
+      }
+      await mostrarEstadoDelCoach();
+    } catch (error) {
+      resultado.textContent = "No pude comunicarme con la app. Prob\u00e1 de nuevo.";
+    } finally {
+      campo.value = "";
+      controles.forEach((control) => { control.disabled = false; });
     }
-    const de = respuesta.proveedor ? "de " + nombreDelProveedor(respuesta.proveedor) : "";
-    if (!clave) {
-      resultado.textContent = "Listo: la clave se borr\u00f3. El coach queda apagado.";
-    } else if (respuesta.probada) {
-      resultado.textContent = "Listo: es una clave " + de + " y anda. Ya pod\u00e9s usar el coach.";
-    } else {
-      resultado.textContent = "La clave " + de + " qued\u00f3 guardada, pero al probarla: " +
-        respuesta.motivo;
-    }
-    await mostrarEstadoDelCoach();
   };
 
   document.getElementById("coach-guardar-clave").addEventListener("click", () => {

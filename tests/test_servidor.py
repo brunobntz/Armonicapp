@@ -2326,6 +2326,49 @@ def test_una_clave_que_no_anda_queda_guardada_y_dice_por_que(servidor_andando, c
     assert respuesta["estado"]["clave_en_ajustes"] is True
 
 
+def _el_servicio_rechaza_la_clave(monkeypatch):
+    """_pedir como cuando el proveedor contesta que la clave no es válida."""
+    def rechaza(sistema, usuario, ruta_env=None):
+        error = coach.CoachNoDisponible("La clave no es válida. Revisala en Ajustes, en El coach.")
+        error.clave_invalida = True
+        raise error
+
+    monkeypatch.setattr(coach, "_pedir", rechaza)
+
+
+def test_una_clave_que_el_servicio_rechaza_no_se_guarda_y_queda_la_de_antes(
+        servidor_andando, coach_sin_env, monkeypatch):
+    monkeypatch.setattr(coach, "_pedir", lambda sistema, usuario, ruta_env=None: "listo")
+    mandar(servidor_andando, "/api/coach/clave", {"clave": "sk-ant-buena_123"})
+    _el_servicio_rechaza_la_clave(monkeypatch)
+
+    respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": "AQ.mala_123456"})
+
+    assert respuesta["ok"] is False
+    assert respuesta["proveedor"] == "gemini"
+    assert "no la guardé" in respuesta["motivo"] and "Gemini" in respuesta["motivo"]
+    # Sigue la de antes, con su proveedor.
+    assert respuesta["estado"]["clave_en_ajustes"] is True
+    assert respuesta["estado"]["proveedor"] == "claude"
+    assert coach.leer_env(coach.ruta_de_la_clave())["LLM_CLAVE"] == "sk-ant-buena_123"
+    # Ni la mala ni la buena vuelven al navegador.
+    assert "AQ.mala_123456" not in json.dumps(respuesta)
+    assert "sk-ant-buena_123" not in json.dumps(respuesta)
+
+
+def test_una_clave_que_el_servicio_rechaza_sin_otra_antes_no_deja_nada_guardado(
+        servidor_andando, coach_sin_env, monkeypatch):
+    _el_servicio_rechaza_la_clave(monkeypatch)
+
+    respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": "sk-ant-mala_123456"})
+
+    assert respuesta["ok"] is False
+    assert "no la guardé" in respuesta["motivo"] and "Claude" in respuesta["motivo"]
+    assert respuesta["estado"]["clave_en_ajustes"] is False
+    assert not os.path.exists(coach.ruta_de_la_clave())
+    assert traer_json(servidor_andando, "/api/coach")["clave_en_ajustes"] is False
+
+
 def test_una_clave_que_no_se_reconoce_no_se_guarda(servidor_andando, coach_sin_env):
     for mala in ("sk-ant con espacios", "desconocida-abcdefghij"):
         respuesta = mandar(servidor_andando, "/api/coach/clave", {"clave": mala})

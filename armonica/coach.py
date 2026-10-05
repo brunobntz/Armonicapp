@@ -126,6 +126,10 @@ class CoachNoDisponible(Exception):
     Si lo levantó porque no pudo conectarse (sin red, o se acabó el tiempo),
     lleva `sin_conexion = True`: su texto trae el detalle técnico del error
     del sistema, que sirve para el registro pero no para mostrarle a nadie.
+    Si el servicio dijo que la clave no es válida, lleva `clave_invalida =
+    True`: Ajustes lo usa para no dejar guardada una clave que se sabe mala
+    (un error de red o un servicio saturado no la marcan: la clave puede estar
+    bien).
     """
 
 
@@ -565,16 +569,24 @@ def _pedir(sistema, usuario, ruta_env=None):
     raise CoachNoDisponible(estado(ruta_env)["motivo"])
 
 
+def _es_clave_invalida(error):
+    """
+    Si un error HTTP quiere decir que la clave no es válida. Gemini contesta
+    400, y no 401, a una clave mala: se reconoce por el motivo que viene en
+    el cuerpo.
+    """
+    codigo = getattr(error, "codigo", None)
+    detalle = getattr(error, "detalle", "") or ""
+    return codigo == 401 or (codigo == 400 and "API_KEY_INVALID" in detalle)
+
+
 def _motivo_del_error(error, conf):
     """
     El motivo de un error HTTP de Claude, ChatGPT o Gemini, o None si no hay
     uno mejor que "El servicio contestó con un error (N)".
     """
     codigo = getattr(error, "codigo", None)
-    detalle = getattr(error, "detalle", "") or ""
-    # Gemini contesta 400, y no 401, a una clave que no es válida: se
-    # reconoce por el motivo que viene en el cuerpo.
-    if codigo == 401 or (codigo == 400 and "API_KEY_INVALID" in detalle):
+    if _es_clave_invalida(error):
         return _motivo_de_la_clave("invalida", conf["proveedor"])
     if codigo == 402:
         return "La cuenta de esa clave no tiene crédito."
@@ -609,7 +621,10 @@ def _pedir_por_http(conf, url, cuerpo, cabeceras):
                   f"{(getattr(error, 'detalle', '') or '')[:300]}")
         motivo = _motivo_del_error(error, conf)
         if motivo:
-            raise CoachNoDisponible(motivo)
+            traducido = CoachNoDisponible(motivo)
+            if _es_clave_invalida(error):
+                traducido.clave_invalida = True
+            raise traducido
         raise
 
 

@@ -425,6 +425,45 @@ def test_un_400_que_no_es_la_clave_no_culpa_a_la_clave(sin_entorno, tmp_path, ht
     assert "(400)" in str(error.value)
 
 
+@pytest.mark.parametrize("proveedor, clave, codigo, detalle", [
+    ("claude", "sk-ant-prueba", 401, ""),
+    ("openai", "sk-prueba", 401, ""),
+    ("gemini", "AIza-prueba", 400, '{"error": {"details": [{"reason": "API_KEY_INVALID"}]}}')])
+def test_una_clave_que_el_servicio_rechaza_se_marca_como_invalida(
+        sin_entorno, tmp_path, http_falso, proveedor, clave, codigo, detalle):
+    """Ajustes necesita distinguir "la clave está mal" de "ahora no se pudo"."""
+    ruta = env_con(tmp_path, f"LLM_PROVEEDOR={proveedor}\nLLM_CLAVE={clave}\n")
+    http_falso["error"] = f"El servicio contestó con un error ({codigo})."
+    http_falso["codigo"] = codigo
+    http_falso["detalle"] = detalle
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert error.value.clave_invalida is True
+
+
+@pytest.mark.parametrize("codigo, detalle", [
+    (402, ""), (403, ""), (404, ""), (429, ""), (529, ""), (500, ""),
+    (400, '{"error": {"status": "INVALID_ARGUMENT", "message": "otra cosa"}}')])
+def test_los_otros_errores_no_marcan_la_clave_como_invalida(sin_entorno, tmp_path, http_falso,
+                                                            codigo, detalle):
+    ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-prueba\n")
+    http_falso["error"] = f"El servicio contestó con un error ({codigo})."
+    http_falso["codigo"] = codigo
+    http_falso["detalle"] = detalle
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert not getattr(error.value, "clave_invalida", False)
+
+
+def test_sin_conexion_no_marca_la_clave_como_invalida(sin_entorno, tmp_path, http_falso):
+    ruta = env_con(tmp_path, "LLM_CLAVE=sk-ant-prueba\n")
+    http_falso["error"] = "No hay conexión con el servicio (sin red)."
+    http_falso["sin_conexion"] = True
+    with pytest.raises(coach.CoachNoDisponible) as error:
+        coach._pedir("s", "u", ruta)
+    assert not getattr(error.value, "clave_invalida", False)
+
+
 @pytest.mark.parametrize("proveedor, clave", [
     ("claude", "sk-ant-prueba"), ("openai", "sk-prueba"), ("gemini", "AQ.prueba")])
 def test_sin_conexion_lo_dice_sin_jerga(sin_entorno, tmp_path, http_falso, capsys,

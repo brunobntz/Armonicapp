@@ -2570,12 +2570,18 @@ class Manejador(SimpleHTTPRequestHandler):
         """
         Ajustes → El coach: guarda la clave pegada (o la borra si viene
         vacía) y, si quedó una, la prueba con un pedido mínimo. Si la prueba
-        falla la clave queda igual (puede ser que justo no haya internet) y
-        se dice por qué. La clave no vuelve nunca al navegador.
+        falla por otra cosa (puede ser que justo no haya internet, o que el
+        servicio esté saturado) la clave queda igual y se dice por qué. Si el
+        servicio dice que la clave no es válida, no se la deja guardada: se
+        vuelve a la de antes (o a ninguna). La clave no vuelve nunca al
+        navegador.
         """
         clave = (peticion or {}).get("clave")
         if not isinstance(clave, str):
             return {"ok": False, "motivo": "Falta la clave."}
+        # Hay que probar con la nueva ya guardada (es de donde la lee el
+        # coach), así que la de antes se guarda aparte por si hay que volver.
+        anterior = coach.leer_env(coach.ruta_de_la_clave()).get("LLM_CLAVE", "")
         try:
             proveedor = coach.guardar_clave(clave)
         except ValueError as error:
@@ -2587,9 +2593,27 @@ class Manejador(SimpleHTTPRequestHandler):
         try:
             coach.probar()
         except coach.CoachNoDisponible as error:
+            if getattr(error, "clave_invalida", False):
+                self._volver_a_la_clave_anterior(anterior)
+                return {"ok": False, "proveedor": proveedor,
+                        "motivo": f"Esa clave de {coach.NOMBRES[proveedor]} no es válida, así "
+                                  "que no la guardé. Fijate de haberla copiado entera.",
+                        "estado": coach.estado()}
             return {"ok": True, "probada": False, "proveedor": proveedor,
                     "motivo": str(error), "estado": coach.estado()}
         return {"ok": True, "probada": True, "proveedor": proveedor, "estado": coach.estado()}
+
+    def _volver_a_la_clave_anterior(self, anterior):
+        """Deja guardada la clave de antes de pegar una mala ("" la borra)."""
+        try:
+            coach.guardar_clave(anterior)
+        except (ValueError, OSError):
+            # La de antes no se puede volver a escribir (alguien tocó el
+            # archivo a mano): mejor ninguna que una que se sabe mala.
+            try:
+                coach.guardar_clave("")
+            except OSError:
+                pass
 
     def _coach_devolucion(self):
         """Explica la ultima practica. Usa la comparacion que ya se midio."""
